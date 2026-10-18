@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO notification (recipient_id, kind, branch_id, issue_id, work_item_id, actor_id, payload)\n        SELECT DISTINCT r, $2::text, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7::jsonb FROM unnest($1::uuid[]) AS r\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8623889f5015c1ce0dfab10fde071f1531b4377d81a78c10d63eaa3505ba8b47"
+}

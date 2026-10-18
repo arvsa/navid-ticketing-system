@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notification SET read_at = coalesce(read_at, now()) WHERE id = $1 AND recipient_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53ff060a4a93a473c4880e6e2d54a44f765a662dcbdc33fb6bcde6297bf538c6"
+}

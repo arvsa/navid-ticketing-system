@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO group_permission (group_id, permission_key, issue_type_id, scope)\n               VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), $4::text::permission_scope)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ddd393537d5bc8cbe947511f68c56106902b62feca91c71230308370322aa99"
+}

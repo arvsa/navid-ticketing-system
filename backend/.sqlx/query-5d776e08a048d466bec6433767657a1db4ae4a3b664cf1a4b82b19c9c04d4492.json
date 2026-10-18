@@ -1,0 +1,156 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.number, i.title, b.code AS branch, b.timezone, w.status AS \"status!: String\",\n                   w.sla_due_at, w.is_overdue AS \"is_overdue!\", w.submitted_at, w.decided_at,\n                   a.first_name || ' ' || a.last_name AS assignee,\n                   d.first_name || ' ' || d.last_name AS decided_by\n            FROM work_item_overview w\n            JOIN issue i ON i.id = w.issue_id\n            JOIN issue_type ty ON ty.id = i.type_id AND ty.code = 'action'\n            JOIN branch b ON b.id = w.branch_id\n            LEFT JOIN app_user a ON a.id = w.assignee_id\n            LEFT JOIN app_user d ON d.id = w.decided_by\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n              AND w.branch_id = ANY($2)\n              AND ($3::timestamptz IS NULL OR i.created_at >= $3)\n              AND ($4::timestamptz IS NULL OR i.created_at < $4)\n            ORDER BY i.number, w.created_at, w.id\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "timezone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "timezone"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "status!: String",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sla_due_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "sla_due_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_overdue!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "is_overdue"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "submitted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "submitted_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "decided_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decided_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "assignee",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "decided_by",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "UuidArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "5d776e08a048d466bec6433767657a1db4ae4a3b664cf1a4b82b19c9c04d4492"
+}

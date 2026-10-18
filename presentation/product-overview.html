@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>School Ticketing Overview</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f0eee8;
+    --text: #1c1c1e; --muted: #5d5f63; --border: #e2dfd7;
+    --accent: #2c56c9; --accent-soft: #e7ecfa;
+    --ok: #1d7448; --ok-soft: #e2f3e9; --no: #b02a20; --no-soft: #fae8e6;
+    --warn: #845400; --warn-soft: #fbf0d6;
+    --c-org: #2c56c9; --c-work: #1d7448; --c-talk: #845400; --c-sys: #7a3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+      --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+      --accent: #8eaaf5; --accent-soft: #1f2a46;
+      --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+      --warn: #f0c46c; --warn-soft: #3a2d12;
+      --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+    --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+    --accent: #8eaaf5; --accent-soft: #1f2a46;
+    --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+    --warn: #f0c46c; --warn-soft: #3a2d12;
+    --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header.hero { padding-top: 56px; padding-bottom: 32px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 17px; margin: 0 0 4px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  nav.toc { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+  nav.toc .wrap { display: flex; gap: 20px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; }
+  nav.toc a { color: var(--muted); text-decoration: none; font-size: 14px; white-space: nowrap; }
+  nav.toc a:hover { color: var(--accent); }
+  section { padding: 40px 0 8px; }
+  .section-intro { color: var(--muted); margin: 0 0 20px; max-width: 720px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; border-top: 4px solid var(--stripe, var(--accent)); }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+  .card .ex { margin-top: 10px; font-size: 14px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+  .tech { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 3px 6px; margin-left: 6px; vertical-align: middle; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stripe); flex: none; }
+  .org  { --stripe: var(--c-org); }
+  .work { --stripe: var(--c-work); }
+  .talk { --stripe: var(--c-talk); }
+  .sys  { --stripe: var(--c-sys); }
+  .diagram { width: 100%; height: auto; display: block; }
+  .diagram .box { fill: var(--surface); stroke-width: 2; }
+  .diagram .lbl { fill: var(--text); font: 600 15px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .lane { fill: var(--muted); font: 600 11px -apple-system, "Segoe UI", sans-serif; letter-spacing: .1em; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .diagram .dash { stroke-dasharray: 5 4; }
+  .diagram .elbl { fill: var(--muted); font: italic 12px -apple-system, "Segoe UI", sans-serif; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+  .pill { border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); }
+  .pill.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .pill.bad { background: var(--no-soft); color: var(--no); border-color: transparent; }
+  .pill.wait { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .arrow { color: var(--muted); }
+  ul.rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  ul.rules li { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 12px 44px; position: relative; }
+  ul.rules li::before { content: "✓"; position: absolute; left: 14px; top: 11px; width: 20px; height: 20px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-weight: 700; font-size: 13px; text-align: center; line-height: 20px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .types { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+  footer { color: var(--muted); font-size: 13px; padding: 48px 0 40px; }
+  @media (max-width: 600px) { header.hero { padding-top: 36px; } .lead { font-size: 16px; } }
+  .hero-grid { display: grid; gap: 24px; grid-template-columns: 1.3fr 1fr; align-items: center; }
+  @media (max-width: 760px) { .hero-grid { grid-template-columns: 1fr; } }
+  .facts { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
+  .fact { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .fact .num { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .fact .cap { color: var(--muted); font-size: 13px; }
+  .problem { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .problem .card { --stripe: var(--no); }
+  .feature { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .feature .card h3 { font-size: 18px; }
+  .roles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .role { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; border-left: 5px solid var(--stripe); }
+  .role h3 { margin-bottom: 6px; }
+  .role p { margin: 0; color: var(--muted); font-size: 15px; }
+  .mock { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+  .mock-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .mock-title { font-weight: 700; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ok); font-weight: 600; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .tile { background: var(--surface-2); border-radius: 10px; padding: 12px; }
+  .tile .num { font-size: 24px; font-weight: 700; }
+  .tile .cap { font-size: 13px; color: var(--muted); }
+  .tile.alert .num { color: var(--no); }
+  .tile.wait .num { color: var(--warn); }
+  .feed { margin-top: 14px; display: grid; gap: 8px; }
+  .feed div { font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
+  .feed b { color: var(--accent); }
+  .story { display: grid; gap: 12px; }
+  .beat { display: grid; grid-template-columns: 110px 1fr; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .beat .when { font-weight: 700; color: var(--accent); font-size: 14px; }
+  .beat p { margin: 0; }
+  @media (max-width: 520px) { .beat { grid-template-columns: 1fr; gap: 4px; } }
+  .scope-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .scope-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .scope-box ul { margin: 8px 0 0; padding-left: 18px; }
+  .scope-box li { margin: 5px 0; }
+  .scope-box.in h3 { color: var(--ok); }
+  .scope-box.later h3 { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <div class="hero-grid">
+    <div>
+      <div class="eyebrow">Product overview</div>
+      <h1>One place for every request, task, report and event across the school</h1>
+      <p class="lead">A web app that lets branch leaders hand out work, follow it to completion and see what's happening at every site, live. Staff ask questions, submit work and stay informed without chasing emails.</p>
+    </div>
+    <div class="facts">
+      <div class="fact"><div class="num">4</div><div class="cap">kinds of items: tickets, actions, reports, events</div></div>
+      <div class="fact"><div class="num">Live</div><div class="cap">dashboard for every branch</div></div>
+      <div class="fact"><div class="num">~100</div><div class="cap">staff at launch, around 50 online at busy times</div></div>
+      <div class="fact"><div class="num">Excel</div><div class="cap">export for each branch, or the whole school</div></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#why">Why</a>
+  <a href="#who">Who it's for</a>
+  <a href="#features">Features</a>
+  <a href="#dashboard">Dashboard</a>
+  <a href="#week">A week in the app</a>
+  <a href="#scope">Scope</a>
+  <a href="#status">Where it stands</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="why">
+  <h2>The problem</h2>
+  <p class="section-intro">Today, work across branches travels through email threads, chat messages and spreadsheets. That causes the same problems again and again.</p>
+  <div class="problem">
+    <div class="card"><h3>Requests get lost</h3><p>Questions and tasks are buried in inboxes. Nobody can tell what is still open or who owns it.</p></div>
+    <div class="card"><h3>No overview</h3><p>School leaders can't see how each branch is doing without asking for updates.</p></div>
+    <div class="card"><h3>Chasing for reports</h3><p>Collecting a report from every teacher means reminders, spreadsheets and manual tracking.</p></div>
+    <div class="card"><h3>Unclear sign-off</h3><p>It isn't recorded who approved what, or when.</p></div>
+  </div>
+</section>
+
+<section id="who">
+  <h2>Who it's for</h2>
+  <p class="section-intro">The school is organized into <b>branches</b>, and each branch into <b>groups</b> of staff. People can work at more than one branch.</p>
+  <div class="roles">
+    <div class="role" style="--stripe: var(--c-sys)"><h3>Super admin</h3><p>School leadership. Sets up branches and their admins, sends work to every branch at once, signs off on school-wide tasks and sees everything.</p></div>
+    <div class="role" style="--stripe: var(--c-org)"><h3>Branch admin</h3><p>Runs a branch. Manages its staff and groups, decides what each group may do, hands out work and approves it.</p></div>
+    <div class="role" style="--stripe: var(--c-work)"><h3>Staff</h3><p>Teachers and support staff. Ask questions, receive and complete tasks, write reports, create events and reply to invitations.</p></div>
+  </div>
+  <p class="section-intro" style="margin-top:14px">Admins can give a group extra powers, such as approving work or exporting data, without making its members full admins. See the <i>Permissions</i> document for details.</p>
+</section>
+
+<section id="features">
+  <h2>What it does</h2>
+  <div class="feature">
+    <div class="card work"><h3>Tickets for questions and requests</h3><p>Anyone can ask a question and address it to a person or group. The answer comes in comments, and the person who asked closes it when satisfied.</p></div>
+    <div class="card work"><h3>Actions: tasks with sign-off</h3><p>Send a task to a person or a group. Choose whether one group member picks it up, or everyone gets their own copy. Work is submitted, then approved or sent back with a note.</p></div>
+    <div class="card work"><h3>Reports, collected and approved</h3><p>Request a written report from a group. Each person drafts, submits and gets approval. You can see who has submitted and who hasn't, without chasing anyone.</p></div>
+    <div class="card work"><h3>Events with RSVPs</h3><p>Calendar entries like Outlook's: invite people or groups, collect going / maybe / declined replies, and send automatic reminders. Invitees are told when the time changes or the event is cancelled.</p></div>
+    <div class="card org"><h3>Branches and groups</h3><p>Each branch runs itself. Admins create groups (departments, year teams, committees), send work to whole groups at once, and give groups the permissions they need.</p></div>
+    <div class="card org"><h3>Private items</h3><p>Sensitive matters can be marked private, so only the people involved and admins can see them. Comments can also be marked staff-only.</p></div>
+    <div class="card talk"><h3>Deadlines and overdue alerts</h3><p>Tasks and reports have due dates. People are warned the day before, and admins see anything overdue straight away.</p></div>
+    <div class="card talk"><h3>Comments, mentions and files</h3><p>Discuss work in place, @mention colleagues to bring them in, and attach documents or photos.</p></div>
+    <div class="card sys"><h3>In-app notifications</h3><p>A personal inbox on the dashboard for new assignments, mentions, approvals, deadlines and event reminders. It arrives instantly, without email.</p></div>
+    <div class="card sys"><h3>Excel export</h3><p>Admins download their branch's tickets, actions, reports and events for any date range. Super admins can export any branch, or the whole school.</p></div>
+    <div class="card sys"><h3>Full history</h3><p>Every change, approval, permission change and export is recorded permanently, so there's always an answer to "who did this, and when?".</p></div>
+  </div>
+</section>
+
+<section id="dashboard">
+  <h2>The live dashboard</h2>
+  <p class="section-intro">Everyone lands on a dashboard that updates by itself the moment something changes, with no refreshing. Admins see their whole branch, super admins see every branch, and staff see their own work. The example below is illustrative.</p>
+  <div class="mock" aria-label="Example dashboard">
+    <div class="mock-top"><span class="mock-title">North Campus</span><span class="live">Live</span></div>
+    <div class="tiles">
+      <div class="tile"><div class="num">24</div><div class="cap">Open items</div></div>
+      <div class="tile alert"><div class="num">3</div><div class="cap">Overdue</div></div>
+      <div class="tile wait"><div class="num">5</div><div class="cap">Waiting for my approval</div></div>
+      <div class="tile"><div class="num">9</div><div class="cap">Due in the next 7 days</div></div>
+      <div class="tile"><div class="num">2</div><div class="cap">Events in the next 14 days</div></div>
+    </div>
+    <div class="feed">
+      <div><b>Sara K.</b> submitted "Term 1 science report" for approval · just now</div>
+      <div><b>Omar R.</b> mentioned you on "Lab supplies order" · 4 min ago</div>
+      <div><b>Reminder:</b> Parent evening starts tomorrow at 18:00 · 12 of 15 going</div>
+    </div>
+  </div>
+</section>
+
+<section id="week">
+  <h2>A week in the app</h2>
+  <div class="story">
+    <div class="beat"><div class="when">Monday</div><p>The super admin sends a fire-drill Action to every branch, due Friday. Each branch admin is notified straight away.</p></div>
+    <div class="beat"><div class="when">Monday</div><p>The North admin assigns the drill to the site manager, and sends a term Report request to the Science group, with one copy per teacher.</p></div>
+    <div class="beat"><div class="when">Tuesday</div><p>A teacher opens a Ticket asking where to order lab supplies, addressed to the Lab technicians group. A technician replies in the comments, and the teacher closes it.</p></div>
+    <div class="beat"><div class="when">Wednesday</div><p>The admin creates a Parent Evening event and invites all staff. RSVPs come in, and a reminder goes out the day before.</p></div>
+    <div class="beat"><div class="when">Thursday</div><p>Teachers submit their reports. The admin approves most of them and sends one back with a note. The dashboard shows two reports still outstanding, and those teachers get a due-tomorrow reminder.</p></div>
+    <div class="beat"><div class="when">Friday</div><p>Every branch has submitted its drill, and a super admin approves them all. At the end of term, the admin exports the branch's reports to Excel.</p></div>
+  </div>
+</section>
+
+<section id="scope">
+  <h2>What's in the first version</h2>
+  <div class="scope-grid">
+    <div class="scope-box in">
+      <h3>Included</h3>
+      <ul>
+        <li>Branches, members (including people in several branches) and groups</li>
+        <li>Configurable permissions per group, with safe defaults</li>
+        <li>Tickets, actions, reports and events</li>
+        <li>Approvals, deadlines and overdue alerts</li>
+        <li>RSVPs and event reminders</li>
+        <li>Comments, @mentions and file attachments</li>
+        <li>Private items and staff-only comments</li>
+        <li>Live dashboard and in-app notifications</li>
+        <li>Excel export</li>
+        <li>Complete activity history</li>
+      </ul>
+    </div>
+    <div class="scope-box later">
+      <h3>Not yet (possible later)</h3>
+      <ul>
+        <li>Email or text-message notifications</li>
+        <li>Self-service password reset (admins reset passwords for now)</li>
+        <li>Recurring tasks and events, such as a weekly report</li>
+        <li>Reporting by academic term (exports use date ranges)</li>
+        <li>Advanced search</li>
+        <li>Calendar sync with Outlook or Google Calendar</li>
+        <li>Mobile app (the web app works on phones)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="status">
+  <h2>Where it stands</h2>
+  <p class="section-intro">As of 17 October 2026.</p>
+  <div class="scope-grid">
+    <div class="scope-box in">
+      <h3>Built: the server</h3>
+      <ul>
+        <li>Everything listed under "Included" above works through the server</li>
+        <li>Covered by 141 automated tests, including every permission rule</li>
+        <li>Demo data: three branches with about 90 staff, ready to sign in to</li>
+      </ul>
+    </div>
+    <div class="scope-box later">
+      <h3>Next: the screens</h3>
+      <ul>
+        <li>The user interface is designed and its build plan is written</li>
+        <li>Building it is the next step; until then the app can't be used from a browser</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">School Ticketing System · Product overview, updated 17 October 2026. Companion documents: Data model, Permissions.</footer>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM event_rsvp r\n        WHERE r.issue_id = $1 AND NOT EXISTS (\n            SELECT 1 FROM issue_target t\n            WHERE t.issue_id = $1 AND t.removed_at IS NULL AND (\n                   (t.kind = 'user' AND t.user_id = r.user_id)\n                OR (t.kind = 'group' AND EXISTS (\n                      SELECT 1 FROM group_member gm WHERE gm.group_id = t.group_id AND gm.user_id = r.user_id))\n                OR (t.kind = 'branch' AND EXISTS (\n                      SELECT 1 FROM branch_membership m\n                      WHERE m.branch_id = t.branch_id AND m.user_id = r.user_id AND m.left_at IS NULL))))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aef20d26261175aa3f876cab2cec3233206d53695377900f0e5f449e00b98095"
+}

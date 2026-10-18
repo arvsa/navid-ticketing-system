@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schema Types &amp; Functions</title>
+<style>
+  :root { --bg:#f7f7f5; --surface:#fff; --surface-2:#f0efeb; --text:#1c1c1e; --muted:#5d5f63; --border:#e2dfd7; --accent:#2c56c9; --code:#7a3fb0; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141416; --surface:#1d1d20; --surface-2:#26262a; --text:#ececee; --muted:#a2a3a8; --border:#34343a; --accent:#8eaaf5; --code:#c9a2f0; } }
+  :root[data-theme="dark"] { --bg:#141416; --surface:#1d1d20; --surface-2:#26262a; --text:#ececee; --muted:#a2a3a8; --border:#34343a; --accent:#8eaaf5; --code:#c9a2f0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 16px; }
+  header { padding-top:40px; padding-bottom:16px; }
+  h1 { font-size:30px; margin:4px 0 8px; } h2 { font-size:22px; margin:36px 0 8px; } h3 { font-size:16px; margin:0 0 6px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--code); }
+  .eyebrow { color:var(--accent); font-weight:600; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+  .muted { color:var(--muted); }
+  nav { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--border); z-index:2; }
+  nav .wrap { display:flex; gap:18px; overflow-x:auto; padding-top:8px; padding-bottom:8px; }
+  nav a { color:var(--muted); text-decoration:none; font-size:14px; white-space:nowrap; }
+  code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
+  code { background:var(--surface-2); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--surface-2); padding:12px; border-radius:8px; overflow-x:auto; margin:8px 0 0; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin:10px 0; }
+  .card p { margin:4px 0; }
+  .vals { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+  .vals code { border:1px solid var(--border); }
+  .meta { font-size:13px; color:var(--muted); }
+  .tw { overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--surface-2); font-size:12px; text-transform:uppercase; color:var(--muted); }
+  tr:last-child td { border-bottom:none; }
+  footer { color:var(--muted); font-size:13px; padding:40px 0; }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <div class="eyebrow">Developer reference · backend/migrations</div>
+  <h1>Schema types &amp; functions</h1>
+  <p class="muted">Every custom type, function, trigger and view in <code>backend/migrations</code> 0001–0005, as they stand after the latest migration. <code>schema.sql</code> is identical to <code>0001_init.sql</code> only and does not include 0002–0005. PostgreSQL 16, extension <code>citext</code>.</p>
+  <p class="muted">Checked on 17 Oct 2026 against the dev database (<code>backend-postgres-1</code>, migrations 1–5 applied): 7 enum types, 14 functions, 19 triggers and 2 views, all listed below. Rust names come from <code>backend/src</code>.</p>
+</header>
+<nav><div class="wrap">
+  <a href="#enums">Enum types</a><a href="#arrays">Column types</a><a href="#trigfn">Trigger functions</a><a href="#constraint">Invariants</a><a href="#bindings">Trigger bindings</a><a href="#sqlfn">SQL functions</a><a href="#views">Views</a><a href="#rust">Rust mapping</a><a href="#history">Migration history</a>
+</div></nav>
+<main class="wrap">
+
+<h2 id="enums">Enum types</h2>
+<p class="muted">Changing an enum needs a new migration (<code>ALTER TYPE … ADD VALUE</code>); values can't be removed easily.</p>
+
+<div class="card"><h3>issue_priority</h3><div class="vals"><code>low</code><code>medium</code><code>high</code><code>critical</code></div><p class="meta">Used by <code>issue.priority</code> (default <code>medium</code>).</p></div>
+
+<div class="card"><h3>issue_state</h3><div class="vals"><code>open</code><code>closed</code><code>cancelled</code></div><p class="meta">Used by <code>issue.state</code>. Check <code>issue_closed_at</code>: <code>closed_at IS NULL</code> exactly when state is <code>open</code>.</p></div>
+
+<div class="card"><h3>completion_mode</h3><div class="vals"><code>shared</code><code>per_member</code></div><p class="meta">Used by <code>issue.completion_mode</code>. <code>shared</code>: one work item per target, claimed by a member. <code>per_member</code>: one work item per member at send time.</p></div>
+
+<div class="card"><h3>target_kind</h3><div class="vals"><code>branch</code><code>group</code><code>user</code></div><p class="meta">Used by <code>issue_target.kind</code>. Check <code>issue_target_shape</code> requires <code>group_id</code>/<code>user_id</code> to match the kind. <code>branch</code> only for super admin issues (enforced by <code>check_issue_target</code>). Targets are never deleted: removing one sets <code>removed_at</code>/<code>removed_by</code> (0004), and the partial unique index <code>issue_target_once</code> applies to active targets only, so a removed target can be added again.</p></div>
+
+<div class="card"><h3>permission_scope</h3><div class="vals"><code>own</code><code>targeted</code><code>branch</code></div><p class="meta">Used by <code>group_permission.scope</code> and <code>permission.allowed_scopes</code> (array).</p></div>
+
+<div class="card"><h3>rsvp_response</h3><div class="vals"><code>pending</code><code>going</code><code>maybe</code><code>declined</code></div><p class="meta">Used by <code>event_rsvp.response</code>. Check <code>event_rsvp_responded</code>: <code>responded_at IS NULL</code> exactly when <code>pending</code>.</p></div>
+
+<div class="card"><h3>work_status</h3><div class="vals"><code>open</code><code>in_progress</code><code>blocked</code><code>pending_approval</code><code>approved</code><code>cancelled</code></div>
+<pre>open → in_progress ⇄ blocked → pending_approval → approved
+pending_approval → in_progress   (rejection)
+any non-final    → cancelled</pre>
+<p class="meta">Used by <code>work_item.status</code>. Transitions are enforced in Rust; the DB enforces <code>work_item_submitted</code> (pending_approval/approved need <code>submitted_at</code>) and <code>work_item_decided</code> (approved needs <code>decided_at</code>).</p></div>
+
+<h2 id="arrays">Other notable column types</h2>
+<div class="tw"><table>
+<thead><tr><th>Type</th><th>Where</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>citext</code></td><td><code>app_user.email</code>, <code>branch.email</code></td><td>Case-insensitive; <code>app_user.email</code> is UNIQUE, so <code>A@x.io</code> = <code>a@x.io</code>.</td></tr>
+<tr><td><code>permission_scope[]</code></td><td><code>permission.allowed_scopes</code></td><td>Catalog of scopes a grant may use; checked by <code>check_group_permission</code>.</td></tr>
+<tr><td><code>bytea</code></td><td><code>user_session.token_hash</code></td><td>sha256 of the cookie token; never store the raw token.</td></tr>
+<tr><td><code>inet</code></td><td><code>user_session.ip</code></td><td></td></tr>
+<tr><td><code>char(64)</code></td><td><code>issue_attachment.checksum_sha256</code></td><td>Hex sha256.</td></tr>
+<tr><td><code>jsonb</code></td><td><code>notification.payload</code>, <code>audit_log.old_value/new_value</code></td><td>Audit stores only changed fields.</td></tr>
+<tr><td><code>bigint IDENTITY</code></td><td><code>issue.number</code>, <code>notification.id</code>, <code>audit_log.id</code></td><td><code>issue.number</code> is the human key <code>ISS-&lt;n&gt;</code>.</td></tr>
+<tr><td><code>smallint IDENTITY</code></td><td><code>issue_type.id</code></td><td>Code values fixed by check: <code>ticket</code>, <code>report</code>, <code>event</code>, <code>action</code>.</td></tr>
+<tr><td><code>uuid</code></td><td>All other PKs</td><td><code>gen_random_uuid()</code> default.</td></tr>
+<tr><td><code>text</code> + CHECK</td><td><code>notification.kind</code></td><td>Fixed list of 18 kinds (see 0001); not an enum, so adding one is a CHECK change.</td></tr>
+</tbody></table></div>
+
+<h2 id="trigfn">Trigger functions</h2>
+<p class="muted">All <code>plpgsql</code>, <code>RETURNS trigger</code>. Errors raised here surface as SQLSTATE <code>P0001</code> (raise_exception); map them to 409/422 in <code>AppError</code>.</p>
+
+<div class="card"><h3>set_updated_at()</h3><p>BEFORE UPDATE. Sets <code>NEW.updated_at := now()</code>. Bound to 8 tables (see bindings).</p></div>
+<div class="card"><h3>reject_modification()</h3><p>BEFORE UPDATE OR DELETE on <code>audit_log</code>. Always raises <code>'&lt;table&gt; is append-only'</code>.</p></div>
+<div class="card"><h3>create_default_group()</h3><p>AFTER INSERT on <code>branch</code>. Creates the branch's <code>All members</code> group (<code>is_default = true</code>) and inserts 12 baseline <code>group_permission</code> rows:</p>
+<pre>issue.read        *       branch     issue.target      ticket  own
+issue.create      ticket  branch     issue.target      event   own
+issue.create      report  branch     work_item.update  *       targeted
+issue.create      event   branch     work_item.assign  *       targeted
+issue.edit        *       own        comment.create    *       branch
+issue.close       *       own        member.view       *       branch</pre></div>
+<div class="card"><h3>sync_default_group_membership()</h3><p>AFTER INSERT OR UPDATE OF <code>left_at</code> on <code>branch_membership</code>. Joining (insert, or <code>left_at</code> → NULL) adds the user to the branch's default group (<code>ON CONFLICT DO NOTHING</code>). Leaving (<code>left_at</code> set) deletes all of the user's <code>group_member</code> rows in that branch.</p></div>
+<div class="card"><h3>check_group_member_active()</h3><p>BEFORE INSERT on <code>group_member</code>. Raises if the membership has <code>left_at</code> set.</p></div>
+<div class="card"><h3>protect_default_group()</h3><p>BEFORE UPDATE OR DELETE on <code>user_group</code>. Blocks deleting the default group and changing <code>is_default</code>.</p></div>
+<div class="card"><h3>check_group_permission()</h3><p>BEFORE INSERT OR UPDATE on <code>group_permission</code>. Raises if <code>scope</code> isn't in the permission's <code>allowed_scopes</code>, or if <code>issue_type_id</code> is set on a permission with <code>per_issue_type = false</code>.</p></div>
+<div class="card"><h3>check_issue_target()</h3><p>BEFORE INSERT OR UPDATE on <code>issue_target</code>. Raises if a branch-owned issue gets a target in another branch, or if a <code>branch</code>-kind target is added to an issue without <code>requires_super_admin_approval</code>.</p></div>
+
+<h2 id="constraint">Invariant functions (deferred constraint triggers)</h2>
+<p class="muted">These run <code>DEFERRABLE INITIALLY DEFERRED</code>, i.e. at COMMIT, so multi-statement changes (create branch + first admin, swap admins) pass. They do not prevent races between concurrent transactions: lock the branch row (<code>SELECT … FOR UPDATE</code>) before demoting admins.</p>
+<div class="card"><h3>assert_branch_has_admin(b uuid) RETURNS void</h3><p>Helper. Raises <code>'branch % must have at least one active admin'</code> if the branch is active and has no membership with <code>is_admin</code>, <code>left_at IS NULL</code> and an active user.</p></div>
+<div class="card"><h3>check_branch_has_admin()</h3><p>On <code>branch</code> AFTER INSERT OR UPDATE OF <code>is_active</code>. Calls the helper with <code>NEW.id</code>.</p></div>
+<div class="card"><h3>check_membership_keeps_admin()</h3><p>On <code>branch_membership</code> AFTER UPDATE OR DELETE. Calls the helper with <code>OLD.branch_id</code>.</p></div>
+<div class="card"><h3>check_user_deactivation_keeps_admins()</h3><p>On <code>app_user</code> AFTER UPDATE OF <code>is_active</code>. Raises if deactivating leaves any active branch the user administers without an active admin.</p></div>
+<div class="card"><h3>check_super_admin_exists()</h3><p>On <code>app_user</code> AFTER INSERT, UPDATE OF <code>is_super_admin, is_active</code>, or DELETE. Raises if users exist but no active super admin does. The bootstrap CLI must insert the first user as a super admin.</p></div>
+
+<h2 id="bindings">Trigger bindings</h2>
+<div class="tw"><table>
+<thead><tr><th>Table</th><th>Trigger</th><th>When</th><th>Function</th></tr></thead>
+<tbody>
+<tr><td>branch</td><td>branch_default_group</td><td>AFTER INSERT</td><td>create_default_group</td></tr>
+<tr><td>branch</td><td>branch_needs_admin</td><td>AFTER INSERT / UPDATE OF is_active · deferred</td><td>check_branch_has_admin</td></tr>
+<tr><td>branch_membership</td><td>branch_membership_default_group</td><td>AFTER INSERT / UPDATE OF left_at</td><td>sync_default_group_membership</td></tr>
+<tr><td>branch_membership</td><td>branch_membership_keeps_admin</td><td>AFTER UPDATE / DELETE · deferred</td><td>check_membership_keeps_admin</td></tr>
+<tr><td>app_user</td><td>app_user_keeps_branch_admins</td><td>AFTER UPDATE OF is_active · deferred</td><td>check_user_deactivation_keeps_admins</td></tr>
+<tr><td>app_user</td><td>app_user_keeps_super_admin</td><td>AFTER INSERT / UPDATE / DELETE · deferred</td><td>check_super_admin_exists</td></tr>
+<tr><td>group_member</td><td>group_member_active</td><td>BEFORE INSERT</td><td>check_group_member_active</td></tr>
+<tr><td>user_group</td><td>user_group_protect_default</td><td>BEFORE UPDATE / DELETE</td><td>protect_default_group</td></tr>
+<tr><td>group_permission</td><td>group_permission_valid</td><td>BEFORE INSERT / UPDATE</td><td>check_group_permission</td></tr>
+<tr><td>issue_target</td><td>issue_target_valid</td><td>BEFORE INSERT / UPDATE</td><td>check_issue_target</td></tr>
+<tr><td>audit_log</td><td>audit_log_append_only</td><td>BEFORE UPDATE / DELETE</td><td>reject_modification</td></tr>
+<tr><td>app_user, branch, branch_membership, user_group, issue, work_item, issue_comment, issue_report</td><td>&lt;table&gt;_updated_at</td><td>BEFORE UPDATE</td><td>set_updated_at</td></tr>
+</tbody></table></div>
+
+<h2 id="sqlfn">SQL functions</h2>
+<div class="card"><h3>issue_visible(p_issue_id uuid, p_branch_id uuid, p_type_id smallint, p_is_private boolean, p_created_by uuid, f jsonb) RETURNS boolean</h3>
+<p><code>LANGUAGE sql STABLE</code>. Created in 0002, replaced in 0004 and 0005; the description below is the 0005 version. The single read-visibility predicate for lists, dashboard and export. Must agree with <code>authz::policy::can_read</code> (tested).</p>
+<pre>WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)</pre>
+<p><code>f</code> is built by <code>IssueFilter::for_actor(actor).into_json()</code> in <code>src/authz/filter.rs</code>. Only branch-scope grants feed <code>read</code> and <code>read_private</code>:</p>
+<pre>{"me": "&lt;uuid&gt;", "super": false,
+ "branches":     ["&lt;branch&gt;", ...],          -- current memberships
+ "admin":        ["&lt;branch&gt;", ...],          -- admin in
+ "read":         ["&lt;branch&gt;:&lt;type|*&gt;", ...],  -- issue.read @ branch
+ "read_private": ["&lt;branch&gt;:&lt;type|*&gt;", ...],  -- issue.read_private
+ "internal":     ["&lt;branch&gt;", ...]}          -- admin or comment.internal; not used by issue_visible</pre>
+<p>Returns true when any of these holds. Only active targets count (<code>removed_at IS NULL</code>).</p>
+<div class="tw"><table>
+<thead><tr><th>Path</th><th>Condition</th></tr></thead>
+<tbody>
+<tr><td>Super admin</td><td><code>f.super</code></td></tr>
+<tr><td>Own</td><td><code>created_by = me</code>, and still a member of the issue's branch (or the issue is cross-branch)</td></tr>
+<tr><td>User target</td><td>Targeted directly, and still a member of that target's branch</td></tr>
+<tr><td>Group target</td><td>Current member of a targeted group (leaving a branch removes group membership via trigger)</td></tr>
+<tr><td>Branch target</td><td>Member of a branch-kind target's branch</td></tr>
+<tr><td>Assignee</td><td>Assignee of a work item on an active target, and still a member of the work item's branch</td></tr>
+<tr><td>Branch access</td><td>In the issue's branch (cross-branch: any active targeted branch): admin, or <code>read_private</code>, or <code>read</code> and the issue is not private. Grant keys are <code>&lt;branch&gt;:&lt;issue_type.code&gt;</code> or <code>&lt;branch&gt;:*</code>.</td></tr>
+</tbody></table></div>
+<p class="meta">Consequence: leaving a branch ends all access to its issues, including ones you created or were assigned (0005).</p></div>
+
+<h2 id="views">Views</h2>
+<div class="card"><h3>work_item_overview</h3><p><code>work_item.*</code> plus <code>is_overdue boolean</code>: <code>sla_due_at &lt; now()</code> and status in open/in_progress/blocked; false when no SLA.</p></div>
+<div class="card"><h3>issue_overview</h3><p><code>issue.*</code> plus rollups over its work items: <code>work_item_count</code>, <code>done_count</code> (approved + cancelled), <code>awaiting_approval_count</code>, <code>is_overdue</code>, <code>next_sla_due_at</code>. Counts are <code>bigint</code> (<code>i64</code> in Rust). Not permission-filtered: always combine with <code>issue_visible</code>.</p></div>
+
+<h2 id="rust">Rust mapping (sqlx 0.9)</h2>
+<p class="muted">As implemented in <code>backend/src</code>. All enums derive <code>sqlx::Type</code> with <code>#[sqlx(type_name = "...", rename_all = "snake_case")]</code> and the matching serde rename.</p>
+<div class="tw"><table>
+<thead><tr><th>Postgres</th><th>Rust</th><th>Defined in</th></tr></thead>
+<tbody>
+<tr><td><code>issue_priority</code></td><td><code>Priority</code></td><td><code>src/domain/types.rs</code></td></tr>
+<tr><td><code>issue_state</code></td><td><code>IssueState</code></td><td><code>src/domain/types.rs</code></td></tr>
+<tr><td><code>completion_mode</code></td><td><code>CompletionMode</code> (default <code>Shared</code>)</td><td><code>src/domain/types.rs</code></td></tr>
+<tr><td><code>target_kind</code></td><td><code>TargetKind</code></td><td><code>src/domain/types.rs</code></td></tr>
+<tr><td><code>work_status</code></td><td><code>WorkStatus</code> (<code>is_final()</code>: Approved, Cancelled)</td><td><code>src/domain/types.rs</code></td></tr>
+<tr><td><code>permission_scope</code></td><td><code>Scope</code></td><td><code>src/authz/permission.rs</code></td></tr>
+<tr><td><code>rsvp_response</code></td><td><code>RsvpResponse</code></td><td><code>src/domain/events.rs</code></td></tr>
+<tr><td><code>issue_type.code</code> (text)</td><td><code>IssueType</code>: not a sqlx type; maps via <code>code()</code></td><td><code>src/authz/permission.rs</code></td></tr>
+<tr><td><code>permission.key</code> (text)</td><td><code>Permission</code> enum; checked against the table at startup</td><td><code>src/authz/permission.rs</code></td></tr>
+<tr><td><code>notification.kind</code> (text + CHECK)</td><td><code>Kind</code> (18 variants, <code>Kind::ALL</code>)</td><td><code>src/domain/notifications.rs</code></td></tr>
+<tr><td><code>permission_scope[]</code></td><td>Read as <code>allowed_scopes::text[]</code> into <code>Vec&lt;String&gt;</code></td><td><code>src/http/permissions.rs</code></td></tr>
+<tr><td><code>citext</code></td><td><code>String</code>. Read with <code>email::text</code>, compare with <code>($1::text)::citext</code></td><td><code>src/auth/login.rs</code></td></tr>
+<tr><td><code>inet</code></td><td><code>std::net::IpAddr</code></td><td><code>src/auth/session.rs</code></td></tr>
+<tr><td><code>timestamptz</code> / <code>uuid</code> / <code>jsonb</code> / <code>bytea</code></td><td><code>time::OffsetDateTime</code> / <code>Uuid</code> / <code>serde_json::Value</code> / <code>Vec&lt;u8&gt;</code></td><td></td></tr>
+<tr><td><code>smallint</code> / <code>bigint</code></td><td><code>i16</code> / <code>i64</code></td><td></td></tr>
+</tbody></table></div>
+
+<h2 id="history">Migration history</h2>
+<div class="tw"><table>
+<thead><tr><th>Migration</th><th>Change</th></tr></thead>
+<tbody>
+<tr><td><code>0001_init</code></td><td>Initial schema: all types, tables, trigger functions, views and catalog seeds.</td></tr>
+<tr><td><code>0002_issue_visible</code></td><td>Adds <code>issue_visible()</code>.</td></tr>
+<tr><td><code>0003_work_item_unassigned</code></td><td><code>work_item_once_per_assignee</code> becomes a plain <code>UNIQUE (target_id, assignee_id)</code>: at most one item per assignee per target, but any number of unassigned items (needed when several members of a <code>per_member</code> target leave).</td></tr>
+<tr><td><code>0004_issue_target_removal</code></td><td>Adds <code>issue_target.removed_at</code> and <code>removed_by</code>. <code>issue_target_once</code> becomes a partial unique index over active targets. <code>issue_visible()</code> ignores removed targets.</td></tr>
+<tr><td><code>0005_visibility_needs_membership</code></td><td><code>issue_visible()</code>: the own, user-target and assignee paths now require a current membership in the relevant branch.</td></tr>
+</tbody></table></div>
+</main>
+<footer class="wrap">Generated from backend/migrations 0001–0005.</footer>
+</body>
+</html>

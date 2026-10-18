@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE branch SET code = $2, name = $3, timezone = $4, email = $5::text, is_active = $6 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e1cf57de360649f6fd23d470100947ce9f79adae0d1db24b7c1ee1cb2e321a16"
+}

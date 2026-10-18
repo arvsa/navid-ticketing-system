@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT gp.group_id, gp.permission_key, t.code AS \"issue_type?\", gp.scope AS \"scope: Scope\"\n           FROM group_permission gp LEFT JOIN issue_type t ON t.id = gp.issue_type_id WHERE gp.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "permission_key"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "scope: Scope",
+        "type_info": {
+          "Custom": {
+            "name": "permission_scope",
+            "kind": {
+              "Enum": [
+                "own",
+                "targeted",
+                "branch"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "scope"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "bf99b67cecc82125d538c7ca84d62391bec3a8af67f835d4e938af049af8db05"
+}

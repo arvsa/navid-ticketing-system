@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue SET state = $3, closed_at = now(), closed_by = $4, version = version + 1\n           WHERE id = $1 AND version = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "333c2e4827b8ec5ddf9ad741c25b0d2e567e4481ee237bb0f09d86b844023797"
+}

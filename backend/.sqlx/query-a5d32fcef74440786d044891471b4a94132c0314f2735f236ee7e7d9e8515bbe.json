@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_super_admin FROM app_user WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_super_admin",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "is_super_admin"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a5d32fcef74440786d044891471b4a94132c0314f2735f236ee7e7d9e8515bbe"
+}

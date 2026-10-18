@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT count(*) AS \"n!\" FROM work_item w JOIN issue i ON i.id = w.issue_id\n        WHERE w.assignee_id = $2 AND w.status NOT IN ('approved', 'cancelled')\n          AND ($3::uuid[] IS NULL OR w.branch_id = ANY($3))\n          AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "86becec697cf811ee8c63ffa57d10faff7e04e39a4eb10ab1ce335f7496a5742"
+}

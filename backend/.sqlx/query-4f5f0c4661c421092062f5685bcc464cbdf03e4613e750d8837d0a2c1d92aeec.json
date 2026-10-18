@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue SET title = $3, description = $4, priority = $5, is_private = $6, version = version + 1\n           WHERE id = $1 AND version = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "issue_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f5f0c4661c421092062f5685bcc464cbdf03e4613e750d8837d0a2c1d92aeec"
+}

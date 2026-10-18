@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_internal_only, deleted_at IS NOT NULL AS \"deleted!\" FROM issue_comment WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_internal_only",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_comment",
+            "name": "is_internal_only"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "45af8739b75d8affffd73e231ef8a6024ec8d9bc17107b459db473a9ef99ded9"
+}

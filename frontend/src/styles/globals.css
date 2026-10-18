@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sunken: var(--sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input-border);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-on-soft: var(--primary-on-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-solid: var(--success-solid);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-edge: var(--warning-edge);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-solid: var(--danger-solid);
+  --color-private: var(--private);
+  --color-private-bg: var(--private-bg);
+  --color-staff-bg: var(--staff-bg);
+  --color-staff-edge: var(--staff-edge);
+  --color-sent-back: var(--sent-back);
+  --color-sent-back-bg: var(--sent-back-bg);
+  --color-sent-back-edge: var(--sent-back-edge);
+  --color-nav: var(--nav-bg);
+  --color-nav-surface: var(--nav-surface);
+  --color-nav-border: var(--nav-border);
+  --color-nav-text: var(--nav-text);
+  --color-nav-text-2: var(--nav-text-2);
+  --color-nav-active: var(--nav-active);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+}
+@media (max-width: 639px) { body { font-size: 16px; } }
+* { box-sizing: border-box; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+.tabular { font-variant-numeric: tabular-nums; }
+.break-anywhere { overflow-wrap: anywhere; }
+.skeleton { background: linear-gradient(90deg, var(--sunken) 25%, var(--surface-2) 50%, var(--sunken) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.highlight-in { animation: highlight var(--dur-highlight) ease-out; }
+@keyframes highlight { from { background-color: var(--primary-soft); } to { background-color: transparent; } }
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* Modals fade and rise in; nothing moves with reduced motion. */
+.modal-overlay[data-state="open"] { animation: fade-in var(--dur-2) var(--ease-out, ease-out); }
+.modal-content[data-state="open"] { animation: rise-in var(--dur-2) cubic-bezier(.2,.8,.2,1); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay[data-state="open"], .modal-content[data-state="open"] { animation: none; }
+}

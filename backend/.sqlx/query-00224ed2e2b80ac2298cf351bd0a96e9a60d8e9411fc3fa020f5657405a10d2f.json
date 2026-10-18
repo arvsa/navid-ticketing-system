@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO branch_membership (user_id, branch_id, is_admin) VALUES ($1, $2, true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00224ed2e2b80ac2298cf351bd0a96e9a60d8e9411fc3fa020f5657405a10d2f"
+}

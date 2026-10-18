@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE branch SET timezone = 'Asia/Tokyo' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56810d6de6264a7e33e161fa62f6f8e16e304672c5124f21957bb8b7f2f3d315"
+}

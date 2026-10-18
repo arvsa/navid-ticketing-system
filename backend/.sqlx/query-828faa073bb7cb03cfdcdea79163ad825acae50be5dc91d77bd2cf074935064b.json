@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.number, i.title, i.state::text AS \"state!\", i.created_at, i.closed_at,\n                   coalesce(b.code, (SELECT string_agg(DISTINCT bb.code, ', ') FROM issue_target t\n                                     JOIN branch bb ON bb.id = t.branch_id\n                                     WHERE t.issue_id = i.id AND t.removed_at IS NULL)) AS branch,\n                   coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   u.first_name || ' ' || u.last_name AS \"created_by!\",\n                   (SELECT count(*) FROM issue_comment c\n                    WHERE c.issue_id = i.id AND c.deleted_at IS NULL\n                      AND (NOT c.is_internal_only\n                           OR coalesce(($1::jsonb->>'super')::boolean, false)\n                           OR $1::jsonb->'internal' ? i.branch_id::text\n                           OR (i.branch_id IS NULL AND EXISTS (\n                                 SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.removed_at IS NULL\n                                   AND $1::jsonb->'internal' ? t.branch_id::text)))) AS \"comments!\"\n            FROM issue i\n            JOIN issue_type ty ON ty.id = i.type_id AND ty.code = 'ticket'\n            LEFT JOIN branch b ON b.id = i.branch_id\n            JOIN app_user u ON u.id = i.created_by\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n              AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (\n                    SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))\n              AND ($3::timestamptz IS NULL OR i.created_at >= $3)\n              AND ($4::timestamptz IS NULL OR i.created_at < $4)\n            ORDER BY i.number\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "state!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "closed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "closed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "branch",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_by!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "comments!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "UuidArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "828faa073bb7cb03cfdcdea79163ad825acae50be5dc91d77bd2cf074935064b"
+}

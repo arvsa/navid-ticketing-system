@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.issue_id, r.author_id, r.submitted_at IS NOT NULL AS \"submitted!\", r.version,\n               w.status AS \"item_status: Option<WorkStatus>\", i.state AS \"issue_state: IssueState\"\n        FROM issue_report r\n        JOIN issue i ON i.id = r.issue_id\n        LEFT JOIN work_item w ON w.id = r.work_item_id\n        WHERE r.id = $1\n        FOR UPDATE OF r\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "issue_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_report",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "author_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_report",
+            "name": "author_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "submitted!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "version",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_report",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "item_status: Option<WorkStatus>",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "issue_state: IssueState",
+        "type_info": {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d898ed045f7a3ec0852ab58447c2a59fbd908f0349f0012c5ba625fa26cd04fe"
+}

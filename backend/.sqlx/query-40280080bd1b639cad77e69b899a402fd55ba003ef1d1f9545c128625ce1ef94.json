@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE branch_membership SET left_at = now() WHERE user_id = $1 AND branch_id = $2 AND left_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40280080bd1b639cad77e69b899a402fd55ba003ef1d1f9545c128625ce1ef94"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO notification (recipient_id, kind, branch_id, issue_id, actor_id, payload, dedupe_key)\n        SELECT r.user_id, 'event_reminder', i.branch_id, i.id, NULL,\n               jsonb_build_object('minutes_before', er.minutes_before, 'starts_at', e.starts_at),\n               'reminder:' || i.id || ':' || r.user_id || ':' || er.minutes_before\n                   || ':' || extract(epoch FROM e.starts_at)::bigint\n        FROM event_reminder er\n        JOIN issue_event e ON e.issue_id = er.issue_id\n        JOIN issue i ON i.id = e.issue_id AND i.state = 'open'\n        JOIN event_rsvp r ON r.issue_id = i.id AND r.response <> 'declined'\n        JOIN app_user u ON u.id = r.user_id AND u.is_active\n        WHERE e.starts_at - make_interval(mins => er.minutes_before) <= $1\n          AND e.starts_at > $1\n        ON CONFLICT (dedupe_key) DO NOTHING\n        RETURNING recipient_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipient_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "recipient_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7c846a7cbf5bd68bad0bc25ca570150c4c6b1505719ae5644b0ddcf32e5d0155"
+}

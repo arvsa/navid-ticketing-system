@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO group_permission (group_id, permission_key, scope) VALUES ($1, 'export.run', 'branch')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3258cde57ab69e9e7b95fb6311f2d4c3c100fe58e0a92e548e886f57ca8502d"
+}

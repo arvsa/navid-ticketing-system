@@ -1,0 +1,5 @@
+.DS_Store
+.env
+
+# Same images as the "School Ticketing UI-png" folder, which is kept.
+/School Ticketing UI-png.zip

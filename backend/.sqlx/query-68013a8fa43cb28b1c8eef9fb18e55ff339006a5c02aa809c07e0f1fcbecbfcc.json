@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_admin, left_at IS NOT NULL AS \"departed!\" FROM branch_membership\n           WHERE user_id = $1 AND branch_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_admin",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "branch_membership",
+            "name": "is_admin"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "departed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "68013a8fa43cb28b1c8eef9fb18e55ff339006a5c02aa809c07e0f1fcbecbfcc"
+}

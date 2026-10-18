@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO app_user (email, first_name, last_name, password_hash, is_super_admin, must_change_password)\n                VALUES ($1::text, $2, $3, $4, true, true)\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e8bb34a9276d93d7dde57527e1fc66bbdf03ad5dbb2a979e1660cc641d0e6118"
+}

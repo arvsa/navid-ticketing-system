@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE event_rsvp SET response = 'pending', responded_at = NULL\n               WHERE issue_id = $1 AND response IN ('going', 'maybe')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b9920a4494d2123a0e55b5d03315c3aa791d5fdd909332762825861b50f4cd6"
+}

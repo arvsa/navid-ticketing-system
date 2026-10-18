@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.branch_id, ty.code AS issue_type, i.completion_mode AS \"completion_mode: CompletionMode\",\n                  i.state AS \"state: IssueState\"\n           FROM issue i JOIN issue_type ty ON ty.id = i.type_id WHERE i.id = $1 FOR UPDATE OF i",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "completion_mode: CompletionMode",
+        "type_info": {
+          "Custom": {
+            "name": "completion_mode",
+            "kind": {
+              "Enum": [
+                "shared",
+                "per_member"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "completion_mode"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "state: IssueState",
+        "type_info": {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "63c75bc3f1327a206cc25bcd36836ce610ca46e49fe5cce33cc258bd95356fd4"
+}

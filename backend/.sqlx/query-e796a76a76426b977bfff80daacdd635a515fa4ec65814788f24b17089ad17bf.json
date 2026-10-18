@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM issue_report\n                          WHERE issue_id = $1 AND work_item_id IS NOT DISTINCT FROM $2\n                            AND ($2::uuid IS NOT NULL OR author_id = $3)) AS \"e!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "e!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e796a76a76426b977bfff80daacdd635a515fa4ec65814788f24b17089ad17bf"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue_report SET submitted_at = now() WHERE work_item_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "720986c09f08beb783f5aed68f339dde2e09762ff15fc55b14f8b088f85b37d4"
+}

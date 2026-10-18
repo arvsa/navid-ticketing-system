@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT actor_id, dedupe_key FROM notification WHERE kind = 'sla_due_soon' LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "actor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "actor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "dedupe_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "dedupe_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "941da54de2e0bd743700800ace8e23979e860f379e2a072cb13a8c98156e2ee6"
+}

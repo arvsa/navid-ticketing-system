@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state AS \"state: IssueState\" FROM issue WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state: IssueState",
+        "type_info": {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3c15ce9e00a4ec7ab76c625a123716c483ea4362335ff7c49305e8eccdccce28"
+}

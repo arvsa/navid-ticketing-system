@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT starts_at, ends_at, all_day, location FROM issue_event WHERE issue_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "starts_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "starts_at"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ends_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "ends_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "all_day",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "all_day"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "location",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "location"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "445e17c82867d4fa5bd56efb081e31e4c6cef5ae6929808f04cdfa3648d4bfb3"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM issue_target WHERE group_id = $1) AS \"referenced!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "referenced!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8c030d9fe149de47f366102fccf076c7dab9eaae0a3caa02897b2fffd9e0940b"
+}

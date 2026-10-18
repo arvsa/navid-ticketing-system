@@ -1,0 +1,4 @@
+# Lets `docker compose up -d postgres && cargo test` work on a clean checkout without a
+# .env file. A real environment variable (or .env loaded by your shell) wins.
+[env]
+DATABASE_URL = "postgres://ticketing:ticketing@localhost:5432/ticketing"

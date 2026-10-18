@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notification (recipient_id, kind, created_at, read_at)\n                   VALUES ($1, 'assigned', now() - make_interval(days => $2),\n                           CASE WHEN $3 THEN now() - make_interval(days => $2) END)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a603301018d4b6e83d5110f7e6683941ea1c53614f631efebbb41c9fa8c7350c"
+}

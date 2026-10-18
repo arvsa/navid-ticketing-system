@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT minutes_before FROM event_reminder WHERE issue_id = $1 ORDER BY minutes_before DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes_before",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "event_reminder",
+            "name": "minutes_before"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e0f4d0a6037eb8e8551dd0ab4e557e3e72e22b1510fddd446b74751833bebf44"
+}

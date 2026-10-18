@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE work_item SET\n            status = $3,\n            assignee_id = $4,\n            submitted_at = CASE WHEN $5 THEN now() ELSE submitted_at END,\n            decided_by = CASE WHEN $6 THEN $7 ELSE decided_by END,\n            decided_at = CASE WHEN $6 THEN now() ELSE decided_at END,\n            decision_note = CASE WHEN $6 THEN $8 ELSE decision_note END,\n            version = version + 1\n        WHERE id = $1 AND version = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64b66aee13d5a232c7eb21264ec98b5912b6d395d425fc402e3b0e238b82aa3d"
+}

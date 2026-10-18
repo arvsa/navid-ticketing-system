@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE issue SET state = 'closed', closed_at = now(), closed_by = NULL, version = version + 1\n        WHERE id = $1 AND state = 'open'\n          AND EXISTS (SELECT 1 FROM work_item WHERE issue_id = $1)\n          AND NOT EXISTS (SELECT 1 FROM work_item WHERE issue_id = $1 AND status NOT IN ('approved', 'cancelled'))\n        RETURNING branch_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "branch_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9b420522db9692c2ec87258456b7fe0d3dd0531572e266be74d2892a82747ae0"
+}

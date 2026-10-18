@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticketing Data Model</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f0eee8;
+    --text: #1c1c1e; --muted: #5d5f63; --border: #e2dfd7;
+    --accent: #2c56c9; --accent-soft: #e7ecfa;
+    --ok: #1d7448; --ok-soft: #e2f3e9; --no: #b02a20; --no-soft: #fae8e6;
+    --warn: #845400; --warn-soft: #fbf0d6;
+    --c-org: #2c56c9; --c-work: #1d7448; --c-talk: #845400; --c-sys: #7a3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+      --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+      --accent: #8eaaf5; --accent-soft: #1f2a46;
+      --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+      --warn: #f0c46c; --warn-soft: #3a2d12;
+      --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+    --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+    --accent: #8eaaf5; --accent-soft: #1f2a46;
+    --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+    --warn: #f0c46c; --warn-soft: #3a2d12;
+    --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header.hero { padding-top: 56px; padding-bottom: 32px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 17px; margin: 0 0 4px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  nav.toc { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+  nav.toc .wrap { display: flex; gap: 20px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; }
+  nav.toc a { color: var(--muted); text-decoration: none; font-size: 14px; white-space: nowrap; }
+  nav.toc a:hover { color: var(--accent); }
+  section { padding: 40px 0 8px; }
+  .section-intro { color: var(--muted); margin: 0 0 20px; max-width: 720px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; border-top: 4px solid var(--stripe, var(--accent)); }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+  .card .ex { margin-top: 10px; font-size: 14px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+  .tech { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 3px 6px; margin-left: 6px; vertical-align: middle; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stripe); flex: none; }
+  .org  { --stripe: var(--c-org); }
+  .work { --stripe: var(--c-work); }
+  .talk { --stripe: var(--c-talk); }
+  .sys  { --stripe: var(--c-sys); }
+  .diagram { width: 100%; height: auto; display: block; }
+  .diagram .box { fill: var(--surface); stroke-width: 2; }
+  .diagram .lbl { fill: var(--text); font: 600 15px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .lane { fill: var(--muted); font: 600 11px -apple-system, "Segoe UI", sans-serif; letter-spacing: .1em; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .diagram .dash { stroke-dasharray: 5 4; }
+  .diagram .elbl { fill: var(--muted); font: italic 12px -apple-system, "Segoe UI", sans-serif; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+  .pill { border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); }
+  .pill.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .pill.bad { background: var(--no-soft); color: var(--no); border-color: transparent; }
+  .pill.wait { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .arrow { color: var(--muted); }
+  ul.rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  ul.rules li { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 12px 44px; position: relative; }
+  ul.rules li::before { content: "✓"; position: absolute; left: 14px; top: 11px; width: 20px; height: 20px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-weight: 700; font-size: 13px; text-align: center; line-height: 20px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .types { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+  footer { color: var(--muted); font-size: 13px; padding: 48px 0 40px; }
+  @media (max-width: 600px) { header.hero { padding-top: 36px; } .lead { font-size: 16px; } }
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <div class="eyebrow">School Ticketing System · Data model</div>
+  <h1>What the system keeps track of</h1>
+  <p class="lead">A plain-language tour of the information the app stores, how the pieces connect, and the rules the database enforces so the data stays trustworthy.</p>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#picture">Big picture</a>
+  <a href="#types">Four kinds of items</a>
+  <a href="#blocks">Building blocks</a>
+  <a href="#lifecycle">Lifecycle of work</a>
+  <a href="#rules">Guaranteed rules</a>
+  <a href="#glossary">Glossary</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="picture">
+  <h2>The big picture</h2>
+  <p class="section-intro">The school is organized into branches, and people work in branches and their groups. Work is created as items, which are sent to people or groups. Everything said or attached to an item stays with it, and every change is recorded.</p>
+  <div class="panel">
+    <svg class="diagram" viewBox="0 0 900 560" role="img" aria-label="Diagram of how branches, people, groups, items, work and events relate">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <text class="lane" x="20" y="24">ORGANISATION</text>
+      <text class="lane" x="20" y="184">WORK</text>
+      <text class="lane" x="20" y="344">AROUND EACH ITEM</text>
+
+      <!-- organisation -->
+      <rect class="box" x="20"  y="36" width="190" height="64" rx="12" stroke="var(--c-org)"/>
+      <text class="lbl" x="115" y="64" text-anchor="middle">Branch</text>
+      <text class="sub" x="115" y="84" text-anchor="middle">a school site</text>
+
+      <rect class="box" x="250" y="36" width="190" height="64" rx="12" stroke="var(--c-org)"/>
+      <text class="lbl" x="345" y="64" text-anchor="middle">Members</text>
+      <text class="sub" x="345" y="84" text-anchor="middle">people in the branch</text>
+
+      <rect class="box" x="480" y="36" width="190" height="64" rx="12" stroke="var(--c-org)"/>
+      <text class="lbl" x="575" y="64" text-anchor="middle">Groups</text>
+      <text class="sub" x="575" y="84" text-anchor="middle">teams inside a branch</text>
+
+      <rect class="box" x="710" y="36" width="170" height="64" rx="12" stroke="var(--c-org)"/>
+      <text class="lbl" x="795" y="64" text-anchor="middle">Permissions</text>
+      <text class="sub" x="795" y="84" text-anchor="middle">what a group may do</text>
+
+      <path class="edge" d="M210 68 H246" marker-end="url(#arr)"/>
+      <path class="edge" d="M440 68 H476" marker-end="url(#arr)"/>
+      <path class="edge" d="M670 68 H706" marker-end="url(#arr)"/>
+
+      <!-- work -->
+      <rect class="box" x="20"  y="196" width="190" height="64" rx="12" stroke="var(--c-work)"/>
+      <text class="lbl" x="115" y="224" text-anchor="middle">Item</text>
+      <text class="sub" x="115" y="244" text-anchor="middle">ticket · action · report · event</text>
+
+      <rect class="box" x="250" y="196" width="190" height="64" rx="12" stroke="var(--c-work)"/>
+      <text class="lbl" x="345" y="224" text-anchor="middle">Recipients</text>
+      <text class="sub" x="345" y="244" text-anchor="middle">who it is sent to</text>
+
+      <rect class="box" x="480" y="196" width="190" height="64" rx="12" stroke="var(--c-work)"/>
+      <text class="lbl" x="575" y="224" text-anchor="middle">Assignments</text>
+      <text class="sub" x="575" y="244" text-anchor="middle">each person's piece of work</text>
+
+      <rect class="box" x="710" y="196" width="170" height="64" rx="12" stroke="var(--c-work)"/>
+      <text class="lbl" x="795" y="224" text-anchor="middle">Approval</text>
+      <text class="sub" x="795" y="244" text-anchor="middle">accepted or sent back</text>
+
+      <path class="edge" d="M210 228 H246" marker-end="url(#arr)"/>
+      <path class="edge" d="M440 228 H476" marker-end="url(#arr)"/>
+      <path class="edge" d="M670 228 H706" marker-end="url(#arr)"/>
+
+      <!-- recipients point to members / groups -->
+      <path class="edge dash" d="M345 196 V104" marker-end="url(#arr)"/>
+      <path class="edge dash" d="M400 196 L540 104" marker-end="url(#arr)"/>
+      <text class="elbl" x="186" y="150">sent to people…</text>
+      <text class="elbl" x="478" y="150">…or whole groups</text>
+
+      <!-- around each item -->
+      <rect class="box" x="20"  y="356" width="190" height="64" rx="12" stroke="var(--c-talk)"/>
+      <text class="lbl" x="115" y="384" text-anchor="middle">Comments</text>
+      <text class="sub" x="115" y="404" text-anchor="middle">conversation, @mentions</text>
+
+      <rect class="box" x="250" y="356" width="190" height="64" rx="12" stroke="var(--c-talk)"/>
+      <text class="lbl" x="345" y="384" text-anchor="middle">Written reports</text>
+      <text class="sub" x="345" y="404" text-anchor="middle">drafted, then submitted</text>
+
+      <rect class="box" x="480" y="356" width="190" height="64" rx="12" stroke="var(--c-talk)"/>
+      <text class="lbl" x="575" y="384" text-anchor="middle">Files</text>
+      <text class="sub" x="575" y="404" text-anchor="middle">documents and photos</text>
+
+      <rect class="box" x="710" y="356" width="170" height="64" rx="12" stroke="var(--c-talk)"/>
+      <text class="lbl" x="795" y="384" text-anchor="middle">Event details</text>
+      <text class="sub" x="795" y="404" text-anchor="middle">time, place, RSVPs</text>
+
+      <path class="edge" d="M175 260 V352" marker-end="url(#arr)"/>
+      <path class="edge" d="M195 260 V300 H345 V352" marker-end="url(#arr)"/>
+      <path class="edge" d="M195 300 H575 V352" marker-end="url(#arr)"/>
+      <path class="edge" d="M575 300 H795 V352" marker-end="url(#arr)"/>
+
+      <!-- system -->
+      <rect class="box" x="20"  y="470" width="420" height="64" rx="12" stroke="var(--c-sys)"/>
+      <text class="lbl" x="230" y="498" text-anchor="middle">Notifications</text>
+      <text class="sub" x="230" y="518" text-anchor="middle">tell the right people when something changes</text>
+
+      <rect class="box" x="480" y="470" width="400" height="64" rx="12" stroke="var(--c-sys)"/>
+      <text class="lbl" x="680" y="498" text-anchor="middle">Activity history</text>
+      <text class="sub" x="680" y="518" text-anchor="middle">a permanent record of who changed what, and when</text>
+    </svg>
+  </div>
+</section>
+
+<section id="types">
+  <h2>Four kinds of items</h2>
+  <p class="section-intro">Every piece of work in the app is an item. The four kinds share the same basics (title, description, priority, who it is sent to) but behave differently.</p>
+  <div class="types">
+    <div class="card work"><h3>Ticket</h3><p>A question or request, such as "Where do I order lab supplies?". It is answered in comments, and whoever asked closes it.</p></div>
+    <div class="card work"><h3>Action</h3><p>A task sent to people or groups, such as "Update the fire-exit signs". Each person's work is submitted, then approved.</p></div>
+    <div class="card work"><h3>Report</h3><p>Like an action, but the person must attach a written report before submitting. Anyone can also file a report of their own.</p></div>
+    <div class="card work"><h3>Event</h3><p>A calendar entry with invitees, such as "Parent evening, Thursday 6pm". Invitees reply going, maybe or declined, and get reminders.</p></div>
+  </div>
+</section>
+
+<section id="blocks">
+  <h2>The building blocks</h2>
+  <p class="section-intro">Each card is one kind of record the database keeps. The grey label is its technical name, which is useful when talking to developers.</p>
+
+  <div class="group-title org"><span class="dot"></span><h3>People and organisation</h3></div>
+  <div class="grid">
+    <div class="card org"><h3>People <span class="tech">app_user</span></h3>
+      <p>Everyone who can sign in: name, email and a securely scrambled password. People are deactivated, never deleted, so their history stays intact.</p>
+      <div class="ex">Super admins are marked here. Their access covers every branch.</div></div>
+    <div class="card org"><h3>Branches <span class="tech">branch</span></h3>
+      <p>Each school site, with a short code, a name and its time zone, so deadlines and event times are right for that site.</p>
+      <div class="ex">Example: <b>NTH</b>, North Campus, Europe/London</div></div>
+    <div class="card org"><h3>Branch membership <span class="tech">branch_membership</span></h3>
+      <p>Links a person to a branch. A person can belong to several branches. This is also where someone is made the <b>admin</b> of a branch.</p>
+      <div class="ex">Omar: admin at North, regular member at South</div></div>
+    <div class="card org"><h3>Groups <span class="tech">user_group</span></h3>
+      <p>Teams inside one branch, created by the branch admin. Items can be sent to a whole group, and a group can be given extra permissions.</p>
+      <div class="ex">Every branch has an automatic <b>All members</b> group.</div></div>
+    <div class="card org"><h3>Group members <span class="tech">group_member</span></h3>
+      <p>Who is in each group. Joining a group immediately gives that person the group's permissions, and leaving takes them away.</p></div>
+    <div class="card org"><h3>Group permissions <span class="tech">group_permission</span></h3>
+      <p>What members of a group may do, such as "approve work" or "export to Excel". The full list is in the companion permissions document.</p></div>
+  </div>
+
+  <div class="group-title work"><span class="dot"></span><h3>Work</h3></div>
+  <div class="grid">
+    <div class="card work"><h3>Items <span class="tech">issue</span></h3>
+      <p>The ticket, action, report or event itself: title, description, priority, whether it is <b>private</b>, and whether it is open, closed or cancelled. Each gets a friendly number such as <b>ISS-1042</b>.</p></div>
+    <div class="card work"><h3>Item kinds <span class="tech">issue_type</span></h3>
+      <p>The four kinds, and each one's default deadline. For example, actions are due 3 days after sending unless set otherwise.</p></div>
+    <div class="card work"><h3>Recipients <span class="tech">issue_target</span></h3>
+      <p>Who an item is sent to: a person, a group, or (for super admins only) an entire branch. One item can have many recipients.</p>
+      <div class="ex">Removing a recipient cancels their unfinished work but keeps the record. They can be added again later.</div></div>
+    <div class="card work"><h3>Assignments <span class="tech">work_item</span></h3>
+      <p>The actual piece of work for actions and reports: who is doing it, its status and its deadline. It also records who approved or rejected it, and why.</p>
+      <div class="ex">When an item is sent to a group, it can be <b>shared</b> (one person picks it up) or <b>one each</b> (everyone in the group gets their own).</div>
+      <p>If someone leaves the branch, their unfinished work becomes unassigned and the branch admins are told, so it can be handed to someone else.</p></div>
+    <div class="card work"><h3>Watchers <span class="tech">issue_watcher</span></h3>
+      <p>People who asked to be kept informed about an item without working on it.</p></div>
+    <div class="card work"><h3>Read markers <span class="tech">issue_read</span></h3>
+      <p>When each person last opened an item. This powers the "unread" badges on the dashboard.</p></div>
+  </div>
+
+  <div class="group-title talk"><span class="dot"></span><h3>Conversation and content</h3></div>
+  <div class="grid">
+    <div class="card talk"><h3>Comments <span class="tech">issue_comment</span></h3>
+      <p>The discussion on an item, or on one person's assignment. A comment can be marked <b>staff-only</b> so ordinary members don't see it.</p></div>
+    <div class="card talk"><h3>Mentions <span class="tech">comment_mention</span></h3>
+      <p>People @mentioned in a comment. Each one gets a notification.</p></div>
+    <div class="card talk"><h3>Written reports <span class="tech">issue_report</span></h3>
+      <p>The written report, saved as a draft until submitted. Required before a Report assignment can be handed in.</p></div>
+    <div class="card talk"><h3>Files <span class="tech">issue_attachment</span></h3>
+      <p>Uploaded documents and photos, attached to the item, a comment or a report. Files can only be downloaded by people allowed to see the item.</p></div>
+  </div>
+
+  <div class="group-title talk"><span class="dot"></span><h3>Calendar</h3></div>
+  <div class="grid">
+    <div class="card talk"><h3>Event details <span class="tech">issue_event</span></h3>
+      <p>Start and end time, all-day or not, and location.</p></div>
+    <div class="card talk"><h3>RSVPs <span class="tech">event_rsvp</span></h3>
+      <p>One per invitee: waiting, going, maybe or declined, with an optional note.</p></div>
+    <div class="card talk"><h3>Reminders <span class="tech">event_reminder</span></h3>
+      <p>When to remind invitees, for example 1 day before and 1 hour before.</p></div>
+  </div>
+
+  <div class="group-title sys"><span class="dot"></span><h3>Keeping people informed, and keeping records</h3></div>
+  <div class="grid">
+    <div class="card sys"><h3>Notifications <span class="tech">notification</span></h3>
+      <p>The inbox on each person's dashboard: newly assigned work, mentions, approvals, deadlines approaching, event reminders and more. Read or unread.</p></div>
+    <div class="card sys"><h3>Activity history <span class="tech">audit_log</span></h3>
+      <p>A permanent, unchangeable record of every important change: status updates, approvals, permission changes, new admins, exports. Nobody can edit or delete it.</p></div>
+    <div class="card sys"><h3>Sign-in sessions <span class="tech">user_session</span></h3>
+      <p>Who is currently signed in, and on which device. Sessions expire, and an admin can sign someone out everywhere.</p></div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <h2>The life of an assignment</h2>
+  <p class="section-intro">Actions and reports follow this path for each person doing the work.</p>
+  <div class="panel">
+    <div class="flow">
+      <span class="pill">Open</span><span class="arrow">→</span>
+      <span class="pill">In progress</span><span class="arrow">⇄</span>
+      <span class="pill">Blocked</span><span class="arrow">→</span>
+      <span class="pill wait">Waiting for approval</span><span class="arrow">→</span>
+      <span class="pill good">Approved</span>
+    </div>
+    <p class="section-intro" style="margin:12px 0 0">If the approver <b>rejects</b> the work, it goes back to <i>In progress</i> with a note explaining why. Any unfinished assignment can be <span class="pill bad" style="padding:2px 10px">Cancelled</span>. When every assignment on an item is approved or cancelled, the item closes by itself.</p>
+  </div>
+  <div class="table-wrap" style="margin-top:16px">
+    <table>
+      <thead><tr><th>Kind</th><th>How it finishes</th></tr></thead>
+      <tbody>
+        <tr><td><b>Ticket</b></td><td>The person who asked closes it once answered. An admin can close it too.</td></tr>
+        <tr><td><b>Action</b></td><td>Each assignment is submitted and approved. The item closes when all are done.</td></tr>
+        <tr><td><b>Report</b></td><td>Same as an action, but a written report must be attached before submitting. Reports someone files for themselves can be closed by that person.</td></tr>
+        <tr><td><b>Event</b></td><td>The organizer closes it after it happens, or cancels it. Cancelling tells every invitee.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="rules">
+  <h2>Rules the database guarantees</h2>
+  <p class="section-intro">These are enforced by the database itself, so no bug in the app can break them. Each one has been tested.</p>
+  <ul class="rules">
+    <li>Every branch always has at least one admin. A branch can't be created without one, and the last admin can't be removed until a replacement is appointed.</li>
+    <li>There is always at least one active super admin.</li>
+    <li>Everyone who joins a branch is automatically put in its <b>All members</b> group, and that group can't be deleted.</li>
+    <li>Leaving a branch removes the person from all of that branch's groups and ends their access to its items, including items they created or worked on. Their membership in other branches is untouched.</li>
+    <li>Work can only be assigned to people who belong to that branch.</li>
+    <li>An item belonging to one branch can only be sent to people and groups in that branch. Only super admins can send items to whole branches or across branches.</li>
+    <li>Work can't be approved before it has been submitted.</li>
+    <li>A permission can only be given in a form that makes sense. For example, "export" can't be limited to one kind of item.</li>
+    <li>The activity history can never be edited or deleted.</li>
+    <li>Two people editing the same item at once can't silently overwrite each other. The second one is told to refresh.</li>
+    <li>Nothing important is ever deleted: people are deactivated, members "leave", recipients are "removed", and items are closed or cancelled. History stays complete.</li>
+  </ul>
+</section>
+
+<section id="glossary">
+  <h2>Glossary</h2>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr><td><b>Branch</b></td><td>A school site. Most permissions apply to one branch only.</td></tr>
+        <tr><td><b>Super admin</b></td><td>School-wide administrator with access to every branch.</td></tr>
+        <tr><td><b>Branch admin</b></td><td>Runs one branch. Appointed only by a super admin.</td></tr>
+        <tr><td><b>Group</b></td><td>A team inside a branch, used to send work to many people at once and to give extra permissions.</td></tr>
+        <tr><td><b>Item</b></td><td>A ticket, action, report or event.</td></tr>
+        <tr><td><b>Recipient</b></td><td>A person, group or branch an item is sent to.</td></tr>
+        <tr><td><b>Assignment</b></td><td>One person's (or one group's) piece of work on an action or report.</td></tr>
+        <tr><td><b>Private item</b></td><td>Visible only to its creator, its recipients and admins.</td></tr>
+        <tr><td><b>Staff-only comment</b></td><td>A comment hidden from ordinary members.</td></tr>
+        <tr><td><b>Deadline (SLA)</b></td><td>When an assignment is due. The dashboard flags anything overdue.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">School Ticketing System · Data model, updated 17 October 2026 to match the built backend (database migrations 1–5). Companion documents: Product overview, Permissions.</footer>
+</body>
+</html>

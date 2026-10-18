@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Database Data Types</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f0eee8;
+    --text: #1c1c1e; --muted: #5d5f63; --border: #e2dfd7;
+    --accent: #2c56c9; --accent-soft: #e7ecfa;
+    --ok: #1d7448; --ok-soft: #e2f3e9; --no: #b02a20; --no-soft: #fae8e6;
+    --warn: #845400; --warn-soft: #fbf0d6;
+    --c-org: #2c56c9; --c-work: #1d7448; --c-talk: #845400; --c-sys: #7a3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+      --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+      --accent: #8eaaf5; --accent-soft: #1f2a46;
+      --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+      --warn: #f0c46c; --warn-soft: #3a2d12;
+      --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+    --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+    --accent: #8eaaf5; --accent-soft: #1f2a46;
+    --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+    --warn: #f0c46c; --warn-soft: #3a2d12;
+    --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header.hero { padding-top: 56px; padding-bottom: 32px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 17px; margin: 0 0 4px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  nav.toc { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+  nav.toc .wrap { display: flex; gap: 20px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; }
+  nav.toc a { color: var(--muted); text-decoration: none; font-size: 14px; white-space: nowrap; }
+  nav.toc a:hover { color: var(--accent); }
+  section { padding: 40px 0 8px; }
+  .section-intro { color: var(--muted); margin: 0 0 20px; max-width: 720px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; border-top: 4px solid var(--stripe, var(--accent)); }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+  .card .ex { margin-top: 10px; font-size: 14px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+  .tech { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 3px 6px; margin-left: 6px; vertical-align: middle; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stripe); flex: none; }
+  .org  { --stripe: var(--c-org); }
+  .work { --stripe: var(--c-work); }
+  .talk { --stripe: var(--c-talk); }
+  .sys  { --stripe: var(--c-sys); }
+  .diagram { width: 100%; height: auto; display: block; }
+  .diagram .box { fill: var(--surface); stroke-width: 2; }
+  .diagram .lbl { fill: var(--text); font: 600 15px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .lane { fill: var(--muted); font: 600 11px -apple-system, "Segoe UI", sans-serif; letter-spacing: .1em; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .diagram .dash { stroke-dasharray: 5 4; }
+  .diagram .elbl { fill: var(--muted); font: italic 12px -apple-system, "Segoe UI", sans-serif; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+  .pill { border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); }
+  .pill.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .pill.bad { background: var(--no-soft); color: var(--no); border-color: transparent; }
+  .pill.wait { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .arrow { color: var(--muted); }
+  ul.rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  ul.rules li { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 12px 44px; position: relative; }
+  ul.rules li::before { content: "✓"; position: absolute; left: 14px; top: 11px; width: 20px; height: 20px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-weight: 700; font-size: 13px; text-align: center; line-height: 20px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .types { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+  footer { color: var(--muted); font-size: 13px; padding: 48px 0 40px; }
+  @media (max-width: 600px) { header.hero { padding-top: 36px; } .lead { font-size: 16px; } }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: var(--muted); }
+  .stat b { color: var(--text); font-size: 18px; margin-right: 4px; }
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+  .side { position: sticky; top: 56px; max-height: calc(100vh - 72px); overflow: auto; font-size: 14px; padding: 24px 0; }
+  .toc-group { margin-bottom: 14px; display: grid; gap: 2px; }
+  .toc-group b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+  .toc-group a { color: var(--text); text-decoration: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 2px 0; }
+  .toc-group a:hover { color: var(--accent); }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .side { position: static; max-height: none; padding-bottom: 0; } }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .tbl { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin: 0 0 18px; scroll-margin-top: 60px; }
+  .tbl h3 { font-size: 18px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .tbl h3 code { font-size: 18px; }
+  .count { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .doc { color: var(--muted); margin: 4px 0 12px; font-size: 15px; }
+  .tbl .table-wrap { border-radius: 10px; }
+  table.cols { font-size: 14px; }
+  table.cols td { padding: 8px 12px; }
+  table.cols th { padding: 8px 12px; white-space: nowrap; }
+  .req { color: var(--text); font-weight: 600; font-size: 13px; }
+  .opt { color: var(--muted); font-size: 13px; }
+  code.def { color: var(--muted); font-size: 12px; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .b { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; margin: 1px 0; }
+  .b a { color: inherit; }
+  .b.pk { background: var(--warn-soft); color: var(--warn); }
+  .b.fk { background: var(--accent-soft); color: var(--accent); }
+  .b.uq { background: var(--ok-soft); color: var(--ok); }
+  .b.k-c { background: var(--warn-soft); color: var(--warn); }
+  .b.k-f { background: var(--accent-soft); color: var(--accent); }
+  .b.k-u { background: var(--ok-soft); color: var(--ok); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); }
+  ul.rules-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+  ul.rules-list li { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  pre { margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+  .muted { color: var(--muted); }
+  .enum-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .enum { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; scroll-margin-top: 60px; }
+  .enum p { margin: 6px 0 8px; color: var(--muted); font-size: 14px; }
+  .vals { display: flex; flex-wrap: wrap; gap: 6px; }
+  .vals code { background: var(--surface-2); border-radius: 6px; padding: 2px 8px; }
+  h2.sec { margin-top: 8px; scroll-margin-top: 60px; }
+  .group-h { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; font-size: 20px; }
+</style>
+</head>
+<body>
+<header class="hero wrap">
+  <div class="eyebrow">School Ticketing System · Developer reference</div>
+  <h1>Database data types</h1>
+  <p class="lead">Every table, column, type, enum and rule in the database, read directly from the migrations (<code>0001_init.sql</code> to <code>0005_visibility_needs_membership.sql</code>) loaded into PostgreSQL 16. The <b>In the API</b> column shows how each value appears in JSON.</p>
+  <div class="stats">
+    <div class="stat"><b>23</b> tables</div>
+    <div class="stat"><b>180</b> columns</div>
+    <div class="stat"><b>7</b> enums</div>
+    <div class="stat"><b>2</b> views</div>
+    <div class="stat"><b>19</b> triggers</div>
+  </div>
+</header>
+<nav class="toc"><div class="wrap">
+  <a href="#conventions">Conventions</a><a href="#enums">Enums</a><a href="#tables">Tables</a><a href="#views">Views</a><a href="#functions">Functions</a><a href="#seed">Seed data</a>
+</div></nav>
+<div class="wrap layout">
+<aside class="side"><div class="toc-group"><b>Accounts</b><a href="#t-app_user">app_user</a><a href="#t-user_session">user_session</a></div><div class="toc-group"><b>Organisation</b><a href="#t-branch">branch</a><a href="#t-branch_membership">branch_membership</a><a href="#t-user_group">user_group</a><a href="#t-group_member">group_member</a></div><div class="toc-group"><b>Permissions</b><a href="#t-issue_type">issue_type</a><a href="#t-permission">permission</a><a href="#t-group_permission">group_permission</a></div><div class="toc-group"><b>Issues and work</b><a href="#t-issue">issue</a><a href="#t-issue_target">issue_target</a><a href="#t-work_item">work_item</a><a href="#t-issue_watcher">issue_watcher</a><a href="#t-issue_read">issue_read</a></div><div class="toc-group"><b>Collaboration</b><a href="#t-issue_comment">issue_comment</a><a href="#t-comment_mention">comment_mention</a><a href="#t-issue_report">issue_report</a><a href="#t-issue_attachment">issue_attachment</a></div><div class="toc-group"><b>Events</b><a href="#t-issue_event">issue_event</a><a href="#t-event_rsvp">event_rsvp</a><a href="#t-event_reminder">event_reminder</a></div><div class="toc-group"><b>Notifications and audit</b><a href="#t-notification">notification</a><a href="#t-audit_log">audit_log</a></div><div class="toc-group"><b>Views</b><a href="#t-work_item_overview">work_item_overview</a><a href="#t-issue_overview">issue_overview</a></div></aside>
+<main>
+
+<section id="conventions">
+  <h2 class="sec">Conventions</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Postgres type</th><th>In the API (JSON)</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>uuid</code></td><td>string (UUID)</td><td>Primary keys and references. Generated by the database.</td></tr>
+      <tr><td><code>timestamp with time zone</code></td><td>string (RFC 3339, UTC)</td><td>Displayed in the item's branch time zone (<code>branch.timezone</code>).</td></tr>
+      <tr><td><code>citext</code></td><td>string</td><td>Case-insensitive text, used for emails.</td></tr>
+      <tr><td><code>text</code>, <code>character(n)</code></td><td>string</td><td></td></tr>
+      <tr><td><code>bigint</code> identity</td><td>number</td><td><code>issue.number</code> is shown as <b>ISS-&lt;number&gt;</b>.</td></tr>
+      <tr><td><code>jsonb</code></td><td>JSON object</td><td>Notification payloads and audit before/after values.</td></tr>
+      <tr><td>enum types</td><td>string union</td><td>See <a href="#enums">Enums</a>.</td></tr>
+      <tr><td><code>bytea</code></td><td>never sent</td><td>Only the session token hash.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="section-intro" style="margin-top:12px">Nothing is hard-deleted: users have <code>is_active</code>, memberships <code>left_at</code>, groups <code>archived_at</code>, comments <code>deleted_at</code>, and issues a <code>state</code>. Rows with <code>version</code> use optimistic locking.</p>
+</section>
+
+<section id="enums">
+  <h2 class="sec">Enums</h2>
+  <div class="enum-grid">
+  <div class="enum" id="enum-issue_priority"><h3><code>issue_priority</code></h3><div class="vals"><code>low</code><code>medium</code><code>high</code><code>critical</code></div></div><div class="enum" id="enum-issue_state"><h3><code>issue_state</code></h3><div class="vals"><code>open</code><code>closed</code><code>cancelled</code></div></div><div class="enum" id="enum-completion_mode"><h3><code>completion_mode</code></h3><div class="vals"><code>shared</code><code>per_member</code></div></div><div class="enum" id="enum-target_kind"><h3><code>target_kind</code></h3><div class="vals"><code>branch</code><code>group</code><code>user</code></div></div><div class="enum" id="enum-permission_scope"><h3><code>permission_scope</code></h3><div class="vals"><code>own</code><code>targeted</code><code>branch</code></div></div><div class="enum" id="enum-rsvp_response"><h3><code>rsvp_response</code></h3><div class="vals"><code>pending</code><code>going</code><code>maybe</code><code>declined</code></div></div><div class="enum" id="enum-work_status"><h3><code>work_status</code></h3><p>open -&gt; in_progress &lt;-&gt; blocked -&gt; pending_approval -&gt; approved pending_approval -&gt; in_progress on rejection; any non-final -&gt; cancelled</p><div class="vals"><code>open</code><code>in_progress</code><code>blocked</code><code>pending_approval</code><code>approved</code><code>cancelled</code></div></div>
+  <div class="enum" id="enum-notification-kind"><h3><code>notification.kind</code></h3><p>Text with a CHECK constraint, not an enum type.</p><div class="vals"><code>assigned</code><code>unassigned</code><code>mentioned</code><code>commented</code><code>status_changed</code><code>submitted_for_approval</code><code>approved</code><code>rejected</code><code>changed_by_admin</code><code>ticket_created</code><code>event_invited</code><code>event_updated</code><code>event_cancelled</code><code>event_reminder</code><code>sla_due_soon</code><code>sla_breached</code><code>added_to_group</code><code>permissions_changed</code></div></div>
+  </div>
+</section>
+
+<section id="tables">
+  <h2 class="sec">Tables</h2>
+  <div class="group-h"><b>Accounts</b></div><article class="tbl" id="t-app_user">
+    <h3><code>app_user</code> <span class="count">13 columns</span></h3>
+    <p class="doc">Everyone who can sign in. Users are deactivated (is_active), never deleted. Super admins are flagged here.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>email</code></td><td><code>citext</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>first_name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>last_name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>password_hash</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><div class="note">argon2id</div></td></tr><tr><td><code>is_super_admin</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td></td></tr><tr><td><code>is_active</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">true</code></td><td></td></tr><tr><td><code>must_change_password</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">true</code></td><td><div class="note">no email: admins set temp passwords</div></td></tr><tr><td><code>failed_login_count</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">0</code></td><td></td></tr><tr><td><code>locked_until</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>last_login_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (2)</summary><ul class="rules-list"><li><span class="b k-t">Trigger</span> <code>app_user_keeps_branch_admins</code><pre>TRIGGER DEFERRABLE INITIALLY DEFERRED</pre></li><li><span class="b k-t">Trigger</span> <code>app_user_keeps_super_admin</code><pre>TRIGGER DEFERRABLE INITIALLY DEFERRED</pre></li></ul></details>
+    
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>app_user_keeps_branch_admins</code> <span class="muted">AFTER UPDATE OF is_active → check_user_deactivation_keeps_admins()</span></li><li><code>app_user_keeps_super_admin</code> <span class="muted">AFTER INSERT OR DELETE OR UPDATE OF is_super_admin, is_active → check_super_admin_exists()</span></li><li><code>app_user_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-user_session">
+    <h3><code>user_session</code> <span class="count">9 columns</span></h3>
+    <p class="doc">Signed-in sessions. The cookie holds a random token; only its sha256 is stored.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>token_hash</code></td><td><code>bytea</code></td><td>never sent</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span><div class="note">sha256 of the cookie token</div></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>last_seen_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>expires_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>revoked_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>user_agent</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>ip</code></td><td><code>inet</code></td><td>string (IP)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr></tbody></table></div>
+    
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>user_session_user_idx</code><pre>CREATE INDEX user_session_user_idx ON user_session (user_id)</pre></li></ul></details>
+    
+  </article><div class="group-h"><b>Organisation</b></div><article class="tbl" id="t-branch">
+    <h3><code>branch</code> <span class="count">9 columns</span></h3>
+    <p class="doc">A school site, with a short code and the IANA time zone used for deadlines and event times.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>code</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>email</code></td><td><code>citext</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>timezone</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"UTC"</code></td><td><div class="note">IANA name, validated by the API</div></td></tr><tr><td><code>is_active</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">true</code></td><td></td></tr><tr><td><code>created_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (2)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>branch_code_check</code><pre>CHECK ((code ~ '^[A-Z0-9]{2,10}$'::text))</pre></li><li><span class="b k-t">Trigger</span> <code>branch_needs_admin</code><pre>TRIGGER DEFERRABLE INITIALLY DEFERRED</pre></li></ul></details>
+    
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>branch_default_group</code> <span class="muted">AFTER INSERT → create_default_group()</span></li><li><code>branch_needs_admin</code> <span class="muted">AFTER INSERT OR UPDATE OF is_active → check_branch_has_admin()</span></li><li><code>branch_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-branch_membership">
+    <h3><code>branch_membership</code> <span class="count">7 columns</span></h3>
+    <p class="doc">A user's place in a branch. Rows are never deleted; leaving sets left_at, so history (targets, assignments) keeps pointing at a valid row.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-branch">branch.id</a></span></td></tr><tr><td><code>is_admin</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td><div class="note">set by super admins only</div></td></tr><tr><td><code>added_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>joined_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>left_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (2)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>branch_membership_admin_active</code><pre>CHECK ((NOT (is_admin AND (left_at IS NOT NULL))))</pre></li><li><span class="b k-t">Trigger</span> <code>branch_membership_keeps_admin</code><pre>TRIGGER DEFERRABLE INITIALLY DEFERRED</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>branch_membership_branch_idx</code><pre>CREATE INDEX branch_membership_branch_idx ON branch_membership (branch_id) WHERE (left_at IS NULL)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>branch_membership_default_group</code> <span class="muted">AFTER INSERT OR UPDATE OF left_at → sync_default_group_membership()</span></li><li><code>branch_membership_keeps_admin</code> <span class="muted">AFTER DELETE OR UPDATE → check_membership_keeps_admin()</span></li><li><code>branch_membership_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-user_group">
+    <h3><code>user_group</code> <span class="count">9 columns</span></h3>
+    <p class="doc">A team inside one branch, created by the branch admin. Each branch has exactly one default "All members" group.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-branch">branch.id</a></span></td></tr><tr><td><code>name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>description</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>is_default</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td><div class="note">the branch's "All members" group</div></td></tr><tr><td><code>created_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>archived_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">groups with history are archived, not deleted</div></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (3)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>user_group_default_not_archived</code><pre>CHECK ((NOT (is_default AND (archived_at IS NOT NULL))))</pre></li><li><span class="b k-u">Unique</span> <code>user_group_id_branch_uq</code><pre>UNIQUE (id, branch_id)</pre></li><li><span class="b k-u">Unique</span> <code>user_group_name_uq</code><pre>UNIQUE (branch_id, name)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>user_group_one_default</code><pre>CREATE UNIQUE INDEX user_group_one_default ON user_group (branch_id) WHERE is_default</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>user_group_protect_default</code> <span class="muted">BEFORE DELETE OR UPDATE → protect_default_group()</span></li><li><code>user_group_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-group_member">
+    <h3><code>group_member</code> <span class="count">5 columns</span></h3>
+    <p class="doc">Who is in each group. Composite foreign keys keep the group and the person in the same branch.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>group_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>added_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>added_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (2)</summary><ul class="rules-list"><li><span class="b k-f">Foreign key</span> <code>group_member_group_id_branch_id_fkey</code><pre>FOREIGN KEY (group_id, branch_id) REFERENCES user_group(id, branch_id) ON DELETE CASCADE</pre></li><li><span class="b k-f">Foreign key</span> <code>group_member_user_id_branch_id_fkey</code><pre>FOREIGN KEY (user_id, branch_id) REFERENCES branch_membership(user_id, branch_id)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>group_member_user_idx</code><pre>CREATE INDEX group_member_user_idx ON group_member (user_id, branch_id)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>group_member_active</code> <span class="muted">BEFORE INSERT → check_group_member_active()</span></li></ul></details>
+  </article><div class="group-h"><b>Permissions</b></div><article class="tbl" id="t-issue_type">
+    <h3><code>issue_type</code> <span class="count">7 columns</span></h3>
+    <p class="doc">The four item kinds (ticket, report, event, action) and their default deadlines. Seeded by the migration.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>smallint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">auto-increment</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>code</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>description</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>default_sla_hours</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>is_active</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">true</code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (2)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_type_code_check</code><pre>CHECK ((code = ANY (ARRAY['ticket'::text, 'report'::text, 'event'::text, 'action'::text])))</pre></li><li><span class="b k-c">Check</span> <code>issue_type_default_sla_hours_check</code><pre>CHECK ((default_sla_hours &gt; 0))</pre></li></ul></details>
+    
+    
+  </article><article class="tbl" id="t-permission">
+    <h3><code>permission</code> <span class="count">4 columns</span></h3>
+    <p class="doc">Catalog of grantable permissions. Mirrors an enum in the Rust code and is only changed by migrations. Admin-only and super-admin-only actions are deliberately absent: they are hard-coded and can never be granted.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>key</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>description</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>per_issue_type</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><div class="note">may a grant be limited to one issue type?</div></td></tr><tr><td><code>allowed_scopes</code></td><td><code>permission_scope[]</code></td><td><a href="#enum-permission_scope">permission_scope</a>[]</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr></tbody></table></div>
+    
+    
+    
+  </article><article class="tbl" id="t-group_permission">
+    <h3><code>group_permission</code> <span class="count">7 columns</span></h3>
+    <p class="doc">A permission granted to a group, optionally limited to one item type, with a scope: own, targeted or branch.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>group_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-user_group">user_group.id</a></span></td></tr><tr><td><code>permission_key</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-permission">permission.key</a></span></td></tr><tr><td><code>issue_type_id</code></td><td><code>smallint</code></td><td>number</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue_type">issue_type.id</a></span><div class="note">NULL = all types</div></td></tr><tr><td><code>scope</code></td><td><code>permission_scope</code></td><td><a href="#enum-permission_scope">permission_scope</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>granted_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (1)</summary><ul class="rules-list"><li><span class="b k-u">Unique</span> <code>group_permission_uq</code><pre>UNIQUE NULLS NOT DISTINCT (group_id, permission_key, issue_type_id, scope)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>group_permission_group_idx</code><pre>CREATE INDEX group_permission_group_idx ON group_permission (group_id)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>group_permission_valid</code> <span class="muted">BEFORE INSERT OR UPDATE → check_group_permission()</span></li></ul></details>
+  </article><div class="group-h"><b>Issues and work</b></div><article class="tbl" id="t-issue">
+    <h3><code>issue</code> <span class="count">17 columns</span></h3>
+    <p class="doc">A ticket, action, report or event. branch_id is NULL only for cross-branch items created by a super admin.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>number</code></td><td><code>bigint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">auto-increment</code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-branch">branch.id</a></span><div class="note">NULL = cross-branch (super admin)</div></td></tr><tr><td><code>type_id</code></td><td><code>smallint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue_type">issue_type.id</a></span></td></tr><tr><td><code>title</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>description</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>priority</code></td><td><code>issue_priority</code></td><td><a href="#enum-issue_priority">issue_priority</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"medium"</code></td><td></td></tr><tr><td><code>is_private</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td></td></tr><tr><td><code>completion_mode</code></td><td><code>completion_mode</code></td><td><a href="#enum-completion_mode">completion_mode</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"shared"</code></td><td></td></tr><tr><td><code>state</code></td><td><code>issue_state</code></td><td><a href="#enum-issue_state">issue_state</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"open"</code></td><td></td></tr><tr><td><code>closed_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>closed_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>requires_super_admin_approval</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td></td></tr><tr><td><code>created_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>version</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">1</code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (3)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_closed_at</code><pre>CHECK (((state = 'open'::issue_state) = (closed_at IS NULL)))</pre></li><li><span class="b k-c">Check</span> <code>issue_cross_branch_is_super</code><pre>CHECK (((branch_id IS NOT NULL) OR requires_super_admin_approval))</pre></li><li><span class="b k-c">Check</span> <code>issue_title_check</code><pre>CHECK (((length(title) &gt;= 1) AND (length(title) &lt;= 200)))</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_branch_state_idx</code><pre>CREATE INDEX issue_branch_state_idx ON issue (branch_id, state)</pre></li><li><code>issue_created_at_idx</code><pre>CREATE INDEX issue_created_at_idx ON issue (created_at DESC)</pre></li><li><code>issue_created_by_idx</code><pre>CREATE INDEX issue_created_by_idx ON issue (created_by)</pre></li><li><code>issue_type_idx</code><pre>CREATE INDEX issue_type_idx ON issue (type_id)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>issue_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-issue_target">
+    <h3><code>issue_target</code> <span class="count">10 columns</span></h3>
+    <p class="doc">Who an issue is addressed to. branch_id is always filled, even for user and group targets, so every permission filter is a plain branch check. Targets are never deleted: removing one sets removed_at and removed_by and cancels its unfinished work items (0004). Removed targets no longer count for visibility.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-branch">branch.id</a></span></td></tr><tr><td><code>kind</code></td><td><code>target_kind</code></td><td><a href="#enum-target_kind">target_kind</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>group_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>created_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>removed_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td>NULL = active target</td></tr><tr><td><code>removed_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr></tbody></table></div>
+    <details><summary>Constraints (5)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_target_shape</code><pre>CHECK ((((kind = 'branch'::target_kind) AND (group_id IS NULL) AND (user_id IS NULL)) OR ((kind = 'group'::target_kind) AND (group_id IS NOT NULL) AND (user_id IS NULL)) OR ((kind = 'user'::target_kind) AND (user_id IS NOT NULL) AND (group_id IS NULL))))</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_target_group_id_branch_id_fkey</code><pre>FOREIGN KEY (group_id, branch_id) REFERENCES user_group(id, branch_id)</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_target_user_id_branch_id_fkey</code><pre>FOREIGN KEY (user_id, branch_id) REFERENCES branch_membership(user_id, branch_id)</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_target_removed_by_fkey</code><pre>FOREIGN KEY (removed_by) REFERENCES app_user(id)</pre></li><li><span class="b k-u">Unique</span> <code>issue_target_id_issue_branch_uq</code><pre>UNIQUE (id, issue_id, branch_id)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_target_once</code> <span class="muted">unique, active targets only</span><pre>CREATE UNIQUE INDEX issue_target_once ON issue_target (issue_id, branch_id, group_id, user_id) NULLS NOT DISTINCT WHERE (removed_at IS NULL)</pre></li><li><code>issue_target_branch_idx</code><pre>CREATE INDEX issue_target_branch_idx ON issue_target (branch_id)</pre></li><li><code>issue_target_group_idx</code><pre>CREATE INDEX issue_target_group_idx ON issue_target (group_id) WHERE (group_id IS NOT NULL)</pre></li><li><code>issue_target_issue_idx</code><pre>CREATE INDEX issue_target_issue_idx ON issue_target (issue_id)</pre></li><li><code>issue_target_user_idx</code><pre>CREATE INDEX issue_target_user_idx ON issue_target (user_id) WHERE (user_id IS NOT NULL)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>issue_target_valid</code> <span class="muted">BEFORE INSERT OR UPDATE → check_issue_target()</span></li></ul></details>
+  </article><article class="tbl" id="t-work_item">
+    <h3><code>work_item</code> <span class="count">14 columns</span></h3>
+    <p class="doc">The unit of work for Actions and Reports. 'shared' targets get one item (claimed by a member); 'per_member' targets get one item per member, snapshotted when the issue is sent. When a member leaves the branch, their unfinished items become unassigned.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>target_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>assignee_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>status</code></td><td><code>work_status</code></td><td><a href="#enum-work_status">work_status</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"open"</code></td><td></td></tr><tr><td><code>sla_due_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>submitted_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">last submission for approval</div></td></tr><tr><td><code>decided_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span><div class="note">last approve/reject</div></td></tr><tr><td><code>decided_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>decision_note</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">required by the API on rejection</div></td></tr><tr><td><code>version</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">1</code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (6)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>work_item_decided</code><pre>CHECK (((status &lt;&gt; 'approved'::work_status) OR (decided_at IS NOT NULL)))</pre></li><li><span class="b k-c">Check</span> <code>work_item_submitted</code><pre>CHECK (((status &lt;&gt; ALL (ARRAY['pending_approval'::work_status, 'approved'::work_status])) OR (submitted_at IS NOT NULL)))</pre></li><li><span class="b k-f">Foreign key</span> <code>work_item_assignee_id_branch_id_fkey</code><pre>FOREIGN KEY (assignee_id, branch_id) REFERENCES branch_membership(user_id, branch_id)</pre></li><li><span class="b k-f">Foreign key</span> <code>work_item_target_id_issue_id_branch_id_fkey</code><pre>FOREIGN KEY (target_id, issue_id, branch_id) REFERENCES issue_target(id, issue_id, branch_id)</pre></li><li><span class="b k-u">Unique</span> <code>work_item_id_issue_uq</code><pre>UNIQUE (id, issue_id)</pre></li><li><span class="b k-u">Unique</span> <code>work_item_once_per_assignee</code><pre>UNIQUE (target_id, assignee_id)</pre><span class="muted">NULLs are distinct: one item per assignee per target, any number of unassigned items (0003).</span></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>work_item_assignee_idx</code><pre>CREATE INDEX work_item_assignee_idx ON work_item (assignee_id, status)</pre></li><li><code>work_item_issue_idx</code><pre>CREATE INDEX work_item_issue_idx ON work_item (issue_id)</pre></li><li><code>work_item_queue_idx</code><pre>CREATE INDEX work_item_queue_idx ON work_item (branch_id, status)</pre></li><li><code>work_item_sla_idx</code><pre>CREATE INDEX work_item_sla_idx ON work_item (sla_due_at) WHERE (status = ANY (ARRAY['open'::work_status, 'in_progress'::work_status, 'blocked'::work_status]))</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>work_item_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-issue_watcher">
+    <h3><code>issue_watcher</code> <span class="count">3 columns</span></h3>
+    <p class="doc">People following an item without working on it.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_watcher_user_idx</code><pre>CREATE INDEX issue_watcher_user_idx ON issue_watcher (user_id)</pre></li></ul></details>
+    
+  </article><article class="tbl" id="t-issue_read">
+    <h3><code>issue_read</code> <span class="count">3 columns</span></h3>
+    <p class="doc">Last time a user opened an issue; drives "unread" badges.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>last_read_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    
+    
+    
+  </article><div class="group-h"><b>Collaboration</b></div><article class="tbl" id="t-issue_comment">
+    <h3><code>issue_comment</code> <span class="count">9 columns</span></h3>
+    <p class="doc">Comments on an item, or on one work item. Soft-deleted via deleted_at.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>work_item_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">NULL = issue-wide thread</div></td></tr><tr><td><code>author_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>body</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>is_internal_only</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td><div class="note">hidden without comment.internal</div></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>deleted_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (3)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_comment_body_check</code><pre>CHECK ((length(body) &gt; 0))</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_comment_work_item_id_issue_id_fkey</code><pre>FOREIGN KEY (work_item_id, issue_id) REFERENCES work_item(id, issue_id)</pre></li><li><span class="b k-u">Unique</span> <code>issue_comment_id_issue_uq</code><pre>UNIQUE (id, issue_id)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_comment_issue_idx</code><pre>CREATE INDEX issue_comment_issue_idx ON issue_comment (issue_id, created_at)</pre></li><li><code>issue_comment_work_idx</code><pre>CREATE INDEX issue_comment_work_idx ON issue_comment (work_item_id, created_at) WHERE (work_item_id IS NOT NULL)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>issue_comment_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-comment_mention">
+    <h3><code>comment_mention</code> <span class="count">2 columns</span></h3>
+    <p class="doc">Users @mentioned in a comment; each one is notified.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>comment_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue_comment">issue_comment.id</a></span></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr></tbody></table></div>
+    
+    
+    
+  </article><article class="tbl" id="t-issue_report">
+    <h3><code>issue_report</code> <span class="count">10 columns</span></h3>
+    <p class="doc">Written reports. NULL submitted_at means draft. A Report work item needs a submitted report before it can be submitted for approval.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>work_item_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">NULL = a self-filed report</div></td></tr><tr><td><code>author_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>title</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>body</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>submitted_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><div class="note">NULL = draft</div></td></tr><tr><td><code>version</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">1</code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (3)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_report_title_check</code><pre>CHECK (((length(title) &gt;= 1) AND (length(title) &lt;= 200)))</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_report_work_item_id_issue_id_fkey</code><pre>FOREIGN KEY (work_item_id, issue_id) REFERENCES work_item(id, issue_id)</pre></li><li><span class="b k-u">Unique</span> <code>issue_report_id_issue_uq</code><pre>UNIQUE (id, issue_id)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_report_issue_idx</code><pre>CREATE INDEX issue_report_issue_idx ON issue_report (issue_id)</pre></li><li><code>issue_report_work_idx</code><pre>CREATE INDEX issue_report_work_idx ON issue_report (work_item_id) WHERE (work_item_id IS NOT NULL)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>issue_report_updated_at</code> <span class="muted">BEFORE UPDATE → set_updated_at()</span></li></ul></details>
+  </article><article class="tbl" id="t-issue_attachment">
+    <h3><code>issue_attachment</code> <span class="count">11 columns</span></h3>
+    <p class="doc">File metadata. The file itself lives in object storage under storage_key. Attached to the item, one comment, or one report.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">gen_random_uuid()</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>comment_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>report_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>uploaded_by</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>file_name</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>storage_key</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span></td></tr><tr><td><code>content_type</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>file_size_bytes</code></td><td><code>bigint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>checksum_sha256</code></td><td><code>character(64)</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (4)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_attachment_file_size_bytes_check</code><pre>CHECK ((file_size_bytes &gt;= 0))</pre></li><li><span class="b k-c">Check</span> <code>issue_attachment_single_parent</code><pre>CHECK ((num_nonnulls(comment_id, report_id) &lt;= 1))</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_attachment_comment_id_issue_id_fkey</code><pre>FOREIGN KEY (comment_id, issue_id) REFERENCES issue_comment(id, issue_id)</pre></li><li><span class="b k-f">Foreign key</span> <code>issue_attachment_report_id_issue_id_fkey</code><pre>FOREIGN KEY (report_id, issue_id) REFERENCES issue_report(id, issue_id)</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_attachment_comment_idx</code><pre>CREATE INDEX issue_attachment_comment_idx ON issue_attachment (comment_id) WHERE (comment_id IS NOT NULL)</pre></li><li><code>issue_attachment_issue_idx</code><pre>CREATE INDEX issue_attachment_issue_idx ON issue_attachment (issue_id)</pre></li><li><code>issue_attachment_report_idx</code><pre>CREATE INDEX issue_attachment_report_idx ON issue_attachment (report_id) WHERE (report_id IS NOT NULL)</pre></li></ul></details>
+    
+  </article><div class="group-h"><b>Events</b></div><article class="tbl" id="t-issue_event">
+    <h3><code>issue_event</code> <span class="count">5 columns</span></h3>
+    <p class="doc">Calendar details for event items: start, end, all-day flag and location.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>starts_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>ends_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>all_day</code></td><td><code>boolean</code></td><td>boolean</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">false</code></td><td></td></tr><tr><td><code>location</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (1)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>issue_event_range</code><pre>CHECK ((ends_at &gt;= starts_at))</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>issue_event_starts_idx</code><pre>CREATE INDEX issue_event_starts_idx ON issue_event (starts_at)</pre></li></ul></details>
+    
+  </article><article class="tbl" id="t-event_rsvp">
+    <h3><code>event_rsvp</code> <span class="count">6 columns</span></h3>
+    <p class="doc">One row per invitee, created from the targets when the event is published.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue_event">issue_event.issue_id</a></span></td></tr><tr><td><code>user_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>response</code></td><td><code>rsvp_response</code></td><td><a href="#enum-rsvp_response">rsvp_response</a></td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"pending"</code></td><td></td></tr><tr><td><code>note</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>responded_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (1)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>event_rsvp_responded</code><pre>CHECK (((response = 'pending'::rsvp_response) = (responded_at IS NULL)))</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>event_rsvp_user_idx</code><pre>CREATE INDEX event_rsvp_user_idx ON event_rsvp (user_id)</pre></li></ul></details>
+    
+  </article><article class="tbl" id="t-event_reminder">
+    <h3><code>event_reminder</code> <span class="count">2 columns</span></h3>
+    <p class="doc">When to remind invitees, in minutes before the start.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span> <span class="b fk">FK → <a href="#t-issue_event">issue_event.issue_id</a></span></td></tr><tr><td><code>minutes_before</code></td><td><code>integer</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b pk">PK</span><div class="note">up to 4 weeks</div></td></tr></tbody></table></div>
+    <details><summary>Constraints (1)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>event_reminder_minutes_before_check</code><pre>CHECK (((minutes_before &gt;= 1) AND (minutes_before &lt;= 40320)))</pre></li></ul></details>
+    
+    
+  </article><div class="group-h"><b>Notifications and audit</b></div><article class="tbl" id="t-notification">
+    <h3><code>notification</code> <span class="count">11 columns</span></h3>
+    <p class="doc">The in-app inbox. dedupe_key stops background jobs from creating the same notification twice.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>bigint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">auto-increment</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>recipient_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span></td></tr><tr><td><code>kind</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-branch">branch.id</a></span></td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-issue">issue.id</a></span></td></tr><tr><td><code>work_item_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-work_item">work_item.id</a></span></td></tr><tr><td><code>actor_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span><div class="note">NULL = system job</div></td></tr><tr><td><code>payload</code></td><td><code>jsonb</code></td><td>JSON object</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">"{}"</code></td><td></td></tr><tr><td><code>dedupe_key</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b uq">unique</span><div class="note">e.g. 'reminder:&lt;issue&gt;:&lt;user&gt;:60'</div></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr><tr><td><code>read_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr></tbody></table></div>
+    <details><summary>Constraints (1)</summary><ul class="rules-list"><li><span class="b k-c">Check</span> <code>notification_kind_check</code><pre>CHECK ((kind = ANY (ARRAY['assigned'::text, 'unassigned'::text, 'mentioned'::text, 'commented'::text, 'status_changed'::text, 'submitted_for_approval'::text, 'approved'::text, 'rejected'::text, 'changed_by_admin'::text, 'ticket_created'::text, 'event_invited'::text, 'event_updated'::text, 'event_cancelled'::text, 'event_reminder'::text, 'sla_due_soon'::text, 'sla_breached'::text, 'added_to_group'::text, 'permissions_changed'::text])))</pre></li></ul></details>
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>notification_inbox_idx</code><pre>CREATE INDEX notification_inbox_idx ON notification (recipient_id, created_at DESC)</pre></li><li><code>notification_unread_idx</code><pre>CREATE INDEX notification_unread_idx ON notification (recipient_id) WHERE (read_at IS NULL)</pre></li></ul></details>
+    
+  </article><article class="tbl" id="t-audit_log">
+    <h3><code>audit_log</code> <span class="count">9 columns</span></h3>
+    <p class="doc">Permanent, append-only history of every important change. Updates and deletes are rejected by a trigger.</p>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th><th>Null?</th><th>Default</th><th>Keys and notes</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>bigint</code></td><td>number</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">auto-increment</code></td><td><span class="b pk">PK</span></td></tr><tr><td><code>entity_type</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><div class="note">'issue', 'work_item', 'branch_membership', 'group_permission', 'export', ...</div></td></tr><tr><td><code>entity_id</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-branch">branch.id</a></span></td></tr><tr><td><code>actor_id</code></td><td><code>uuid</code></td><td>string (UUID)</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td><span class="b fk">FK → <a href="#t-app_user">app_user.id</a></span><div class="note">NULL = system job</div></td></tr><tr><td><code>action</code></td><td><code>text</code></td><td>string</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def"></code></td><td><div class="note">'create', 'update', 'approve', 'grant', 'revoke', 'export', ...</div></td></tr><tr><td><code>old_value</code></td><td><code>jsonb</code></td><td>JSON object</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>new_value</code></td><td><code>jsonb</code></td><td>JSON object</td>
+      <td><span class="opt">nullable</span></td>
+      <td><code class="def"></code></td><td></td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td>
+      <td><span class="req">required</span></td>
+      <td><code class="def">now()</code></td><td></td></tr></tbody></table></div>
+    
+    <details><summary>Indexes</summary><ul class="rules-list"><li><code>audit_log_actor_idx</code><pre>CREATE INDEX audit_log_actor_idx ON audit_log (actor_id, created_at)</pre></li><li><code>audit_log_branch_idx</code><pre>CREATE INDEX audit_log_branch_idx ON audit_log (branch_id, created_at)</pre></li><li><code>audit_log_entity_idx</code><pre>CREATE INDEX audit_log_entity_idx ON audit_log (entity_type, entity_id, created_at)</pre></li></ul></details>
+    <details><summary>Triggers</summary><ul class="rules-list"><li><code>audit_log_append_only</code> <span class="muted">BEFORE DELETE OR UPDATE → reject_modification()</span></li></ul></details>
+  </article>
+</section>
+
+<section id="views">
+  <h2 class="sec">Views</h2>
+  <article class="tbl" id="t-work_item_overview"><h3><code>work_item_overview</code> <span class="count">view · 15 columns</span></h3>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>issue_id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>target_id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>assignee_id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>status</code></td><td><code>work_status</code></td><td><a href="#enum-work_status">work_status</a></td></tr><tr><td><code>sla_due_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>submitted_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>decided_by</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>decided_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>decision_note</code></td><td><code>text</code></td><td>string</td></tr><tr><td><code>version</code></td><td><code>integer</code></td><td>number</td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>is_overdue</code></td><td><code>boolean</code></td><td>boolean</td></tr>
+    </tbody></table></div></article><article class="tbl" id="t-issue_overview"><h3><code>issue_overview</code> <span class="count">view · 22 columns</span></h3>
+    <div class="table-wrap"><table class="cols"><thead><tr><th>Column</th><th>Postgres type</th><th>In the API</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>number</code></td><td><code>bigint</code></td><td>number</td></tr><tr><td><code>branch_id</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>type_id</code></td><td><code>smallint</code></td><td>number</td></tr><tr><td><code>title</code></td><td><code>text</code></td><td>string</td></tr><tr><td><code>description</code></td><td><code>text</code></td><td>string</td></tr><tr><td><code>priority</code></td><td><code>issue_priority</code></td><td><a href="#enum-issue_priority">issue_priority</a></td></tr><tr><td><code>is_private</code></td><td><code>boolean</code></td><td>boolean</td></tr><tr><td><code>completion_mode</code></td><td><code>completion_mode</code></td><td><a href="#enum-completion_mode">completion_mode</a></td></tr><tr><td><code>state</code></td><td><code>issue_state</code></td><td><a href="#enum-issue_state">issue_state</a></td></tr><tr><td><code>closed_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>closed_by</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>requires_super_admin_approval</code></td><td><code>boolean</code></td><td>boolean</td></tr><tr><td><code>created_by</code></td><td><code>uuid</code></td><td>string (UUID)</td></tr><tr><td><code>version</code></td><td><code>integer</code></td><td>number</td></tr><tr><td><code>created_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>updated_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr><tr><td><code>work_item_count</code></td><td><code>bigint</code></td><td>number</td></tr><tr><td><code>done_count</code></td><td><code>bigint</code></td><td>number</td></tr><tr><td><code>awaiting_approval_count</code></td><td><code>bigint</code></td><td>number</td></tr><tr><td><code>is_overdue</code></td><td><code>boolean</code></td><td>boolean</td></tr><tr><td><code>next_sla_due_at</code></td><td><code>timestamp with time zone</code></td><td>string (RFC 3339)</td></tr>
+    </tbody></table></div></article>
+</section>
+
+<section id="functions">
+  <h2 class="sec">Functions</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Function</th><th>Arguments</th><th>Returns</th></tr></thead>
+    <tbody><tr><td><code>set_updated_at</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>reject_modification</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>create_default_group</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>sync_default_group_membership</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_group_member_active</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>protect_default_group</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_group_permission</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_issue_target</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>assert_branch_has_admin</code></td><td><code>b uuid</code></td><td><code>void</code></td></tr><tr><td><code>check_branch_has_admin</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_membership_keeps_admin</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_user_deactivation_keeps_admins</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>check_super_admin_exists</code></td><td><code></code></td><td><code>trigger</code></td></tr><tr><td><code>issue_visible</code></td><td><code>p_issue_id uuid, p_branch_id uuid, p_type_id smallint, p_is_private boolean, p_created_by uuid, f jsonb</code></td><td><code>boolean</code></td></tr></tbody>
+  </table></div>
+</section>
+
+<section id="seed">
+  <h2 class="sec">Seed data</h2>
+  <h3 style="margin:16px 0 8px"><code>issue_type</code></h3>
+  <div class="table-wrap"><table><thead><tr><th>code</th><th>name</th><th>Default deadline</th><th>description</th></tr></thead><tbody>
+  <tr><td><code>ticket</code></td><td>Ticket</td><td>—</td><td>A question or request, answered in comments</td></tr><tr><td><code>report</code></td><td>Report</td><td>168 h</td><td>A written report, submitted for approval when assigned</td></tr><tr><td><code>event</code></td><td>Event</td><td>—</td><td>A calendar entry with invitees, RSVPs and reminders</td></tr><tr><td><code>action</code></td><td>Action</td><td>72 h</td><td>A task assigned to people or groups, submitted for approval</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px"><code>permission</code></h3>
+  <div class="table-wrap"><table><thead><tr><th>key</th><th>Per item type</th><th>Allowed scopes</th><th>description</th></tr></thead><tbody>
+  <tr><td><code>comment.create</code></td><td>no</td><td><code>targeted</code> <code>branch</code></td><td>Comment on issues you can read</td></tr><tr><td><code>comment.internal</code></td><td>no</td><td><code>branch</code></td><td>Read and write staff-only comments</td></tr><tr><td><code>comment.moderate</code></td><td>no</td><td><code>branch</code></td><td>Delete other people's comments</td></tr><tr><td><code>dashboard.branch</code></td><td>no</td><td><code>branch</code></td><td>See the branch-wide dashboard</td></tr><tr><td><code>export.run</code></td><td>no</td><td><code>branch</code></td><td>Export branch data to Excel</td></tr><tr><td><code>issue.close</code></td><td>yes</td><td><code>own</code> <code>branch</code></td><td>Close or cancel issues</td></tr><tr><td><code>issue.create</code></td><td>yes</td><td><code>branch</code></td><td>Create issues of this type in the branch</td></tr><tr><td><code>issue.edit</code></td><td>yes</td><td><code>own</code> <code>branch</code></td><td>Edit title, description, priority and event details</td></tr><tr><td><code>issue.read</code></td><td>yes</td><td><code>own</code> <code>targeted</code> <code>branch</code></td><td>View issues (private ones need issue.read_private unless you created or are targeted by them)</td></tr><tr><td><code>issue.read_private</code></td><td>yes</td><td><code>branch</code></td><td>View private issues in the branch</td></tr><tr><td><code>issue.set_private</code></td><td>yes</td><td><code>own</code> <code>branch</code></td><td>Mark issues private or public</td></tr><tr><td><code>issue.target</code></td><td>yes</td><td><code>own</code> <code>branch</code></td><td>Send issues to people and groups in the branch</td></tr><tr><td><code>member.manage</code></td><td>no</td><td><code>branch</code></td><td>Add and remove non-admin members, edit their profiles, reset passwords</td></tr><tr><td><code>member.view</code></td><td>no</td><td><code>branch</code></td><td>See the branch member directory</td></tr><tr><td><code>work_item.approve</code></td><td>yes</td><td><code>branch</code></td><td>Approve or reject submitted work (never super admin issues)</td></tr><tr><td><code>work_item.assign</code></td><td>yes</td><td><code>targeted</code> <code>branch</code></td><td>Assign, reassign or claim work</td></tr><tr><td><code>work_item.update</code></td><td>yes</td><td><code>targeted</code> <code>branch</code></td><td>Change the status of work and submit it for approval</td></tr>
+  </tbody></table></div>
+</section>
+
+</main>
+</div>
+<footer class="wrap">Generated from the migrations on 2026-10-17; updated for migrations 0003–0005. Regenerate whenever a migration is added.</footer>
+</body>
+</html>

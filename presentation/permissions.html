@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticketing Permissions</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f0eee8;
+    --text: #1c1c1e; --muted: #5d5f63; --border: #e2dfd7;
+    --accent: #2c56c9; --accent-soft: #e7ecfa;
+    --ok: #1d7448; --ok-soft: #e2f3e9; --no: #b02a20; --no-soft: #fae8e6;
+    --warn: #845400; --warn-soft: #fbf0d6;
+    --c-org: #2c56c9; --c-work: #1d7448; --c-talk: #845400; --c-sys: #7a3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+      --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+      --accent: #8eaaf5; --accent-soft: #1f2a46;
+      --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+      --warn: #f0c46c; --warn-soft: #3a2d12;
+      --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --surface: #1d1d20; --surface-2: #26262a;
+    --text: #ececee; --muted: #a2a3a8; --border: #34343a;
+    --accent: #8eaaf5; --accent-soft: #1f2a46;
+    --ok: #6fd19d; --ok-soft: #173326; --no: #f3928a; --no-soft: #3b1d1a;
+    --warn: #f0c46c; --warn-soft: #3a2d12;
+    --c-org: #8eaaf5; --c-work: #6fd19d; --c-talk: #f0c46c; --c-sys: #c9a2f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header.hero { padding-top: 56px; padding-bottom: 32px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 17px; margin: 0 0 4px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  nav.toc { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+  nav.toc .wrap { display: flex; gap: 20px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; }
+  nav.toc a { color: var(--muted); text-decoration: none; font-size: 14px; white-space: nowrap; }
+  nav.toc a:hover { color: var(--accent); }
+  section { padding: 40px 0 8px; }
+  .section-intro { color: var(--muted); margin: 0 0 20px; max-width: 720px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; border-top: 4px solid var(--stripe, var(--accent)); }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+  .card .ex { margin-top: 10px; font-size: 14px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+  .tech { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 3px 6px; margin-left: 6px; vertical-align: middle; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 28px 0 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stripe); flex: none; }
+  .org  { --stripe: var(--c-org); }
+  .work { --stripe: var(--c-work); }
+  .talk { --stripe: var(--c-talk); }
+  .sys  { --stripe: var(--c-sys); }
+  .diagram { width: 100%; height: auto; display: block; }
+  .diagram .box { fill: var(--surface); stroke-width: 2; }
+  .diagram .lbl { fill: var(--text); font: 600 15px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .diagram .lane { fill: var(--muted); font: 600 11px -apple-system, "Segoe UI", sans-serif; letter-spacing: .1em; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .diagram .dash { stroke-dasharray: 5 4; }
+  .diagram .elbl { fill: var(--muted); font: italic 12px -apple-system, "Segoe UI", sans-serif; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+  .pill { border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); }
+  .pill.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .pill.bad { background: var(--no-soft); color: var(--no); border-color: transparent; }
+  .pill.wait { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .arrow { color: var(--muted); }
+  ul.rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  ul.rules li { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 12px 44px; position: relative; }
+  ul.rules li::before { content: "✓"; position: absolute; left: 14px; top: 11px; width: 20px; height: 20px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-weight: 700; font-size: 13px; text-align: center; line-height: 20px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .types { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+  footer { color: var(--muted); font-size: 13px; padding: 48px 0 40px; }
+  @media (max-width: 600px) { header.hero { padding-top: 36px; } .lead { font-size: 16px; } }
+  .levels { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .level { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; border-top: 4px solid var(--stripe); }
+  .level .who { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--stripe); }
+  .level h3 { font-size: 20px; margin: 4px 0 8px; }
+  .level ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
+  .level li { margin: 4px 0; }
+  .lv-super { --stripe: var(--c-sys); }
+  .lv-admin { --stripe: var(--c-org); }
+  .lv-member { --stripe: var(--c-work); }
+  .scopes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .scope { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .scope b { display: block; font-size: 17px; margin-bottom: 4px; }
+  .scope span { color: var(--muted); font-size: 15px; }
+  table.matrix th:not(:first-child), table.matrix td:not(:first-child) { text-align: center; white-space: nowrap; }
+  table.matrix td:first-child { min-width: 240px; }
+  table.matrix tr.cat td { background: var(--surface-2); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: left; }
+  .y, .n, .p { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+  .y { background: var(--ok-soft); color: var(--ok); }
+  .n { background: var(--no-soft); color: var(--no); }
+  .p { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  .two { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .reserved { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .reserved h3 { display: flex; align-items: center; gap: 8px; }
+  .reserved ul { margin: 10px 0 0; padding-left: 18px; }
+  .reserved li { margin: 6px 0; }
+  .lock { font-size: 18px; }
+  .qa { display: grid; gap: 12px; }
+  .q { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .q .ask { font-weight: 700; }
+  .q .ans { margin-top: 6px; color: var(--muted); }
+  .q .verdict { font-weight: 700; margin-right: 6px; }
+  .q .verdict.yes { color: var(--ok); } .q .verdict.no { color: var(--no); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
+  .callout b { color: var(--accent); }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 12px 52px; position: relative; }
+  .steps li::before { content: counter(s); position: absolute; left: 14px; top: 11px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--surface); font-weight: 700; text-align: center; line-height: 26px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <div class="eyebrow">School Ticketing System · Permissions</div>
+  <h1>Who can do what</h1>
+  <p class="lead">How access works across branches, groups and roles. It covers what everyone can do by default, what admins can hand out, and the few things that stay locked to admins and super admins.</p>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#levels">Three levels</a>
+  <a href="#groups">How groups work</a>
+  <a href="#reach">Reach</a>
+  <a href="#matrix">Full table</a>
+  <a href="#locked">Locked actions</a>
+  <a href="#safety">Safety rules</a>
+  <a href="#scenarios">Examples</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="levels">
+  <h2>Three levels of access</h2>
+  <p class="section-intro">Access always belongs to a <b>branch</b>. Someone who works in two branches can have different powers in each. Being an admin at North gives nothing extra at South.</p>
+  <div class="levels">
+    <div class="level lv-super">
+      <div class="who">Whole school</div>
+      <h3>Super admin</h3>
+      <div>Can do everything, in every branch.</div>
+      <ul>
+        <li>Creates branches and appoints or removes branch admins</li>
+        <li>Sends work to whole branches, or to several at once</li>
+        <li>The only one who approves work they (or another super admin) sent out</li>
+        <li>Exports data for any or all branches</li>
+      </ul>
+    </div>
+    <div class="level lv-admin">
+      <div class="who">One branch</div>
+      <h3>Branch admin</h3>
+      <div>Runs their branch. Appointed by a super admin.</div>
+      <ul>
+        <li>Manages members, groups and each group's permissions</li>
+        <li>Can see, edit, close and approve all work in the branch</li>
+        <li>On super admin items: can comment and organize their branch's part, but not edit or approve</li>
+        <li>Exports their branch's data</li>
+      </ul>
+    </div>
+    <div class="level lv-member">
+      <div class="who">One branch</div>
+      <h3>Members</h3>
+      <div>Everyone else. Their powers come from their groups.</div>
+      <ul>
+        <li>By default: see the branch's non-private items, ask questions, file reports, create events, and work on what they're given</li>
+        <li>Close what they created</li>
+        <li>Can be given more, up to nearly admin level, by joining a group the admin has set up</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="groups">
+  <h2>How groups give permissions</h2>
+  <p class="section-intro">Groups are teams inside a branch, for example "Science teachers", "Year 10 tutors" or "Coordinators". Only the branch admin creates them.</p>
+  <ol class="steps">
+    <li>The admin creates a group and chooses what its members may do, for example "approve work" or "export to Excel".</li>
+    <li>The admin adds people to the group. They get those permissions immediately, in that branch only.</li>
+    <li>Someone in several groups gets everything from all of them combined.</li>
+    <li>When someone is removed from the group, the permissions are gone on their very next click. No sign-out needed.</li>
+    <li>Anyone can see the list of their own permissions and which group each one comes from. Admins can see this for every member.</li>
+  </ol>
+  <div class="callout"><b>The "All members" group.</b> Every branch has one automatically, and everyone in the branch is in it. It holds the everyday permissions every member gets. The admin can adjust what it allows, but can't delete it.</div>
+</section>
+
+<section id="reach">
+  <h2>Reach: how far a permission goes</h2>
+  <p class="section-intro">Most permissions come with a reach, so an admin can give "close <i>their own</i> items" without giving "close <i>anyone's</i> items".</p>
+  <div class="scopes">
+    <div class="scope"><b>Their own</b><span>Items the person created themselves.</span></div>
+    <div class="scope"><b>Sent to them</b><span>Items sent to them directly, to a group they're in, or work assigned to them.</span></div>
+    <div class="scope"><b>Whole branch</b><span>Every item in the branch.</span></div>
+  </div>
+  <p class="section-intro" style="margin-top:14px">Permissions can also be limited to one kind of item. For example, a group could approve <b>Reports</b> but not <b>Actions</b>.</p>
+</section>
+
+<section id="matrix">
+  <h2>The full table</h2>
+  <p class="section-intro">The "Everyone" column is the default for the <i>All members</i> group. The last column says whether an admin can hand this power to a group.</p>
+  <div class="legend">
+    <span><span class="y">✓</span> Yes</span>
+    <span><span class="n">✕</span> No</span>
+    <span><span class="p">limited</span> Partly (see wording)</span>
+  </div>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th>What</th><th>Super admin</th><th>Branch admin</th><th>Everyone</th><th>Can give to a group?</th></tr></thead>
+      <tbody>
+        <tr class="cat"><td colspan="5">Seeing things</td></tr>
+        <tr><td>See items in the branch</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">non-private</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>See private items</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">if theirs or sent to them</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>See staff-only comments</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>See the branch's groups</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">always allowed</span></td></tr>
+        <tr><td>See the member directory</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Branch-wide dashboard numbers</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">own numbers</span></td><td><span class="y">✓</span></td></tr>
+
+        <tr class="cat"><td colspan="5">Creating and managing items</td></tr>
+        <tr><td>Ask a question (Ticket)</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>File a report, create an event</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Create tasks for others (Action)</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Send items to people or groups</td><td><span class="p">any branch</span></td><td><span class="p">own branch</span></td><td><span class="p">own tickets &amp; events</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Edit items</td><td><span class="y">✓</span></td><td><span class="p">not super admin's</span></td><td><span class="p">their own</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Close or cancel items</td><td><span class="y">✓</span></td><td><span class="p">not super admin's</span></td><td><span class="p">their own</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Close their own tickets, reports and events</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">always allowed, even if defaults change</span></td></tr>
+        <tr><td>Mark items private</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="y">✓</span></td></tr>
+
+        <tr class="cat"><td colspan="5">Doing and approving work</td></tr>
+        <tr><td>Update progress and submit work</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">their own work</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Assign or reassign work</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">pick up group work</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Cancel one person's assignment</td><td><span class="y">✓</span></td><td><span class="p">not super admin's</span></td><td><span class="n">✕</span></td><td><span class="n">never</span></td></tr>
+        <tr><td>Approve or send back submitted work</td><td><span class="y">✓</span></td><td><span class="p">not super admin's</span></td><td><span class="n">✕</span></td><td><span class="p">not super admin's</span></td></tr>
+        <tr><td>Reply to event invitations</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">always allowed for invitees</span></td></tr>
+
+        <tr class="cat"><td colspan="5">Conversation</td></tr>
+        <tr><td>Comment on items they can see</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Write staff-only comments</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="y">✓</span></td></tr>
+        <tr><td>Remove other people's comments</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="y">✓</span></td></tr>
+
+        <tr class="cat"><td colspan="5">People and setup</td></tr>
+        <tr><td>Add or remove members, reset passwords</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="p">not for admins</span></td></tr>
+        <tr><td>Export to Excel</td><td><span class="p">any or all</span></td><td><span class="p">own branch</span></td><td><span class="n">✕</span></td><td><span class="p">own branch</span></td></tr>
+        <tr><td>Create, edit or delete groups</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="n">never</span></td></tr>
+        <tr><td>Decide what a group may do</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="n">never</span></td></tr>
+        <tr><td>Appoint or remove branch admins</td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="n">✕</span></td><td><span class="n">never</span></td></tr>
+        <tr><td>Create or close branches</td><td><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="n">✕</span></td><td><span class="n">never</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="locked">
+  <h2>Locked actions</h2>
+  <p class="section-intro">An admin can give a group every permission in the table, making its members almost admins <i>within that branch</i>. These actions can never be handed out.</p>
+  <div class="two">
+    <div class="reserved">
+      <h3><span class="lock">🔒</span> Super admins only</h3>
+      <ul>
+        <li>Create, rename or close branches</li>
+        <li>Appoint or remove branch admins</li>
+        <li>Make someone a super admin</li>
+        <li>Send work to whole branches, or to several branches at once</li>
+        <li>Approve, edit or close work a super admin sent out</li>
+        <li>Export more than one branch at a time</li>
+        <li>Change anything about a super admin's account</li>
+        <li>Deactivate the account of an admin, or of someone in more than one branch</li>
+      </ul>
+    </div>
+    <div class="reserved">
+      <h3><span class="lock">🔒</span> Branch admins only</h3>
+      <ul>
+        <li>Create, edit or delete groups</li>
+        <li>Add or remove people from groups</li>
+        <li>Decide what each group may do, including the "All members" defaults</li>
+        <li>Change anything about another admin's account</li>
+        <li>Bring back a member who left the branch</li>
+        <li>Cancel one person's assignment on its own</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="safety">
+  <h2>Safety rules</h2>
+  <p class="section-intro">These always apply and can't be switched off.</p>
+  <ul class="rules">
+    <li><b>Every branch always has an admin.</b> A branch is created together with its first admin, and the last admin can't be removed until a super admin appoints another.</li>
+    <li><b>There is always at least one super admin.</b></li>
+    <li><b>Nobody approves their own work.</b> Approval always comes from someone else.</li>
+    <li><b>Private means private.</b> A private item is seen only by its creator, the people it was sent to, and admins. Other members can't tell it exists.</li>
+    <li><b>Staff-only comments stay hidden</b> from people without permission everywhere: on screen, in notifications and in exports.</li>
+    <li><b>Changes take effect immediately.</b> Removing someone from a group or a branch removes their access on their next click.</li>
+    <li><b>Leaving a branch ends all access to it,</b> including items the person created or worked on there. Their unfinished work becomes unassigned so an admin can hand it on.</li>
+    <li><b>Everything is on record.</b> Every change to permissions, groups, admins and exports is written to a permanent history, and branch admins are notified when a group's permissions change.</li>
+    <li><b>Owners are told.</b> If an admin edits or closes someone else's item, the creator is notified.</li>
+  </ul>
+</section>
+
+<section id="scenarios">
+  <h2>Examples</h2>
+  <div class="qa">
+    <div class="q"><div class="ask">Sara, a teacher at North, has a question about lab supplies.</div>
+      <div class="ans"><span class="verdict yes">Allowed.</span>She creates a Ticket and sends it to the "Lab technicians" group. When she has her answer, she closes it herself.</div></div>
+    <div class="q"><div class="ask">The North admin needs every science teacher to hand in a term report.</div>
+      <div class="ans"><span class="verdict yes">Allowed.</span>She sends a Report to the "Science" group as <i>one each</i>. Every teacher gets their own assignment, writes the report and submits it. The admin approves each one or sends it back.</div></div>
+    <div class="q"><div class="ask">The super admin schedules a fire drill at every branch.</div>
+      <div class="ans"><span class="verdict yes">Allowed.</span>The Action goes to all branches. Each branch admin assigns their part to someone, and only a super admin can approve the completed drills.</div></div>
+    <div class="q"><div class="ask">Omar is admin at North and a teacher at South. Can he approve work at South?</div>
+      <div class="ans"><span class="verdict no">No.</span>Admin powers belong to North only. At South he has the same permissions as any other teacher there.</div></div>
+    <div class="q"><div class="ask">The North admin sets up "Coordinators" with power to approve work and manage members. Can a coordinator create a new group?</div>
+      <div class="ans"><span class="verdict no">No.</span>Coordinators can approve work and add or remove ordinary members. Creating groups, changing group permissions and appointing admins stay with the admin and super admin.</div></div>
+    <div class="q"><div class="ask">A counsellor's referral is marked private. Can other teachers see it?</div>
+      <div class="ans"><span class="verdict no">No.</span>Only the person who created it, the people it was sent to, and admins can see it. It doesn't appear in anyone else's lists, searches, dashboard or exports.</div></div>
+    <div class="q"><div class="ask">The only admin at South is leaving. Can they be removed?</div>
+      <div class="ans"><span class="verdict no">Not yet.</span>The system refuses until a super admin appoints a new admin for South. This keeps a branch from ending up with no admin.</div></div>
+    <div class="q"><div class="ask">Can a teacher close an Action an admin assigned to them?</div>
+      <div class="ans"><span class="verdict no">No, they submit it instead.</span>They mark their work as done and submit it for approval. The admin approves it, and the item closes once everyone's work is approved.</div></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">School Ticketing System · Permissions, updated 17 October 2026 to match the built backend. Companion documents: Product overview, Data model.</footer>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE branch SET timezone = 'Pacific/Kiritimati' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6260794b112190082cbfe48561e05404ace2a09982b32021d7de4976911d0b2"
+}

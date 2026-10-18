@@ -1,0 +1,268 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.description,\n               i.priority AS \"priority: Priority\", i.is_private, i.completion_mode AS \"completion_mode: CompletionMode\",\n               i.state AS \"state: IssueState\", i.closed_at, i.closed_by, i.requires_super_admin_approval,\n               i.created_by, i.version, i.created_at, i.updated_at,\n               EXISTS (SELECT 1 FROM issue_watcher w WHERE w.issue_id = i.id AND w.user_id = $2) AS \"watching!\",\n               (SELECT r.last_read_at FROM issue_read r WHERE r.issue_id = i.id AND r.user_id = $2) AS last_read_at\n        FROM issue i JOIN issue_type ty ON ty.id = i.type_id\n        WHERE i.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "priority: Priority",
+        "type_info": {
+          "Custom": {
+            "name": "issue_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "priority"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_private",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "is_private"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "completion_mode: CompletionMode",
+        "type_info": {
+          "Custom": {
+            "name": "completion_mode",
+            "kind": {
+              "Enum": [
+                "shared",
+                "per_member"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "completion_mode"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "state: IssueState",
+        "type_info": {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "closed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "closed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "closed_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "closed_by"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "requires_super_admin_approval",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "requires_super_admin_approval"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "created_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_by"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "version",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "watching!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 18,
+        "name": "last_read_at",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "5f2e34ec56322f206d28e583a9dc6dc52a536bc066a0dd72a02c8559bd2c4acf"
+}

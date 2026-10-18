@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE app_user\n                SET password_hash = $2, must_change_password = true, failed_login_count = 0, locked_until = NULL\n                WHERE email = ($1::text)::citext\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "088bd92251b34f57f42f2aae25df6c94dbcc4b7bb128ec30a10236c2a774895a"
+}

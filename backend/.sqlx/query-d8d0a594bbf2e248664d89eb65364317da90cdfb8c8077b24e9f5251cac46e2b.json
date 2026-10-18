@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issue_report (issue_id, work_item_id, author_id, title, body) VALUES ($1, $2, $3, 'Draft', 'wip')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8d0a594bbf2e248664d89eb65364317da90cdfb8c8077b24e9f5251cac46e2b"
+}

@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO issue (branch_id, type_id, title, description, priority, is_private, completion_mode,\n                           requires_super_admin_approval, created_by)\n        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7, $8, $9)\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "issue_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        },
+        "Bool",
+        {
+          "Custom": {
+            "name": "completion_mode",
+            "kind": {
+              "Enum": [
+                "shared",
+                "per_member"
+              ]
+            }
+          }
+        },
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7765b844b2741c833c48b26a06b2fe43b68c93dbc1c72bc48d7ac66acbaecd2d"
+}

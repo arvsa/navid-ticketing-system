@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issue (branch_id, type_id, title, created_by) VALUES ($1, (SELECT id FROM issue_type WHERE code = 'ticket'), 'Q', $2) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "57d8aa4b6ac4ef15af988ea31b7a2be4679b3ce1bd0c15ae03cf58d1343365b6"
+}

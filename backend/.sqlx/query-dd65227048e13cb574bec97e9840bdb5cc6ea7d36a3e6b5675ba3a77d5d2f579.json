@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_get_constraintdef(oid) AS \"def!\" FROM pg_constraint WHERE conname = 'notification_kind_check'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "def!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dd65227048e13cb574bec97e9840bdb5cc6ea7d36a3e6b5675ba3a77d5d2f579"
+}

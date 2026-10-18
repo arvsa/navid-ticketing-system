@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT locked_until BETWEEN now() + interval '14 minutes' AND now() + interval '16 minutes' AS \"ok!\"\n           FROM app_user WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "69cdae78f9536bb52aa95d270707172b873c87a12c477ee052fd9f9bf9fbe586"
+}

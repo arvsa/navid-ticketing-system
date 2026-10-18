@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_session SET revoked_at = now() - interval '40 days'\n           WHERE id = (SELECT id FROM user_session ORDER BY created_at DESC LIMIT 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ea78c50795b6acdc4f1ed1ae1be83bbf5aba0df90405735abed9be01e90fbe3b"
+}

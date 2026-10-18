@@ -1,0 +1,147 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT n.id, n.kind, n.branch_id, n.issue_id, 'ISS-' || i.number AS issue_key, i.title AS \"issue_title?\",\n               n.work_item_id, n.actor_id, n.payload, n.created_at, n.read_at\n        FROM notification n\n        LEFT JOIN issue i ON i.id = n.issue_id\n        WHERE n.recipient_id = $1\n          AND (NOT $2 OR n.read_at IS NULL)\n          AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $3))\n          AND ($4::bigint IS NULL OR n.id < $4)\n        ORDER BY n.id DESC\n        LIMIT $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "issue_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "issue_key",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "issue_title?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "work_item_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "work_item_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "actor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "actor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "payload"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "read_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "read_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Jsonb",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "bb522ecc68105da6c8beaf2e9c848ca9cc137a8501299cc13ed56f67b199557e"
+}

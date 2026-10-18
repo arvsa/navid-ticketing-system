@@ -1,0 +1,219 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.priority AS \"priority: Priority\",\n               i.state AS \"state: IssueState\", i.is_private, i.created_by, i.created_at,\n               (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id) AS \"work_item_count!\",\n               (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id\n                  AND w.status IN ('approved', 'cancelled')) AS \"done_count!\",\n               EXISTS (SELECT 1 FROM work_item_overview w WHERE w.issue_id = i.id AND w.is_overdue) AS \"is_overdue!\",\n               -- Activity the actor can see: comments count, internal ones only\n               -- where the actor sees internal comments.\n               greatest(i.updated_at,\n                        (SELECT max(w.updated_at) FROM work_item w WHERE w.issue_id = i.id),\n                        (SELECT max(c.updated_at) FROM issue_comment c\n                         WHERE c.issue_id = i.id AND c.deleted_at IS NULL\n                           AND (NOT c.is_internal_only\n                                OR coalesce(($1::jsonb->>'super')::boolean, false)\n                                OR $1::jsonb->'internal' ? i.branch_id::text\n                                OR (i.branch_id IS NULL AND EXISTS (\n                                      SELECT 1 FROM issue_target t\n                                      WHERE t.issue_id = i.id AND t.removed_at IS NULL\n                                        AND $1::jsonb->'internal' ? t.branch_id::text)))))\n                   AS \"last_activity_at!\",\n               r.last_read_at AS \"last_read_at?\"\n        FROM issue i\n        JOIN issue_type ty ON ty.id = i.type_id\n        LEFT JOIN issue_read r ON r.issue_id = i.id AND r.user_id = $2\n        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n          AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND EXISTS (\n                SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $3 AND t.removed_at IS NULL)))\n          AND ($4::text IS NULL OR ty.code = $4)\n          AND ($5::issue_state IS NULL OR i.state = $5)\n          AND (NOT $6 OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id AND w.assignee_id = $2))\n          AND ($7::text IS NULL OR i.title ILIKE $7)\n          AND ($8::timestamptz IS NULL OR (i.created_at, i.id) < ($8, $9))\n        ORDER BY i.created_at DESC, i.id DESC\n        LIMIT $10\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "priority: Priority",
+        "type_info": {
+          "Custom": {
+            "name": "issue_priority",
+            "kind": {
+              "Enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "priority"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "state: IssueState",
+        "type_info": {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_private",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "is_private"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_by"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "work_item_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "done_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_overdue!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_activity_at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_read_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_read",
+            "name": "last_read_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "issue_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "closed",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "bc4ccd0e25d3ea4a281095df5cec13932c23bac85497dc16e36b8739af66c237"
+}

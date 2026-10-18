@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO app_user (email, first_name, last_name, password_hash, is_super_admin)\n                         VALUES ($1, 'A', 'B', 'x', true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f47a630dea087fc180cf802afd4fd4f38de75aad36418ecd8566e65cc6c971d"
+}

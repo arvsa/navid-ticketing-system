@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT i.id, i.number, i.title, e.starts_at, r.response AS \"my_rsvp?: RsvpResponse\"\n        FROM issue_event e\n        JOIN issue i ON i.id = e.issue_id AND i.state = 'open'\n        LEFT JOIN event_rsvp r ON r.issue_id = i.id AND r.user_id = $2\n        WHERE e.starts_at >= $4 AND e.starts_at < $4 + make_interval(days => $5)\n          AND ($3::uuid[] IS NULL OR i.branch_id = ANY($3) OR (i.branch_id IS NULL AND EXISTS (\n                SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($3) AND t.removed_at IS NULL)))\n          AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n        ORDER BY e.starts_at, i.id\n        LIMIT $6\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "starts_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "my_rsvp?: RsvpResponse",
+        "type_info": {
+          "Custom": {
+            "name": "rsvp_response",
+            "kind": {
+              "Enum": [
+                "pending",
+                "going",
+                "maybe",
+                "declined"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "event_rsvp",
+            "name": "response"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid",
+        "UuidArray",
+        "Timestamptz",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d4cc0df1c583b505142ae01b00db496387f6a3fe02df80cc7b06ba9d30f7eaca"
+}

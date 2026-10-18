@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comment_mention (comment_id, user_id) SELECT $1, u FROM unnest($2::uuid[]) AS u",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "21e54c14cddae860ad82343a377162b915378918faf252b65c13d4a50e928397"
+}

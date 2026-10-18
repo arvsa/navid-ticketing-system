@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT i.id, i.branch_id, ty.code AS issue_type, i.is_private, i.created_by, i.requires_super_admin_approval,\n               ARRAY(SELECT DISTINCT t.branch_id FROM issue_target t\n                     WHERE t.issue_id = i.id AND t.removed_at IS NULL) AS \"target_branch_ids!\",\n               (EXISTS (SELECT 1 FROM issue_target t\n                        WHERE t.issue_id = i.id AND t.removed_at IS NULL AND (\n                              (t.user_id = $2 AND t.branch_id = ANY($3))\n                           OR t.group_id IN (SELECT gm.group_id FROM group_member gm WHERE gm.user_id = $2)\n                           OR (t.kind = 'branch' AND t.branch_id = ANY($3))))\n                OR EXISTS (SELECT 1 FROM work_item w JOIN issue_target t ON t.id = w.target_id\n                           WHERE w.issue_id = i.id AND w.assignee_id = $2 AND t.removed_at IS NULL\n                             AND w.branch_id = ANY($3))) AS \"targeted!\"\n        FROM issue i\n        JOIN issue_type ty ON ty.id = i.type_id\n        WHERE i.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "is_private",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "is_private"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "created_by"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "requires_super_admin_approval",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "requires_super_admin_approval"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "target_branch_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "targeted!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b4d42cef1ad18530b625282c5b099e68173dd6d10ca072b00295339771402534"
+}

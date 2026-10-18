@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sla_due_at FROM work_item WHERE issue_id = $1 ORDER BY created_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sla_due_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item",
+            "name": "sla_due_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "0cb727d88b658bb546339a3af5e1cc5fa243d1984f7941ae1570eb47a3e78ccf"
+}

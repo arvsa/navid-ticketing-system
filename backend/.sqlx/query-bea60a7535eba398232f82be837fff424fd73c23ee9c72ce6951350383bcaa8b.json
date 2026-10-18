@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT default_sla_hours FROM issue_type WHERE code = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "default_sla_hours",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "default_sla_hours"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "bea60a7535eba398232f82be837fff424fd73c23ee9c72ce6951350383bcaa8b"
+}

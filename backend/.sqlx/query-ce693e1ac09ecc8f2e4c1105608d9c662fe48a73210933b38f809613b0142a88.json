@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO permission (key, description, per_issue_type, allowed_scopes) VALUES ('x.y', 'x', false, '{branch}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ce693e1ac09ecc8f2e4c1105608d9c662fe48a73210933b38f809613b0142a88"
+}

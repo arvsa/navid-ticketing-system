@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM group_member gm USING user_group g WHERE g.id = gm.group_id AND g.is_default AND gm.user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "15fb86ddf6a885502e36b3ed0115c749c91d0cfd06adfa6b9a68c11edfb58aac"
+}

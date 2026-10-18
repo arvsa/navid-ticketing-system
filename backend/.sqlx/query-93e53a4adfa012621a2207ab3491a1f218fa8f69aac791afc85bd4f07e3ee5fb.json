@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_session SET revoked_at = now()\n        WHERE user_id = $1 AND revoked_at IS NULL AND id IS DISTINCT FROM $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93e53a4adfa012621a2207ab3491a1f218fa8f69aac791afc85bd4f07e3ee5fb"
+}

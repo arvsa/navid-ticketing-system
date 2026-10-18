@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue_event SET starts_at = $2, ends_at = $3, all_day = $4, location = $5 WHERE issue_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65a2e8f8d9baef14864b5ee2948f7442022c8c6fa5e076495701e3ec62c0866b"
+}

@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT w.status AS \"status!: WorkStatus\", count(*) AS \"n!\",\n                       count(*) FILTER (WHERE w.is_overdue) AS \"overdue!\",\n                       count(*) FILTER (WHERE w.status IN ('open', 'in_progress', 'blocked')\n                                          AND w.sla_due_at >= $3\n                                          AND w.sla_due_at < (date_trunc('day', $3 AT TIME ZONE $4) + interval '8 days')\n                                                             AT TIME ZONE $4) AS \"due_soon!\"\n                FROM work_item_overview w JOIN issue i ON i.id = w.issue_id\n                WHERE w.branch_id = $2\n                  AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n                GROUP BY w.status\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!: WorkStatus",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "overdue!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "due_soon!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e9caff2587f1b3a603b1ac07978d0895633c65c531023244a1c7c336737b1ecb"
+}

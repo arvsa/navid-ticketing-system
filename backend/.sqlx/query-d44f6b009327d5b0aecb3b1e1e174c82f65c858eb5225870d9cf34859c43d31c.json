@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.number, i.title, e.starts_at, e.ends_at, e.location,\n                   coalesce(b.code, (SELECT string_agg(DISTINCT bb.code, ', ') FROM issue_target t\n                                     JOIN branch bb ON bb.id = t.branch_id\n                                     WHERE t.issue_id = i.id AND t.removed_at IS NULL)) AS branch,\n                   coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'going') AS \"going!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'maybe') AS \"maybe!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'declined') AS \"declined!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'pending') AS \"pending!\"\n            FROM issue_event e\n            JOIN issue i ON i.id = e.issue_id\n            LEFT JOIN branch b ON b.id = i.branch_id\n            LEFT JOIN event_rsvp r ON r.issue_id = i.id\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n              AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (\n                    SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))\n              AND ($3::timestamptz IS NULL OR e.starts_at >= $3)\n              AND ($4::timestamptz IS NULL OR e.starts_at < $4)\n            GROUP BY i.id, e.issue_id, b.id\n            ORDER BY e.starts_at, i.number\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "starts_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "starts_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "ends_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "ends_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "location",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "location"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "branch",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "going!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "maybe!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "declined!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "pending!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "UuidArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d44f6b009327d5b0aecb3b1e1e174c82f65c858eb5225870d9cf34859c43d31c"
+}

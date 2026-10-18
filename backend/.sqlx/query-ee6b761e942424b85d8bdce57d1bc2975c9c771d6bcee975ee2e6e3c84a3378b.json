@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT failed_login_count FROM app_user WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "failed_login_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "failed_login_count"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ee6b761e942424b85d8bdce57d1bc2975c9c771d6bcee975ee2e6e3c84a3378b"
+}

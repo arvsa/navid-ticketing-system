@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH due AS (\n            SELECT w.id AS work_item_id, w.issue_id, w.branch_id, w.assignee_id, w.sla_due_at,\n                   CASE WHEN w.sla_due_at <= $1 THEN 'sla_breached' ELSE 'sla_due_soon' END AS kind,\n                   to_char(($1 AT TIME ZONE b.timezone)::date, 'YYYY-MM-DD') AS day\n            FROM work_item w\n            JOIN issue i ON i.id = w.issue_id AND i.state = 'open'\n            JOIN branch b ON b.id = w.branch_id\n            WHERE w.status IN ('open', 'in_progress', 'blocked')\n              AND w.sla_due_at <= $1 + interval '24 hours'\n        ),\n        recipients AS (\n            SELECT d.*, d.assignee_id AS recipient_id FROM due d WHERE d.assignee_id IS NOT NULL\n            UNION\n            SELECT d.*, m.user_id FROM due d\n            JOIN branch_membership m ON m.branch_id = d.branch_id AND m.is_admin AND m.left_at IS NULL\n        )\n        INSERT INTO notification (recipient_id, kind, branch_id, issue_id, work_item_id, actor_id, payload, dedupe_key)\n        SELECT r.recipient_id, r.kind, r.branch_id, r.issue_id, r.work_item_id, NULL,\n               jsonb_build_object('sla_due_at', r.sla_due_at),\n               r.kind || ':' || r.work_item_id || ':' || r.recipient_id || ':' || r.day\n        FROM recipients r\n        JOIN app_user u ON u.id = r.recipient_id AND u.is_active\n        ON CONFLICT (dedupe_key) DO NOTHING\n        RETURNING recipient_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipient_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "notification",
+            "name": "recipient_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "60ba2892f4ded1346e9ae3ca67c289812893867aa694fcba60f66a18982d268d"
+}

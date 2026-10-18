@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT assignee_id, status AS \"status: WorkStatus\" FROM work_item WHERE id = $1 AND issue_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "assignee_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item",
+            "name": "assignee_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status: WorkStatus",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "74ab4dd7d6b7f6df6e1a29aa407a58d36890b0b520c0a1e27269ef8a081f489b"
+}

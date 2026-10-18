@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue_report SET title = coalesce($2, title), body = coalesce($3, body), version = version + 1\n           WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2e5efc84d7162be47e221ed21dc1a6c50c462a56a11fd5ae685579095062f8e"
+}

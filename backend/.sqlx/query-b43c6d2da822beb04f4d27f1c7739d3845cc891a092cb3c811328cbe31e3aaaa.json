@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT m.user_id FROM branch_membership m JOIN app_user u ON u.id = m.user_id\n        WHERE m.branch_id = $1 AND m.is_admin AND m.left_at IS NULL AND u.is_active\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "branch_membership",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b43c6d2da822beb04f4d27f1c7739d3845cc891a092cb3c811328cbe31e3aaaa"
+}

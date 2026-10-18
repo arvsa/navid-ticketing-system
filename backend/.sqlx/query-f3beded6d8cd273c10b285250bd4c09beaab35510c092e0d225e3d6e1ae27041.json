@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kind AS \"kind: TargetKind\" FROM issue_target WHERE id = $1 AND issue_id = $2 AND removed_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind: TargetKind",
+        "type_info": {
+          "Custom": {
+            "name": "target_kind",
+            "kind": {
+              "Enum": [
+                "branch",
+                "group",
+                "user"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "issue_target",
+            "name": "kind"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f3beded6d8cd273c10b285250bd4c09beaab35510c092e0d225e3d6e1ae27041"
+}

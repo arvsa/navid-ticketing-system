@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE branch_membership SET is_admin = $3, left_at = NULL WHERE user_id = $1 AND branch_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7c7cbb4a9909e58c0299c53f2aa51a4c719910c5393d81b4af2bfc6f96e62734"
+}

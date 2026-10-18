@@ -1,0 +1,145 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO issue_attachment (id, issue_id, comment_id, report_id, uploaded_by, file_name, storage_key,\n                                      content_type, file_size_bytes, checksum_sha256)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        RETURNING id, issue_id, comment_id, report_id, file_name, content_type, file_size_bytes,\n                  checksum_sha256 AS \"checksum_sha256!\", uploaded_by, created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "comment_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "comment_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "report_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "report_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "file_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "file_name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "content_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "content_type"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "file_size_bytes",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "file_size_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "checksum_sha256!",
+        "type_info": "Bpchar",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "checksum_sha256"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "uploaded_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "uploaded_by"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_attachment",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Bpchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4a15525478f62d5d7917509d1465337787a07624c1193be0eb12669ada94f2d8"
+}

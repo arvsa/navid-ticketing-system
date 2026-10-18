@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT gm.user_id AS \"user_id?\" FROM group_member gm JOIN app_user u ON u.id = gm.user_id\n                   WHERE gm.group_id = $1 AND u.is_active ORDER BY gm.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "group_member",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f323a55c565f351ac24c53fa0c8c5b70447d280ad8515975330305b436c2e077"
+}

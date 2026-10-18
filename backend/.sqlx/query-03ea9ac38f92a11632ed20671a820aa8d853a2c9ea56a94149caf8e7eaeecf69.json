@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT starts_at, ends_at, all_day, location FROM issue_event WHERE issue_id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "starts_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "starts_at"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ends_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "ends_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "all_day",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "all_day"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "location",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_event",
+            "name": "location"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "03ea9ac38f92a11632ed20671a820aa8d853a2c9ea56a94149caf8e7eaeecf69"
+}

@@ -1,0 +1,97 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.number, i.title, b.code AS \"branch?\", coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   u.first_name || ' ' || u.last_name AS \"author!\", r.submitted_at AS \"submitted_at!\",\n                   coalesce(w.status::text, 'self_filed') AS \"approval!\", left(r.body, $6) AS \"body!\"\n            FROM issue_report r\n            JOIN issue i ON i.id = r.issue_id\n            LEFT JOIN work_item w ON w.id = r.work_item_id\n            LEFT JOIN branch b ON b.id = coalesce(w.branch_id, i.branch_id)\n            JOIN app_user u ON u.id = r.author_id\n            WHERE r.submitted_at IS NOT NULL\n              AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n              AND coalesce(w.branch_id, i.branch_id) = ANY($2)\n              AND ($3::timestamptz IS NULL OR r.submitted_at >= $3)\n              AND ($4::timestamptz IS NULL OR r.submitted_at < $4)\n            ORDER BY i.number, r.submitted_at, r.id\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "timezone!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "author!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "submitted_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_report",
+            "name": "submitted_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "approval!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "body!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "UuidArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "a25150b622fb439ecc0176231841e489b82cee3effa4ab0b8ae40a91634c3288"
+}

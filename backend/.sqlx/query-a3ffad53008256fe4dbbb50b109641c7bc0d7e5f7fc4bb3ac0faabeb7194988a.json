@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issue_target (issue_id, branch_id, kind, user_id) VALUES ($1, $2, 'user', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a3ffad53008256fe4dbbb50b109641c7bc0d7e5f7fc4bb3ac0faabeb7194988a"
+}

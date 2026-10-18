@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT response AS \"response: RsvpResponse\" FROM event_rsvp WHERE issue_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "response: RsvpResponse",
+        "type_info": {
+          "Custom": {
+            "name": "rsvp_response",
+            "kind": {
+              "Enum": [
+                "pending",
+                "going",
+                "maybe",
+                "declined"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "event_rsvp",
+            "name": "response"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "59afbda06dafcddb56650d1c616652e61162ee7e80df2441b42f1bf975afe5d9"
+}

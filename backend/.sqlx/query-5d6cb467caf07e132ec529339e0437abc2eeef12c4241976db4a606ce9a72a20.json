@@ -1,0 +1,231 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT w.id AS \"id!\", w.issue_id AS \"issue_id!\", w.target_id AS \"target_id!\", w.branch_id AS \"branch_id!\",\n               w.assignee_id, w.status AS \"status!: WorkStatus\", w.sla_due_at, w.is_overdue AS \"is_overdue!\",\n               w.submitted_at, w.decided_by, w.decided_at, w.decision_note, w.version AS \"version!\",\n               w.created_at AS \"created_at!\", w.updated_at AS \"updated_at!\"\n        FROM work_item_overview w\n        JOIN issue i ON i.id = w.issue_id\n        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)\n          AND (NOT $2 OR w.assignee_id = $3)\n          AND ($4::work_status IS NULL OR w.status = $4)\n          AND ($5::uuid IS NULL OR w.branch_id = $5)\n          AND ($6::timestamptz IS NULL OR (w.created_at, w.id) < ($6, $7))\n        ORDER BY w.created_at DESC, w.id DESC\n        LIMIT $8\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "target_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "target_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "assignee_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "assignee_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "status!: WorkStatus",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "sla_due_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "sla_due_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_overdue!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "is_overdue"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "submitted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "submitted_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "decided_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decided_by"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "decided_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decided_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "decision_note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decision_note"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "version!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Bool",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "5d6cb467caf07e132ec529339e0437abc2eeef12c4241976db4a606ce9a72a20"
+}
