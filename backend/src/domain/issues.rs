@@ -448,8 +448,9 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
     .await?;
 
     let ctx = IssueCtx { id: issue_id, branch_id: input.branch_id, issue_type, completion_mode: input.completion_mode };
+    let mut notified = Vec::new();
     for target in &resolved {
-        targets::add(&mut tx, actor, ctx, *target, sla_due_at).await?;
+        notified.extend(targets::add(&mut tx, actor, ctx, *target, sla_due_at).await?.notified);
     }
     if issue_type == IssueType::Event {
         events::set_reminders(&mut tx, issue_id, &reminders).await?;
@@ -462,7 +463,9 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
             None => resolved.iter().map(|t| t.branch_id).collect(),
         };
         for b in branches {
-            let admins = notifications::branch_admins(&mut tx, b).await?;
+            // Admins who are also targets were already told.
+            let mut admins = notifications::branch_admins(&mut tx, b).await?;
+            admins.retain(|a| !notified.contains(a));
             notifications::notify(
                 &mut tx,
                 &admins,

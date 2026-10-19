@@ -133,6 +133,8 @@ pub struct Added {
     pub target_id: Uuid,
     /// (work item, assignee) for every item created.
     pub work_items: Vec<(Uuid, Option<Uuid>)>,
+    /// People told about a ticket aimed at them (Tickets have no work items).
+    pub notified: Vec<Uuid>,
 }
 
 /// Inserts a target and its work items (Actions and Reports), audits it, and
@@ -253,7 +255,43 @@ pub async fn add(
         }
     }
 
-    Ok(Added { target_id, work_items })
+    // Tickets have no work items, so nothing above tells the people a ticket
+    // is aimed at. A whole-branch target is covered by the branch admins.
+    let mut notified = Vec::new();
+    if issue.issue_type == IssueType::Ticket {
+        notified = match target.kind {
+            TargetKind::User => target.user_id.into_iter().collect(),
+            TargetKind::Group => {
+                sqlx::query_scalar!(
+                    r#"SELECT gm.user_id FROM group_member gm JOIN app_user u ON u.id = gm.user_id
+                   WHERE gm.group_id = $1 AND u.is_active ORDER BY gm.user_id"#,
+                    target.group_id
+                )
+                .fetch_all(&mut **tx)
+                .await?
+            }
+            TargetKind::Branch => Vec::new(),
+        };
+        if !notified.is_empty() {
+            let title =
+                sqlx::query_scalar!("SELECT title FROM issue WHERE id = $1", issue.id).fetch_one(&mut **tx).await?;
+            notifications::notify(
+                tx,
+                &notified,
+                Notice {
+                    kind: Kind::TicketCreated,
+                    branch_id: Some(target.branch_id),
+                    issue_id: Some(issue.id),
+                    work_item_id: None,
+                    actor_id: Some(actor.user_id),
+                    payload: json!({ "title": title }),
+                },
+            )
+            .await?;
+        }
+    }
+
+    Ok(Added { target_id, work_items, notified })
 }
 
 /// Marks a target removed and cancels its non-final work items (they are

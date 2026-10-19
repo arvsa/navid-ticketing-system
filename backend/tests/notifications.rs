@@ -112,6 +112,40 @@ async fn the_inbox_lists_counts_and_marks_read(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
+async fn people_and_groups_a_ticket_is_aimed_at_hear_about_it_once(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let root = as_root(&app).await;
+
+    let ticket = create(
+        &app,
+        &root,
+        json!({
+            "branch_id": org.branch_a, "type": "ticket", "title": "Heating is off",
+            "targets": [{ "user_id": org.plain_a }, { "user_id": org.admin_a }, { "group_id": org.managers_group }]
+        }),
+    )
+    .await;
+    assert_eq!(notifications_of(&app.db, org.plain_a, "ticket_created").await, 1);
+    assert_eq!(notifications_of(&app.db, org.manager_a, "ticket_created").await, 1);
+    assert_eq!(notifications_of(&app.db, org.admin_a, "ticket_created").await, 1, "admin and target: told once");
+    assert_eq!(notifications_of(&app.db, org.boss_like_a, "ticket_created").await, 0);
+
+    // Added later, too.
+    let id = ticket["id"].as_str().unwrap();
+    let res = call(
+        &app,
+        &root,
+        Method::POST,
+        &format!("/api/issues/{id}/targets"),
+        Some(json!({ "user_id": org.boss_like_a })),
+    )
+    .await;
+    assert_status(&res, StatusCode::CREATED, None);
+    assert_eq!(notifications_of(&app.db, org.boss_like_a, "ticket_created").await, 1);
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
 async fn notifications_about_issues_you_can_no_longer_read_are_hidden(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
