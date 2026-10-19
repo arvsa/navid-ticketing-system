@@ -1,0 +1,72 @@
+# Builds static Linux binaries of the backend and attaches them to a GitHub
+# release, so the app can run without compiling Rust (see README, "Without
+# building the backend"). Push a tag like `v0.1.0`, or run it by hand.
+name: Backend binaries
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Alpine's Rust targets musl, so the binaries are fully static and run on
+      # any Linux, including the debian image in Dockerfile.prebuilt.
+      - name: Build
+        run: |
+          docker run --rm -v "$PWD/backend:/app" -w /app -e SQLX_OFFLINE=true \
+            rust:1.95-alpine sh -c '
+              apk add --no-cache musl-dev &&
+              cargo build --release --bins'
+
+      - name: Package
+        run: |
+          out=linux-${{ matrix.arch }}
+          mkdir "$out"
+          for bin in backend admin health users login logout whoami change_password; do
+            sudo cp "backend/target/release/$bin" "$out/"
+          done
+          sudo chown -R "$USER" "$out"
+          tar -czf "backend-$out.tar.gz" "$out"
+          sha256sum "backend-$out.tar.gz" > "backend-$out.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-linux-${{ matrix.arch }}
+          path: backend-linux-${{ matrix.arch }}.tar.gz*
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "Backend binaries for Linux (amd64, arm64)."
+          gh release upload "$TAG" backend-linux-*.tar.gz* --clobber

@@ -2,3 +2,5 @@
 .env
 /data
 cookies.txt
+/dist/*
+!/dist/.keep

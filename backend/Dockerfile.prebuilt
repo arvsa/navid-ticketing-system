@@ -1,0 +1,21 @@
+# Same image as Dockerfile, but from binaries downloaded from a GitHub release
+# instead of compiled here. Extract the release archive into dist/ first:
+#   tar -xzf backend-linux-amd64.tar.gz -C dist
+FROM debian:bookworm-slim
+ARG TARGETARCH
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 app \
+    && mkdir -p /data/attachments \
+    && chown -R app /data
+COPY dist/linux-${TARGETARCH}/ /usr/local/bin/
+USER app
+WORKDIR /app
+ENV BIND_ADDR=0.0.0.0:8080 \
+    STORAGE_DIR=/data/attachments \
+    LOG_FORMAT=json
+EXPOSE 8080
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=10 \
+    CMD ["health", "--url", "http://127.0.0.1:8080"]
+CMD ["backend"]

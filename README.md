@@ -43,6 +43,29 @@ The frontend and `/api` are served from the same address, so the session
 cookie and the backend's `Origin` check work without CORS. The backend applies
 database migrations when it starts.
 
+### Without building the backend
+
+If compiling the backend fails (for example, crates can't be downloaded), use
+the ready-made Linux binaries from the
+[releases page](https://github.com/arvsa/navid-ticketing-system/releases)
+instead. Docker Desktop on a Mac or Windows also runs Linux, so this works
+there too.
+
+1. Download `backend-linux-amd64.tar.gz`, or `backend-linux-arm64.tar.gz` on
+   an Apple Silicon Mac or other ARM machine.
+2. Extract it into `backend/dist`:
+
+   ```sh
+   tar -xzf backend-linux-amd64.tar.gz -C backend/dist
+   ```
+
+3. Start everything with the prebuilt override, then continue from step 2
+   above:
+
+   ```sh
+   docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d --build
+   ```
+
 ### Settings
 
 The defaults work as they are. To change them, copy the example file and edit
