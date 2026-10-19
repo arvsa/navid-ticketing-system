@@ -1,7 +1,12 @@
 // Sentences for inbox entries (UX_SPEC §4.10). Unknown kinds fall back to
 // "Update on ISS-12". Payload fields are undocumented (gap G-8), so clauses
 // that need them are dropped when missing.
+//
+// Each kind is one translatable sentence with {actor} and {item} slots, so
+// languages can order the words their own way; the text around the slots
+// becomes `before` and `after`.
 import type { Notification } from "@/api/types";
+import { quote, t } from "@/i18n";
 import { formatWhen } from "./dates";
 import { workStatusLabel } from "./labels";
 
@@ -17,101 +22,95 @@ export type NotificationText = {
 
 export function describeNotification(n: Notification, nameOf: (id?: string | null) => string): NotificationText {
   const actor = n.actor_id ? nameOf(n.actor_id) : undefined;
-  const item = n.issue_title ? `“${n.issue_title}”` : n.issue_key ?? "an item";
+  const item = n.issue_title ? quote(n.issue_title) : n.issue_key ?? t("an item");
   const p = (n.payload ?? {}) as Record<string, unknown>;
-  const due = typeof p.sla_due_at === "string" ? ` · due ${formatWhen(p.sla_due_at)}` : "";
-  const starts = typeof p.starts_at === "string" ? ` · ${formatWhen(p.starts_at)}` : "";
+  const dueWhen = typeof p.sla_due_at === "string" ? formatWhen(p.sla_due_at) : null;
+  const startWhen = typeof p.starts_at === "string" ? formatWhen(p.starts_at) : null;
+  const due = dueWhen ? t(" · due {when}", { when: dueWhen }) : "";
+  const starts = startWhen ? ` · ${startWhen}` : "";
   const status = typeof p.status === "string" ? workStatusLabel[p.status as keyof typeof workStatusLabel] : undefined;
-  let before = "";
-  let after = "";
+
+  let sentence: string;
+  let suffix = "";
   let tone: NotificationText["tone"] = "info";
-  let withActor = true;
   switch (n.kind) {
     case "assigned":
-      before = "gave you ";
-      after = due;
+      sentence = t("{actor} gave you {item}");
+      suffix = due;
       break;
     case "unassigned":
-      withActor = false;
-      before = "You're no longer assigned to ";
+      sentence = t("You're no longer assigned to {item}");
       break;
     case "mentioned":
-      before = "mentioned you on ";
+      sentence = t("{actor} mentioned you on {item}");
       break;
     case "commented":
-      before = "commented on ";
+      sentence = t("{actor} commented on {item}");
       break;
     case "status_changed":
-      withActor = false;
-      after = status ? ` is now ${status.toLowerCase()}` : " changed";
+      sentence = status ? t("{item} is now {status}", { status: status.toLowerCase() }) : t("{item} changed");
       break;
     case "submitted_for_approval":
-      before = "submitted ";
-      after = " for approval";
+      sentence = t("{actor} submitted {item} for approval");
       break;
     case "approved":
-      before = "approved your work on ";
+      sentence = t("{actor} approved your work on {item}");
       tone = "success";
       break;
     case "rejected":
-      before = "sent ";
-      after = " back to you";
+      sentence = t("{actor} sent {item} back to you");
       tone = "danger";
       break;
     case "changed_by_admin":
-      before = "changed your item ";
+      sentence = t("{actor} changed your item {item}");
       break;
     case "ticket_created":
-      before = "asked a question: ";
+      sentence = t("{actor} asked a question: {item}");
       break;
     case "event_invited":
-      before = "invited you to ";
-      after = starts;
+      sentence = t("{actor} invited you to {item}");
+      suffix = starts;
       break;
     case "event_updated":
-      withActor = false;
-      after = " has a new time or place";
+      sentence = t("{item} has a new time or place");
       break;
     case "event_cancelled":
-      withActor = false;
-      after = " was cancelled";
+      sentence = t("{item} was cancelled");
       tone = "danger";
       break;
     case "event_reminder":
-      withActor = false;
-      before = "Reminder: ";
-      after = starts ? ` starts ${starts.slice(3)}` : " is coming up";
+      sentence = startWhen ? t("Reminder: {item} starts {when}", { when: startWhen }) : t("Reminder: {item} is coming up");
       break;
     case "sla_due_soon":
-      withActor = false;
-      after = due ? ` is${due.replace(" · ", " ")}` : " is due soon";
+      sentence = dueWhen ? t("{item} is due {when}", { when: dueWhen }) : t("{item} is due soon");
       break;
     case "sla_breached":
-      withActor = false;
-      after = " is now overdue";
+      sentence = t("{item} is now overdue");
       tone = "danger";
       break;
     case "added_to_group":
-      before = "added you to a group";
-      withActor = !!actor;
-      return finish();
+      sentence = actor ? t("{actor} added you to a group") : t("Added you to a group");
+      break;
     case "permissions_changed":
-      before = "changed what a group you're in can do";
-      return finish();
+      sentence = t("{actor} changed what a group you're in can do");
+      break;
     default:
-      withActor = false;
-      before = "Update on ";
+      sentence = t("Update on {item}");
   }
-  return finish(true);
+  return finish(sentence + suffix);
 
-  function finish(hasItem = false): NotificationText {
-    const a = withActor ? actor ?? "Someone" : undefined;
-    const itemText = hasItem ? item : undefined;
-    const lead = a ? `${a} ` : "";
-    const plain = `${lead}${before}${itemText ?? ""}${after}`;
+  function finish(text: string): NotificationText {
+    const hasActor = text.includes("{actor}");
+    const a = hasActor ? actor ?? t("Someone") : undefined;
+    const rest = hasActor ? text.slice(text.indexOf("{actor}") + "{actor}".length) : text;
+    const at = rest.indexOf("{item}");
+    const before = at < 0 ? rest : rest.slice(0, at);
+    const after = at < 0 ? "" : rest.slice(at + "{item}".length);
+    const itemText = at < 0 ? undefined : item;
+    const plain = `${a ?? ""}${before}${itemText ?? ""}${after}`;
     return {
       actor: a,
-      before: a ? ` ${before}` : before,
+      before,
       after,
       item: itemText,
       plain: plain.charAt(0).toUpperCase() + plain.slice(1),

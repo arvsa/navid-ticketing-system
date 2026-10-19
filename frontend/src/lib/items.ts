@@ -5,6 +5,7 @@ import type { Group, IssueDetail, Target, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { UNKNOWN_PERSON, usePeople, type Directory } from "@/people/usePeople";
 import { canApprove, canClaim, canComment, isMine, type Viewer } from "./can";
+import { joinList, t, tn } from "@/i18n";
 
 export const numberOf = (key: string) => key.replace(/^ISS-/, "");
 
@@ -25,10 +26,13 @@ export function useGroupDirectory() {
   return data ?? new Map<string, Group>();
 }
 
-export function targetName(t: Target, people: Directory, groups: Map<string, Group>, branchName: (id: string) => string) {
-  if (t.kind === "user") return people.short(t.user_id);
-  if (t.kind === "group") return groups.get(t.group_id ?? "")?.name ?? "A group";
-  return branchName(t.branch_id);
+export function targetName(target: Target, people: Directory, groups: Map<string, Group>, branchName: (id: string) => string) {
+  if (target.kind === "user") return people.short(target.user_id);
+  if (target.kind === "group") {
+    const g = groups.get(target.group_id ?? "");
+    return g ? (g.is_default ? t("All members") : g.name) : t("A group");
+  }
+  return branchName(target.branch_id);
 }
 
 /** Mine first, then by status order. */
@@ -100,7 +104,7 @@ export function useItemLabels(issue: IssueDetail) {
   const person = (id?: string | null, short = true) => {
     const p = people.get(id);
     if (p) return short ? people.short(id) : people.name(id);
-    if (!id) return "Nobody";
+    if (!id) return t("Nobody");
     // The backend sets requires_super_admin_approval exactly when a super admin
     // created the item, and only super admins create school-wide items.
     if (id === issue.created_by && (issue.branch_id === null || issue.requires_super_admin_approval)) return SCHOOL_OFFICE;
@@ -109,16 +113,16 @@ export function useItemLabels(issue: IssueDetail) {
   };
   const known: string[] = [];
   let otherBranches = 0;
-  for (const t of issue.targets) {
-    if (t.kind === "branch") {
-      const n = branchName(t.branch_id);
+  for (const target of issue.targets) {
+    if (target.kind === "branch") {
+      const n = branchName(target.branch_id);
       if (n) known.push(n);
       else otherBranches++;
-    } else known.push(targetName(t, people, groups, (id) => branchName(id) ?? "another branch"));
+    } else known.push(targetName(target, people, groups, (id) => branchName(id) ?? t("another branch")));
   }
-  if (otherBranches) known.push(`${otherBranches} other branch${otherBranches === 1 ? "" : "es"}`);
-  const sentTo = known.length <= 1 ? known.join("") : `${known.slice(0, -1).join(", ")} and ${known[known.length - 1]}`;
+  if (otherBranches) known.push(tn(otherBranches, "{n} other branch", "{n} other branches"));
+  const sentTo = joinList(known);
   return { person, branchName, sentTo };
 }
 
-export const SCHOOL_OFFICE = "School office";
+export const SCHOOL_OFFICE = t("School office");

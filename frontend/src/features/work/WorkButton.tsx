@@ -8,6 +8,7 @@ import { Button } from "@/components/ui";
 import { canClaim, isMine, type Viewer } from "@/lib/can";
 import { numberOf } from "@/lib/items";
 import { errorMessage } from "@/lib/labels";
+import { t } from "@/i18n";
 
 export function WorkButton({
   issue,
@@ -22,12 +23,12 @@ export function WorkButton({
   size?: "sm" | "md" | "lg";
   wide?: boolean;
 }) {
-  const t = useTransition();
+  const tr = useTransition();
   const navigate = useNavigate();
   if (!issue || issue.state !== "open") return null;
   const n = numberOf(issue.key);
   const run = (transition: "start" | "claim" | "unblock", done: string) =>
-    t.mutate(
+    tr.mutate(
       { item: work, transition },
       {
         onSuccess: () => toast.success(done),
@@ -38,28 +39,28 @@ export function WorkButton({
   if (isMine(viewer, work)) {
     if (work.status === "open")
       return (
-        <Button size={size} variant={wide ? "primary" : "secondary"} className={cls} loading={t.isPending} onClick={() => run("start", "Started")}>
-          Start
+        <Button size={size} variant={wide ? "primary" : "secondary"} className={cls} loading={tr.isPending} onClick={() => run("start", t("Started"))}>
+          {t("Start")}
         </Button>
       );
     if (work.status === "blocked")
       return (
-        <Button size={size} className={cls} loading={t.isPending} onClick={() => run("unblock", "Back in progress")}>
-          Continue
+        <Button size={size} className={cls} loading={tr.isPending} onClick={() => run("unblock", t("Back in progress"))}>
+          {t("Continue")}
         </Button>
       );
     if (work.status === "in_progress")
       return (
         <Button size={size} className={cls} onClick={() => navigate({ to: "/items/$number/mine", params: { number: n } })}>
-          {issue.type === "report" ? "Continue report" : "Send for approval"}
+          {issue.type === "report" ? t("Continue report") : t("Send for approval")}
         </Button>
       );
     return null;
   }
   if (canClaim(viewer, issue, work))
     return (
-      <Button size={size} className={cls} loading={t.isPending} onClick={() => run("claim", "It's yours now")}>
-        I'll take it
+      <Button size={size} className={cls} loading={tr.isPending} onClick={() => run("claim", t("It's yours now"))}>
+        {t("I'll take it")}
       </Button>
     );
   return null;

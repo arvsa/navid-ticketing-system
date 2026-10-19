@@ -15,6 +15,8 @@ import { errorMessage, priorityLabel } from "@/lib/labels";
 import { usePeople } from "@/people/usePeople";
 import { isSuper } from "@/lib/can";
 import { useViewer } from "@/lib/useViewer";
+import { quote, t } from "@/i18n";
+import { DateInput } from "@/components/DateInput";
 
 export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
@@ -41,7 +43,7 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
     onSuccess: (updated) => {
       setIssue(qc, updated);
       qc.invalidateQueries({ queryKey: keys.history(issue.id) });
-      toast.success("Saved");
+      toast.success(t("Saved"));
       onOpenChange(false);
     },
     onError: (e) => {
@@ -54,13 +56,13 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit details"
+      title={t("Edit details")}
       wide
       footer={
         <>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
           <Button variant="primary" loading={save.isPending} disabled={!title.trim() || title.length > 200} onClick={() => save.mutate(issue.version)}>
-            Save changes
+            {t("Save changes")}
           </Button>
         </>
       }
@@ -68,9 +70,9 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
       <div className="space-y-4">
         {conflict && (
           <div className="rounded-[10px] border border-warning-edge bg-warning-soft p-3 text-warning" role="alert">
-            <p className="font-semibold">Someone else changed this while you were editing.</p>
+            <p className="font-semibold">{t("Someone else changed this while you were editing.")}</p>
             <p className="text-[14px]">
-              Now: “{latest?.title}”, {latest ? priorityLabel[latest.priority] : ""}. Your changes are still here.
+              {t("Now: {title}, {priority}. Your changes are still here.", { title: quote(latest?.title ?? ""), priority: latest ? priorityLabel[latest.priority] : "" })}
             </p>
             <div className="mt-2 flex gap-2">
               <Button
@@ -81,7 +83,7 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
                   save.mutate(fresh.version);
                 }}
               >
-                Keep mine
+                {t("Keep mine")}
               </Button>
               <Button
                 size="sm"
@@ -90,18 +92,18 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
                   onOpenChange(false);
                 }}
               >
-                Use theirs
+                {t("Use theirs")}
               </Button>
             </div>
           </div>
         )}
-        <Field label="Title" hint={title.length > 180 ? `${200 - title.length} characters left` : undefined}>
+        <Field label={t("Title")} hint={title.length > 180 ? t("{n} characters left", { n: 200 - title.length }) : undefined}>
           {(p) => <input {...p} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className={inputClass} />}
         </Field>
-        <Field label="Details" optional>
+        <Field label={t("Details")} optional>
           {(p) => <textarea {...p} value={description} onChange={(e) => setDescription(e.target.value)} rows={5} className={inputClass} />}
         </Field>
-        <Field label="Priority">
+        <Field label={t("Priority")}>
           {(p) => (
             <select {...p} value={priority} onChange={(e) => setPriority(e.target.value as Priority)} className={inputClass}>
               {PRIORITIES.map((x) => (
@@ -114,14 +116,14 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
         </Field>
         {issue.event && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Starts">{(p) => <input {...p} type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} className={inputClass} />}</Field>
-            <Field label="Ends">{(p) => <input {...p} type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} className={inputClass} />}</Field>
+            <Field label={t("Starts")}>{(p) => <DateInput {...p} mode="datetime" value={starts} onChange={setStarts} />}</Field>
+            <Field label={t("Ends")}>{(p) => <DateInput {...p} mode="datetime" value={ends} onChange={setEnds} />}</Field>
             <div className="sm:col-span-2">
-              <Field label="Where" optional>
+              <Field label={t("Where")} optional>
                 {(p) => <input {...p} value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} />}
               </Field>
             </div>
-            <p className="text-[14px] text-text-2 sm:col-span-2">Everyone invited is told when the time or place changes.</p>
+            <p className="text-[14px] text-text-2 sm:col-span-2">{t("Everyone invited is told when the time or place changes.")}</p>
           </div>
         )}
       </div>
@@ -148,7 +150,7 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
     },
     onSuccess: (updated) => {
       if (updated) setIssue(qc, updated);
-      toast.success("Sent");
+      toast.success(t("Sent"));
       setValue([]);
       onOpenChange(false);
     },
@@ -161,13 +163,13 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Send to more people"
+      title={t("Send to more people")}
       wide
       footer={
         <>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
           <Button variant="primary" disabled={!value.length} loading={send.isPending} onClick={() => send.mutate()}>
-            Send
+            {t("Send")}
           </Button>
         </>
       }
@@ -181,7 +183,7 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
         branchId={branchId ?? null}
       />
       {(issue.type === "action" || issue.type === "report") && (
-        <p className="mt-3 text-[14px] text-text-2">New people get their own part of the work, due at the same time.</p>
+        <p className="mt-3 text-[14px] text-text-2">{t("New people get their own part of the work, due at the same time.")}</p>
       )}
     </Dialog>
   );
@@ -196,7 +198,7 @@ export function ConfirmDialog({
   onConfirm,
   danger,
   loading,
-  cancelText = "Keep it",
+  cancelText = t("Keep it"),
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -234,7 +236,7 @@ export function useIssueAction(issue: IssueDetail, action: "close" | "cancel") {
     onSuccess: (updated) => {
       setIssue(qc, updated);
       qc.invalidateQueries({ queryKey: keys.history(issue.id) });
-      toast.success(action === "close" ? "Closed" : "Cancelled");
+      toast.success(action === "close" ? t("Closed") : t("Cancelled"));
     },
     onError: (e) => {
       toast.error(errorMessage(e));

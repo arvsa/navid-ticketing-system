@@ -11,8 +11,9 @@ import { PriorityText, ProgressBar, TypeBadge } from "@/components/badges";
 import { Button, Card, Chip, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx, inputClass } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
-import { stateLabel, typePlural } from "@/lib/labels";
+import { stateLabel, typeLabel, typePlural } from "@/lib/labels";
 import type { ItemsSearch } from "@/app/router";
+import { quote, t, tn } from "@/i18n";
 
 const KINDS: IssueType[] = ["ticket", "action", "report", "event"];
 
@@ -48,11 +49,11 @@ export function ItemsPage() {
   return (
     <div>
       <PageHeader
-        title="Items"
+        title={t("Items")}
         actions={
           <Link to="/export">
             <Button size="lg" icon={<Download className="size-5" />}>
-              Export to Excel
+              {t("Export to Excel")}
             </Button>
           </Link>
         }
@@ -61,15 +62,15 @@ export function ItemsPage() {
         value={search.view ?? "all"}
         onChange={(v) => set({ view: v === "mine" ? "mine" : undefined })}
         tabs={[
-          { value: "all", label: isAll ? "All my branches" : `Whole ${branch ? "branch" : "school"}` },
-          { value: "mine", label: "Assigned to me" },
+          { value: "all", label: isAll ? t("All my branches") : branch ? t("Whole branch") : t("Whole school") },
+          { value: "mine", label: t("Assigned to me") },
         ]}
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <div className="flex gap-2 overflow-x-auto scrollbar-none">
           <Chip active={!search.type} onClick={() => set({ type: undefined })}>
-            All kinds
+            {t("All kinds")}
           </Chip>
           {KINDS.map((k) => (
             <Chip key={k} active={search.type === k} onClick={() => set({ type: search.type === k ? undefined : k })} tone={`var(--${k})`}>
@@ -79,15 +80,15 @@ export function ItemsPage() {
         </div>
         <span className="hidden h-8 w-px bg-border sm:block" aria-hidden />
         <label className="flex items-center gap-2">
-          <span className="sr-only">Status</span>
+          <span className="sr-only">{t("Status")}</span>
           <select
             value={state}
             onChange={(e) => set({ state: e.target.value === "open" ? undefined : (e.target.value as IssueState) })}
-            className={cx(inputClass, "h-10 w-auto py-0 pr-8")}
+            className={cx(inputClass, "h-10 w-auto py-0 pe-8")}
           >
             {(["open", "closed", "cancelled"] as IssueState[]).map((s) => (
               <option key={s} value={s}>
-                Status: {stateLabel[s]}
+                {t("Status: {state}", { state: stateLabel[s] })}
               </option>
             ))}
           </select>
@@ -96,13 +97,13 @@ export function ItemsPage() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search titles…"
-          aria-label="Search titles"
+          placeholder={t("Search titles…")}
+          aria-label={t("Search titles")}
           className={cx(inputClass, "h-10 w-full py-0 sm:w-64")}
         />
         {filtered && (
           <Button variant="link" onClick={() => navigate({ search: {}, replace: true })}>
-            Clear filters
+            {t("Clear filters")}
           </Button>
         )}
       </div>
@@ -114,25 +115,25 @@ export function ItemsPage() {
           <ErrorPanel error={list.error} onRetry={() => list.refetch()} />
         ) : rows.length === 0 ? (
           search.q ? (
-            <EmptyState title={`No titles match “${search.q}”.`}>Try a number like ISS-1042.</EmptyState>
+            <EmptyState title={t("No titles match {term}.", { term: quote(search.q) })}>{t("Try a number like ISS-1042.")}</EmptyState>
           ) : filtered ? (
-            <EmptyState title="Nothing matches these filters." action={<Button onClick={() => navigate({ search: {} })}>Clear filters</Button>} />
+            <EmptyState title={t("Nothing matches these filters.")} action={<Button onClick={() => navigate({ search: {} })}>{t("Clear filters")}</Button>} />
           ) : (
-            <EmptyState title="No items yet." action={<Button variant="primary" onClick={() => openNew()}>New item</Button>}>
-              Ask a question, send a task or add an event.
+            <EmptyState title={t("No items yet.")} action={<Button variant="primary" onClick={() => openNew()}>{t("New item")}</Button>}>
+              {t("Ask a question, send a task or add an event.")}
             </EmptyState>
           )
         ) : (
           <>
             <div className="hidden grid-cols-[minmax(0,1fr)_260px_110px_130px] gap-4 border-b border-border px-6 py-4 text-[13px] font-semibold tracking-[0.06em] text-text-3 uppercase lg:grid">
-              <span>Item</span>
-              <span>Where it stands</span>
-              <span>Priority</span>
-              <span>Updated</span>
+              <span>{t("Item")}</span>
+              <span>{t("Where it stands")}</span>
+              <span>{t("Priority")}</span>
+              <span>{t("Updated")}</span>
             </div>
             <ul className="divide-y divide-border">
               {rows.map((r) => (
-                <ItemRow key={r.id} item={r} branchName={isAll && r.branch_id ? branchById.get(r.branch_id)?.code : isAll ? "School-wide" : undefined} />
+                <ItemRow key={r.id} item={r} branchName={isAll && r.branch_id ? branchById.get(r.branch_id)?.code : isAll ? t("School-wide") : undefined} />
               ))}
             </ul>
           </>
@@ -141,11 +142,11 @@ export function ItemsPage() {
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-text-2">
-          Showing {rows.length} {stateLabel[state].toLowerCase()} item{rows.length === 1 ? "" : "s"} · a blue dot means something changed since you last looked
+          {tn(rows.length, "Showing {n} {state} item", "Showing {n} {state} items", { state: stateLabel[state].toLowerCase() })} · {t("a blue dot means something changed since you last looked")}
         </p>
         {list.hasNextPage && (
           <Button onClick={() => list.fetchNextPage()} loading={list.isFetchingNextPage}>
-            Load more
+            {t("Load more")}
           </Button>
         )}
       </div>
@@ -165,9 +166,9 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
         className={cx(
           "grid gap-x-4 gap-y-2 px-4 py-4 hover:bg-surface-2 sm:px-6 lg:grid-cols-[minmax(0,1fr)_260px_110px_130px] lg:items-center",
           item.unread && "bg-[color-mix(in_srgb,var(--warning-soft)_35%,transparent)]",
-          item.priority === "critical" && "border-l-[3px] border-danger-solid",
+          item.priority === "critical" && "border-s-[3px] border-danger-solid",
         )}
-        aria-label={`${item.type} ${item.key}, ${item.title}${hasWork ? `, ${approved} of ${total} approved` : ""}${item.unread ? ", unread" : ""}`}
+        aria-label={`${typeLabel[item.type]} ${item.key}${t(", ")}${item.title}${hasWork ? `${t(", ")}${t("{done} of {total} approved", { done: approved, total })}` : ""}${item.unread ? `${t(", ")}${t("unread")}` : ""}`}
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className={cx("size-2.5 shrink-0 rounded-full", item.unread ? "bg-primary" : "bg-transparent")} aria-hidden />
@@ -179,16 +180,16 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
             <span className="flex flex-wrap items-center gap-x-2 font-mono text-[14px] text-text-3">
               {item.key}
               {branchName && <span className="font-sans">· {branchName}</span>}
-              {item.unread && <span className="font-sans">· unread</span>}
+              {item.unread && <span className="font-sans">{t("· unread")}</span>}
               {item.is_private && (
                 <span className="inline-flex items-center gap-1 font-sans">
-                  · <Lock className="size-3.5" aria-hidden /> Private
+                  · <Lock className="size-3.5" aria-hidden />{" "}{t("Private")}
                 </span>
               )}
             </span>
           </span>
         </div>
-        <div className="pl-[22px] lg:pl-0">
+        <div className="ps-[22px] lg:ps-0">
           {hasWork ? (
             <>
               <ProgressBar
@@ -196,12 +197,12 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
                 className="max-w-[240px]"
               />
               <span className="mt-1 block text-[14px] text-text-2">
-                {approved} of {total} approved
-                {item.is_overdue && <b className="text-danger"> · overdue</b>}
+                {t("{done} of {total} approved", { done: approved, total })}
+                {item.is_overdue && <b className="text-danger">{" "}{t("· overdue")}</b>}
               </span>
             </>
           ) : (
-            <span className="text-[14px] text-text-2">{item.state === "open" ? (item.type === "event" ? "Upcoming" : "Open") : stateLabel[item.state]}</span>
+            <span className="text-[14px] text-text-2">{item.state === "open" ? (item.type === "event" ? t("Upcoming") : t("Open")) : stateLabel[item.state]}</span>
           )}
         </div>
         <div className="hidden lg:block">

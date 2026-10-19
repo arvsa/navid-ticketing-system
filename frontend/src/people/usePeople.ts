@@ -6,6 +6,7 @@ import { keys } from "@/api/keys";
 import type { Member } from "@/api/types";
 import { useSession } from "@/auth/session";
 import { useBranch } from "@/app/BranchContext";
+import { isolate, t } from "@/i18n";
 
 export type Person = {
   id: string;
@@ -21,7 +22,7 @@ export type Person = {
 /** Shown for people we can't name: the API returns ids only (gap G-2) and
  * we only see member lists of our own branches. Super admins belong to no
  * branch, so they land here too unless the item tells us more. */
-export const UNKNOWN_PERSON = "Someone outside your branch";
+export const UNKNOWN_PERSON = t("Someone outside your branch");
 
 export type Directory = {
   get: (id?: string | null) => Person | undefined;
@@ -98,9 +99,9 @@ export function usePeople(): Directory {
   };
 }
 
-/** "Sara K." */
+/** "Sara K." (isolated in Farsi, so the full stop stays at the end). */
 export function shortName(first: string, last: string) {
-  return last ? `${first} ${last[0]}.` : first;
+  return last ? isolate(`${first} ${last[0]}.`) : first;
 }
 
 export function initials(first?: string, last?: string) {

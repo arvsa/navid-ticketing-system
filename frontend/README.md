@@ -50,10 +50,12 @@ src/
   api/        generated schema, fixed-up types, fetch client, query keys, hooks
   app/        router, shell (sidebar, top bar, phone nav), branch context, theme
   auth/       session, sign in, password change
+  i18n/       t() and friends, the Farsi dictionary (fa.ts)
   realtime/   live updates (SSE with heartbeat watchdog, debounced refetching, toasts)
   people/     id → name directory built from branch member lists
-  lib/        labels (all UI words for API values), dates, permissions (can.ts),
-              notification and history sentences, item helpers
+  lib/        labels (all UI words for API values), dates and the Jalali
+              calendar, permissions (can.ts), notification and history
+              sentences, item helpers
   components/ buttons, dialogs, badges, pickers, files
   features/   home, items, work, events, calendar, inbox, create, admin, profile
 ```
@@ -61,6 +63,26 @@ src/
 `src/lib/labels.ts` is the only place API values become words on screen.
 `src/lib/can.ts` decides which controls to show; the server still checks
 everything, and when the client is unsure it shows the control.
+
+## Languages and calendars
+
+The app speaks English and Farsi (right to left, Vazirmatn font), and shows
+dates in the Gregorian or Persian (Solar Hijri) calendar. Both are chosen on
+the Profile page (language also in the account menu and on the sign-in page),
+saved in the browser, and applied by reloading. Farsi starts with the Persian
+calendar; without a saved choice, a Farsi browser starts in Farsi.
+
+- Write UI text in English inside `t("…")`, with `{name}` placeholders:
+  `t("Sent to {name}", { name })`. Use `tn(n, "{n} item", "{n} items")` for
+  counts and `tx()` when a placeholder is an element. Keep whole sentences in
+  one call so Farsi can order the words its own way.
+- Add the Farsi to `src/i18n/fa.ts`. `pnpm test` fails when a text has no
+  translation, a placeholder differs, or an entry is unused.
+- Use logical Tailwind classes (`ms-`, `pe-`, `start-`, `text-start`) and
+  `rtl:-scale-x-100` on arrow icons, so layouts mirror in Farsi.
+- Dates go through `src/lib/dates.ts`; dates sent to the API stay Gregorian.
+  With the Persian calendar, `DateInput` shows a Jalali month picker instead
+  of the browser's own.
 
 ## Differences from the plan and designs
 

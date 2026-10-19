@@ -6,6 +6,7 @@ import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Loader2, X } from "lucide-react";
 import { errorMessage } from "@/lib/labels";
+import { num, t } from "@/i18n";
 
 /** Joins classes; later Tailwind classes override earlier conflicting ones. */
 export const cx = (...v: ClassValue[]) => twMerge(clsx(v));
@@ -92,7 +93,7 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function LoadingRows({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-3 p-4" role="status" aria-label="Loading">
+    <div className="space-y-3 p-4" role="status" aria-label={t("Loading")}>
       {Array.from({ length: rows }).map((_, i) => (
         <Skeleton key={i} className="h-12 w-full" />
       ))}
@@ -115,23 +116,23 @@ export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () =>
   const code = (error as { code?: string } | null)?.code;
   if (code === "not_found") {
     return (
-      <EmptyState title="You don't have access to this, or it no longer exists.">
+      <EmptyState title={t("You don't have access to this, or it no longer exists.")}>
         <a href="/" className="text-primary hover:underline">
-          Go to Home
+          {t("Go to Home")}
         </a>
       </EmptyState>
     );
   }
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center" role="alert">
-      <p className="font-semibold">We couldn't load this.</p>
+      <p className="font-semibold">{t("We couldn't load this.")}</p>
       <p className="text-text-2">{errorMessage(error)}</p>
       {onRetry && (
         <Button size="sm" onClick={onRetry}>
-          Try again
+          {t("Try again")}
         </Button>
       )}
-      {requestId && <p className="text-[12px] text-text-3">Request {requestId}</p>}
+      {requestId && <p className="text-[12px] text-text-3">{t("Request {id}", { id: requestId })}</p>}
     </div>
   );
 }
@@ -155,7 +156,7 @@ export function Field({
     <div className="space-y-1.5">
       <label htmlFor={id} className="block font-semibold">
         {label}
-        {optional && <span className="font-normal text-text-3"> (optional)</span>}
+        {optional && <span className="font-normal text-text-3">{" "}{t("(optional)")}</span>}
       </label>
       {children({ id, "aria-describedby": describedBy, "aria-invalid": error ? true : undefined })}
       {error ? (
@@ -213,7 +214,7 @@ export function Dialog({
                 <RDialog.Description className="mt-1 text-text-2">{description}</RDialog.Description>
               )}
             </div>
-            <RDialog.Close className="rounded-md p-1 text-text-3 hover:bg-sunken" aria-label="Close">
+            <RDialog.Close className="rounded-md p-1 text-text-3 hover:bg-sunken" aria-label={t("Close")}>
               <X className="size-5" />
             </RDialog.Close>
           </div>
@@ -346,9 +347,9 @@ export function Tabs<T extends string>({
             {t.label}
             {t.count != null &&
               (t.badge ? (
-                <span className="rounded-full bg-warning-soft px-1.5 text-[12px] font-semibold text-warning tabular">{t.count}</span>
+                <span className="rounded-full bg-warning-soft px-1.5 text-[12px] font-semibold text-warning tabular">{num(t.count)}</span>
               ) : (
-                <span className="text-[13px] text-text-3 tabular">{t.count}</span>
+                <span className="text-[13px] text-text-3 tabular">{num(t.count)}</span>
               ))}
           </button>
         ))}
@@ -416,8 +417,8 @@ export function Switch({
     >
       <span
         className={cx(
-          "absolute top-1 size-6 rounded-full bg-white shadow transition-[left] duration-[var(--dur-2)]",
-          checked ? "left-[32px]" : "left-1",
+          "absolute top-1 size-6 rounded-full bg-white shadow transition-[inset-inline-start] duration-[var(--dur-2)]",
+          checked ? "start-[32px]" : "start-1",
         )}
       />
     </button>

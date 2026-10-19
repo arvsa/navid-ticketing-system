@@ -13,6 +13,7 @@ import { formatDay } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
+import { t } from "@/i18n";
 
 export function SelfReport({ issue }: { issue: IssueDetail }) {
   const viewer = useViewer();
@@ -23,14 +24,14 @@ export function SelfReport({ issue }: { issue: IssueDetail }) {
   const author = issue.created_by === viewer.me.user.id;
   if (reports.isLoading) return <Skeleton className="h-40" />;
   if (author && issue.state === "open" && (!mine || !mine.submitted_at)) return <Editor issue={issue} existing={mine} />;
-  if (!own.length) return <p className="text-text-2">No written report yet.</p>;
+  if (!own.length) return <p className="text-text-2">{t("No written report yet.")}</p>;
   return (
     <div className="space-y-4">
       {own.map((r) => (
         <Card key={r.id} className="p-6">
           <h2 className="text-[20px] font-semibold">{r.title}</h2>
           <p className="mt-1 text-[14px] text-text-3">
-            {r.submitted_at ? `Filed by ${people.name(r.author_id)} · ${formatDay(r.submitted_at)}` : "Draft — only you can see it"}
+            {r.submitted_at ? t("Filed by {who} · {date}", { who: people.name(r.author_id), date: formatDay(r.submitted_at) }) : t("Draft — only you can see it")}
           </p>
           <p className="mt-4 text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{r.body}</p>
           {r.attachments.length > 0 && (
@@ -53,20 +54,20 @@ function Editor({ issue, existing }: { issue: IssueDetail; existing?: Report }) 
       ? api.patch<Report>(`/reports/${existing.id}`, { version: existing.version, title: title.trim(), body })
       : api.post<Report>(`/issues/${issue.id}/reports`, { title: title.trim(), body });
   const refresh = () => qc.invalidateQueries({ queryKey: keys.reports(issue.id) });
-  const draft = useMutation({ mutationFn: save, onSuccess: () => (toast.success("Draft saved"), refresh()), onError: (e) => toast.error(errorMessage(e)) });
+  const draft = useMutation({ mutationFn: save, onSuccess: () => (toast.success(t("Draft saved")), refresh()), onError: (e) => toast.error(errorMessage(e)) });
   const file = useMutation({
     mutationFn: async () => {
       const r = await save();
       await api.post(`/reports/${r.id}/submit`, { version: r.version });
     },
-    onSuccess: () => (toast.success("Report filed"), refresh()),
+    onSuccess: () => (toast.success(t("Report filed")), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
     <Card className="space-y-4 p-6">
-      <h2 className="text-[20px] font-semibold">Your report</h2>
-      <Field label="Title">{(p) => <input {...p} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className={inputClass} />}</Field>
-      <Field label="Report">
+      <h2 className="text-[20px] font-semibold">{t("Your report")}</h2>
+      <Field label={t("Title")}>{(p) => <input {...p} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className={inputClass} />}</Field>
+      <Field label={t("Report")}>
         {(p) => <textarea {...p} value={body} onChange={(e) => setBody(e.target.value)} rows={12} maxLength={100000} className={`${inputClass} text-[17px] leading-[27px]`} />}
       </Field>
       {existing && (
@@ -77,17 +78,17 @@ function Editor({ issue, existing }: { issue: IssueDetail; existing?: Report }) 
       )}
       <div className="flex flex-wrap items-center gap-3">
         <Button loading={draft.isPending} disabled={!body.trim() || !title.trim()} onClick={() => draft.mutate()}>
-          Save draft
+          {t("Save draft")}
         </Button>
-        <span className="text-text-2">Everyone who can see this item can read it once filed.</span>
+        <span className="text-text-2">{t("Everyone who can see this item can read it once filed.")}</span>
         <Button
           variant="primary"
-          className="ml-auto"
+          className="ms-auto"
           loading={file.isPending}
           disabled={!body.trim() || !title.trim()}
-          onClick={() => confirm("File this report? Everyone who can see this item can read it.") && file.mutate()}
+          onClick={() => confirm(t("File this report? Everyone who can see this item can read it.")) && file.mutate()}
         >
-          File report
+          {t("File report")}
         </Button>
       </div>
     </Card>

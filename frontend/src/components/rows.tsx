@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { cx } from "./ui";
+import { num } from "@/i18n";
 
 type Tone = "neutral" | "danger" | "warning" | "primary" | "success";
 const toneStyle: Record<Tone, { fg: string; bg: string }> = {
@@ -38,7 +39,7 @@ export function StatPill({
   );
   const body = (
     <>
-      <b className="text-[17px] tabular">{value}</b>
+      <b className="text-[17px] tabular">{typeof value === "number" ? num(value) : value}</b>
       <span className={tone === "neutral" ? "text-text-2" : ""}>{label}</span>
     </>
   );
@@ -55,7 +56,7 @@ export function StatPill({
   );
 }
 
-const rowCls = "group flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-left transition-colors hover:bg-sunken";
+const rowCls = "group flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-start transition-colors hover:bg-sunken";
 
 /** A list row that is one big link (or button), with a chevron on the right.
  * Next to a button, pass className="w-auto min-w-0 flex-1" so it leaves room. */
@@ -86,7 +87,7 @@ export function RowLink({
         {meta && <span className="block truncate text-[14px] text-text-2">{meta}</span>}
       </span>
       {trailing}
-      {chevron && <ChevronRight className="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5" aria-hidden />}
+      {chevron && <ChevronRight className="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" aria-hidden />}
     </>
   );
   if (link)

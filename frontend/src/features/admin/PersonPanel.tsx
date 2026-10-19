@@ -13,15 +13,16 @@ import { Avatar } from "@/components/badges";
 import { Button, Dialog, Drawer, DrawerClose, Field, LoadingRows, SectionLabel, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { formatDay } from "@/lib/dates";
-import { errorMessage, permissionInfo, typeLabel } from "@/lib/labels";
+import { errorMessage, permissionInfo, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { ConfirmDialog } from "@/features/items/ItemDialogs";
 import { TempPasswordDialog } from "./PeoplePage";
+import { localeTag, t } from "@/i18n";
 
 export function PersonPanel({ userId, branchId, onClose }: { userId?: string | null; branchId?: string; onClose: () => void }) {
   return (
-    <Drawer open={!!userId} onOpenChange={(o) => !o && onClose()} label="Person">
+    <Drawer open={!!userId} onOpenChange={(o) => !o && onClose()} label={t("Person")}>
       {userId && <PersonBody key={`${userId}-${branchId}`} userId={userId} branchId={branchId} onClose={onClose} />}
     </Drawer>
   );
@@ -42,7 +43,7 @@ function usePersonGroups(branchId: string | undefined, userId: string) {
           if (members.some((m) => m.user_id === userId)) mine.push(g);
         }),
       );
-      return mine.sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name));
+      return mine.sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
     },
   });
 }
@@ -65,7 +66,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
   const [dialog, setDialog] = useState<null | "edit" | "remove" | "deactivate" | "reset" | "super">(null);
   const [temp, setTemp] = useState<string | null>(null);
   const self = userId === viewer.me.user.id;
-  const branchName = (id?: string) => (id ? branchById.get(id)?.name ?? "Branch" : "");
+  const branchName = (id?: string) => (id ? branchById.get(id)?.name ?? t("Branch") : "");
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["branches"] });
@@ -75,25 +76,25 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
   };
   const ok = (text: string) => () => (toast.success(text), setDialog(null), refresh());
   const fail = (e: unknown) => toast.error(errorMessage(e));
-  const remove = useMutation({ mutationFn: () => api.del(`/branches/${branchId}/members/${userId}`), onSuccess: ok(`Removed from ${branchName(branchId)}`), onError: fail });
-  const active = useMutation({ mutationFn: () => api.patch(`/users/${userId}/active`, { is_active: !m?.is_active }), onSuccess: ok(m?.is_active ? "Deactivated" : "Reactivated"), onError: fail });
+  const remove = useMutation({ mutationFn: () => api.del(`/branches/${branchId}/members/${userId}`), onSuccess: ok(t("Removed from {name}", { name: branchName(branchId) })), onError: fail });
+  const active = useMutation({ mutationFn: () => api.patch(`/users/${userId}/active`, { is_active: !m?.is_active }), onSuccess: ok(m?.is_active ? t("Deactivated") : t("Reactivated")), onError: fail });
   const reset = useMutation({
     mutationFn: () => api.post<{ temporary_password: string }>(`/users/${userId}/reset-password`),
     onSuccess: (r) => (setTemp(r.temporary_password), setDialog(null)),
     onError: fail,
   });
-  const appoint = useMutation({ mutationFn: (b: string) => api.put(`/branches/${b}/admins/${userId}`), onSuccess: ok("Admin appointed"), onError: fail });
-  const demote = useMutation({ mutationFn: (b: string) => api.del(`/branches/${b}/admins/${userId}`), onSuccess: ok("Admin role removed"), onError: fail });
-  const makeSuper = useMutation({ mutationFn: () => api.put(`/users/${userId}/super-admin`), onSuccess: ok("Now a super admin"), onError: fail });
+  const appoint = useMutation({ mutationFn: (b: string) => api.put(`/branches/${b}/admins/${userId}`), onSuccess: ok(t("Admin appointed")), onError: fail });
+  const demote = useMutation({ mutationFn: (b: string) => api.del(`/branches/${b}/admins/${userId}`), onSuccess: ok(t("Admin role removed")), onError: fail });
+  const makeSuper = useMutation({ mutationFn: () => api.put(`/users/${userId}/super-admin`), onSuccess: ok(t("Now a super admin")), onError: fail });
 
-  const first = m?.first_name ?? person?.first_name ?? "this person";
+  const first = m?.first_name ?? person?.first_name ?? t("this person");
   const fullName = m ? `${m.first_name} ${m.last_name}` : people.name(userId);
   const singleBranch = branchIds.length <= 1;
 
   const byGroup = new Map<string, { name: string; items: string[] }>();
   for (const g of eff.data?.grants ?? []) {
     const entry = byGroup.get(g.group.id) ?? { name: g.group.name, items: [] };
-    entry.items.push(`${permissionInfo[g.permission]?.title ?? g.permission}${g.issue_type ? ` (${typeLabel[g.issue_type]}s)` : ""}`);
+    entry.items.push(`${permissionInfo[g.permission]?.title ?? g.permission}${g.issue_type ? ` (${typePlural[g.issue_type]})` : ""}`);
     byGroup.set(g.group.id, entry);
   }
 
@@ -104,44 +105,44 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
         <div className="min-w-0 flex-1">
           <h2 className={cx("text-[22px] font-bold break-anywhere", m && !m.is_active && "line-through")}>{fullName}</h2>
           <p className="truncate text-text-2">{m?.email ?? person?.email}</p>
-          {m && !m.is_active && <p className="text-[14px] text-text-3">Deactivated</p>}
+          {m && !m.is_active && <p className="text-[14px] text-text-3">{t("Deactivated")}</p>}
         </div>
-        <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label="Close">
+        <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
           <X className="size-5" />
         </DrawerClose>
       </div>
 
       <div className="flex-1 space-y-7 overflow-y-auto px-6 py-5">
         <section>
-          <SectionLabel className="mb-2">Branches</SectionLabel>
+          <SectionLabel className="mb-2">{t("Branches")}</SectionLabel>
           {branchIds.length === 0 ? (
-            <p className="text-text-2">Not a current member of any branch you can see.</p>
+            <p className="text-text-2">{t("Not a current member of any branch you can see.")}</p>
           ) : (
             <ul className="divide-y divide-border rounded-[12px] border border-border">
               {branchIds.map((b) => {
                 const isAdmin = person?.adminOf.includes(b);
                 return (
                   <li key={b} className={cx("flex flex-wrap items-center gap-2 px-4 py-3", b === branchId && "bg-surface-2")}>
-                    <button className="min-w-0 flex-1 text-left" onClick={() => setBranchId(b)} aria-pressed={b === branchId}>
+                    <button className="min-w-0 flex-1 text-start" onClick={() => setBranchId(b)} aria-pressed={b === branchId}>
                       <span className="font-semibold">{branchName(b)}</span>
-                      <span className="ml-2 text-text-2">
+                      <span className="ms-2 text-text-2">
                         {isAdmin ? (
                           <span className="inline-flex items-center gap-1">
-                            <Shield className="size-3.5" /> Admin
+                            <Shield className="size-3.5" />{" "}{t("Admin")}
                           </span>
                         ) : (
-                          "Member"
+                          t("Member")
                         )}
                       </span>
                     </button>
                     {superAdmin &&
                       (isAdmin ? (
                         <Button size="sm" variant="ghost" loading={demote.isPending && demote.variables === b} onClick={() => demote.mutate(b)}>
-                          Remove admin role
+                          {t("Remove admin role")}
                         </Button>
                       ) : (
                         <Button size="sm" loading={appoint.isPending && appoint.variables === b} onClick={() => appoint.mutate(b)}>
-                          Make admin
+                          {t("Make admin")}
                         </Button>
                       ))}
                   </li>
@@ -149,20 +150,20 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
               })}
             </ul>
           )}
-          {m && <p className="mt-2 text-[14px] text-text-3">{m.left_at ? `Left ${branchName(branchId)} ${formatDay(m.left_at)}` : `Joined ${branchName(branchId)} ${formatDay(m.joined_at)}`}</p>}
+          {m && <p className="mt-2 text-[14px] text-text-3">{m.left_at ? t("Left {branch} {date}", { branch: branchName(branchId), date: formatDay(m.left_at) }) : t("Joined {branch} {date}", { branch: branchName(branchId), date: formatDay(m.joined_at) })}</p>}
         </section>
 
         {branchId && m && !m.left_at && (
           <>
             <section>
-              <SectionLabel className="mb-2">Groups in {branchName(branchId)}</SectionLabel>
+              <SectionLabel className="mb-2">{t("Groups in {name}", { name: branchName(branchId) })}</SectionLabel>
               {groups.isLoading ? (
                 <LoadingRows rows={1} />
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {(groups.data ?? []).map((g) => (
                     <span key={g.id} className="rounded-full bg-sunken px-3 py-1">
-                      {g.is_default ? "All members" : g.name}
+                      {g.is_default ? t("All members") : g.name}
                     </span>
                   ))}
                 </div>
@@ -170,22 +171,22 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
             </section>
 
             <section>
-              <SectionLabel className="mb-2">What they can do here</SectionLabel>
+              <SectionLabel className="mb-2">{t("What they can do here")}</SectionLabel>
               {eff.isLoading ? (
                 <LoadingRows rows={2} />
               ) : eff.data?.is_admin ? (
                 <p className="flex gap-2">
-                  <Shield className="mt-0.5 size-4 shrink-0" /> Admin of {branchName(branchId)} — can do everything here except school-level tasks.
+                  <Shield className="mt-0.5 size-4 shrink-0" /> {t("Admin of {name} — can do everything here except school-level tasks.", { name: branchName(branchId) })}
                 </p>
               ) : (
                 <ul className="space-y-3">
                   {[...byGroup.values()].map((g) => (
                     <li key={g.name}>
-                      <span className="block">{g.items.join(", ")}</span>
-                      <span className="text-[14px] text-text-2">from {g.name}</span>
+                      <span className="block">{g.items.join(t(", "))}</span>
+                      <span className="text-[14px] text-text-2">{t("from {name}", { name: g.name })}</span>
                     </li>
                   ))}
-                  {byGroup.size === 0 && <li className="text-text-2">Nothing beyond seeing their own work.</li>}
+                  {byGroup.size === 0 && <li className="text-text-2">{t("Nothing beyond seeing their own work.")}</li>}
                 </ul>
               )}
             </section>
@@ -197,24 +198,24 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       {(manage || superAdmin) && !self && m && !m.left_at && (
         <div className="flex flex-wrap gap-2 border-t border-border px-6 py-4">
           {m.is_admin && !superAdmin ? (
-            <p className="w-full text-[14px] text-text-2">Admins are managed by super admins.</p>
+            <p className="w-full text-[14px] text-text-2">{t("Admins are managed by super admins.")}</p>
           ) : (
             <>
-              <Button onClick={() => setDialog("edit")}>Edit name or email</Button>
-              <Button onClick={() => setDialog("reset")}>Reset password</Button>
+              <Button onClick={() => setDialog("edit")}>{t("Edit name or email")}</Button>
+              <Button onClick={() => setDialog("reset")}>{t("Reset password")}</Button>
               {!m.is_admin && (
                 <Button variant="ghost-danger" onClick={() => setDialog("remove")}>
-                  Remove from {branchName(branchId)}
+                  {t("Remove from {name}", { name: branchName(branchId) })}
                 </Button>
               )}
               {(singleBranch || superAdmin) && (
                 <Button variant={m.is_active ? "ghost-danger" : "ghost"} onClick={() => setDialog("deactivate")}>
-                  {m.is_active ? "Deactivate account" : "Reactivate account"}
+                  {m.is_active ? t("Deactivate account") : t("Reactivate account")}
                 </Button>
               )}
               {superAdmin && (
                 <Button variant="ghost" icon={<Shield className="size-4" />} onClick={() => setDialog("super")}>
-                  Make super admin
+                  {t("Make super admin")}
                 </Button>
               )}
             </>
@@ -225,9 +226,9 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       <ConfirmDialog
         open={dialog === "remove"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title={`Remove ${first} from ${branchName(branchId)}?`}
-        body="Their unfinished work here becomes unassigned, so someone else can be given it."
-        confirm="Remove"
+        title={t("Remove {person} from {branch}?", { person: first, branch: branchName(branchId) })}
+        body={t("Their unfinished work here becomes unassigned, so someone else can be given it.")}
+        confirm={t("Remove")}
         danger
         loading={remove.isPending}
         onConfirm={() => remove.mutate(undefined, { onSuccess: () => singleBranch && onClose() })}
@@ -235,9 +236,9 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       <ConfirmDialog
         open={dialog === "deactivate"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title={m?.is_active ? `Deactivate ${first}?` : `Reactivate ${first}?`}
-        body={m?.is_active ? `${first} won't be able to sign in. Their history stays. You can reactivate later.` : `${first} can sign in again.`}
-        confirm={m?.is_active ? "Deactivate" : "Reactivate"}
+        title={m?.is_active ? t("Deactivate {name}?", { name: first }) : t("Reactivate {name}?", { name: first })}
+        body={m?.is_active ? t("{name} won't be able to sign in. Their history stays. You can reactivate later.", { name: first }) : t("{name} can sign in again.", { name: first })}
+        confirm={m?.is_active ? t("Deactivate") : t("Reactivate")}
         danger={m?.is_active}
         loading={active.isPending}
         onConfirm={() => active.mutate()}
@@ -245,18 +246,18 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       <ConfirmDialog
         open={dialog === "reset"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title={`Reset ${first}'s password?`}
-        body={`${first} gets a new temporary password and is signed out everywhere.`}
-        confirm="Reset password"
+        title={t("Reset {name}'s password?", { name: first })}
+        body={t("{name} gets a new temporary password and is signed out everywhere.", { name: first })}
+        confirm={t("Reset password")}
         loading={reset.isPending}
         onConfirm={() => reset.mutate()}
       />
       <ConfirmDialog
         open={dialog === "super"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title={`Make ${first} a super admin?`}
-        body={`${first} will see every branch, send work school-wide and approve it.`}
-        confirm="Make super admin"
+        title={t("Make {name} a super admin?", { name: first })}
+        body={t("{name} will see every branch, send work school-wide and approve it.", { name: first })}
+        confirm={t("Make super admin")}
         loading={makeSuper.isPending}
         onConfirm={() => makeSuper.mutate()}
       />
@@ -272,29 +273,29 @@ function EditPerson({ m, branchId, onClose }: { m: Member; branchId: string; onC
   const [email, setEmail] = useState(m.email);
   const save = useMutation({
     mutationFn: () => api.patch(`/branches/${branchId}/members/${m.user_id}`, { first_name: first.trim(), last_name: last.trim(), email: email.trim() }),
-    onSuccess: () => (toast.success("Saved"), onClose()),
+    onSuccess: () => (toast.success(t("Saved")), onClose()),
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`Edit ${m.first_name}`}
+      title={t("Edit {name}", { name: m.first_name })}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
           <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
-            Save
+            {t("Save")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="First name">{(p) => <input {...p} value={first} onChange={(e) => setFirst(e.target.value)} className={inputClass} />}</Field>
-          <Field label="Last name">{(p) => <input {...p} value={last} onChange={(e) => setLast(e.target.value)} className={inputClass} />}</Field>
+          <Field label={t("First name")}>{(p) => <input {...p} value={first} onChange={(e) => setFirst(e.target.value)} className={inputClass} />}</Field>
+          <Field label={t("Last name")}>{(p) => <input {...p} value={last} onChange={(e) => setLast(e.target.value)} className={inputClass} />}</Field>
         </div>
-        <Field label="Email">{(p) => <input {...p} type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />}</Field>
+        <Field label={t("Email")}>{(p) => <input {...p} type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />}</Field>
       </div>
     </Dialog>
   );

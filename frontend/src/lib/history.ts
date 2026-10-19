@@ -5,6 +5,7 @@
 // action produces an "issue create", then a "target add" and "work item
 // create" per branch. Those are folded into one line here.
 import type { HistoryEntry, IssueDetail } from "@/api/types";
+import { joinList, quote, t, tn } from "@/i18n";
 import { priorityLabel } from "./labels";
 
 type V = Record<string, unknown> | null | undefined;
@@ -19,11 +20,11 @@ export type HistoryLabels = {
 export type HistoryLine = { id: number; text: string; at: string };
 
 function list(names: string[]) {
-  const known = names.filter((n) => n !== "another branch");
+  const another = t("another branch");
+  const known = names.filter((n) => n !== another);
   const others = names.length - known.length;
-  if (others) known.push(`${others} other branch${others === 1 ? "" : "es"}`);
-  if (known.length <= 1) return known.join("");
-  return `${known.slice(0, -1).join(", ")} and ${known[known.length - 1]}`;
+  if (others) known.push(tn(others, "{n} other branch", "{n} other branches"));
+  return joinList(known);
 }
 
 export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: HistoryLabels): HistoryLine[] {
@@ -35,15 +36,15 @@ export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: His
     const who = (assignee as string | undefined) ?? w?.assignee_id;
     if (schoolWide && w) {
       const b = l.branchName(w.branch_id);
-      if (b) return `${b}'s part`;
+      if (b) return t("{name}'s part", { name: b });
     }
-    return who ? `${l.person(who)}'s part` : "an unassigned part";
+    return who ? t("{name}'s part", { name: l.person(who) }) : t("an unassigned part");
   };
 
   const out: HistoryLine[] = [];
   for (let i = 0; i < entries.length; i++) {
     const h = entries[i];
-    const actor = h.actor_id ? l.person(h.actor_id) : "Automatically";
+    const actor = h.actor_id ? l.person(h.actor_id) : t("Automatically");
     const nv = (h.new_value ?? null) as V;
     const ov = (h.old_value ?? null) as V;
 
@@ -57,7 +58,11 @@ export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: His
         else if (!(e.entity_type === "work_item" && e.action === "create")) break;
         j++;
       }
-      out.push({ id: h.id, at: h.created_at, text: recipients.length ? `${actor} created this and sent it to ${list(recipients)}` : `${actor} created this` });
+      out.push({
+        id: h.id,
+        at: h.created_at,
+        text: recipients.length ? t("{actor} created this and sent it to {names}", { actor, names: list(recipients) }) : t("{actor} created this", { actor }),
+      });
       i = j - 1;
       continue;
     }
@@ -66,69 +71,76 @@ export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: His
     if (text) out.push({ id: h.id, at: h.created_at, text });
 
     function describe(): string | null {
-      if (h.action === "auto_close") return "Closed automatically when all the work was approved";
+      if (h.action === "auto_close") return t("Closed automatically when all the work was approved");
       switch (h.entity_type) {
         case "issue": {
-          if (h.action === "cancel") return `${actor} cancelled this`;
-          if (h.action === "close") return `${actor} closed this`;
-          if (!nv) return `${actor} changed the details`;
+          if (h.action === "cancel") return t("{actor} cancelled this", { actor });
+          if (h.action === "close") return t("{actor} closed this", { actor });
+          if (!nv) return t("{actor} changed the details", { actor });
           const parts = Object.keys(nv)
             .filter((k) => k !== "version" && k !== "updated_at")
             .map((k) => {
-              if (k === "priority") return `priority to ${priorityLabel[nv[k] as keyof typeof priorityLabel] ?? nv[k]}`;
-              if (k === "is_private") return nv[k] ? "it to private" : "it to visible";
-              if (k === "title") return `the title to “${nv[k]}”`;
-              if (k === "state") return nv[k] === "closed" ? "it to closed" : `it to ${String(nv[k])}`;
-              if (k === "event") return "the time or place";
-              if (k === "description") return "the details";
+              if (k === "priority") return t("priority to {value}", { value: priorityLabel[nv[k] as keyof typeof priorityLabel] ?? String(nv[k]) });
+              if (k === "is_private") return nv[k] ? t("it to private") : t("it to visible");
+              if (k === "title") return t("the title to {title}", { title: quote(String(nv[k])) });
+              if (k === "state") return nv[k] === "closed" ? t("it to closed") : t("it to {value}", { value: String(nv[k]) });
+              if (k === "event") return t("the time or place");
+              if (k === "description") return t("the details");
               return k.replace(/_/g, " ");
             });
-          return `${actor} changed ${parts.join(", ") || "the details"}`;
+          return t("{actor} changed {what}", { actor, what: parts.join(t(", ")) || t("the details") });
         }
         case "issue_target":
-          return h.action === "remove" ? `${actor} stopped sending this to ${l.target(ov ?? nv)}` : `${actor} also sent this to ${l.target(nv)}`;
+          return h.action === "remove"
+            ? t("{actor} stopped sending this to {name}", { actor, name: l.target(ov ?? nv) })
+            : t("{actor} also sent this to {name}", { actor, name: l.target(nv) });
         case "work_item": {
           const assignee = (nv?.assignee_id ?? ov?.assignee_id) as string | undefined;
-          const note = typeof nv?.decision_note === "string" ? `: “${nv.decision_note}”` : "";
+          const note = typeof nv?.decision_note === "string" ? `: ${quote(nv.decision_note)}` : "";
+          const thePart = (a?: unknown) => (schoolWide ? part(h.entity_id, a) : t("the work"));
           switch (h.action) {
             case "create":
-              return assignee ? `Work added for ${l.person(assignee)}` : `Work added for ${part(h.entity_id)}`;
+              return t("Work added for {who}", { who: assignee ? l.person(assignee) : part(h.entity_id) });
             case "assign":
-              return `${actor} gave ${schoolWide ? part(h.entity_id) : "the work"} to ${l.person(nv?.assignee_id as string)}`;
+              return t("{actor} gave {what} to {who}", { actor, what: thePart(), who: l.person(nv?.assignee_id as string) });
             case "claim":
-              return `${actor} picked up ${schoolWide ? part(h.entity_id) : "the work"}`;
+              return t("{actor} picked up {what}", { actor, what: thePart() });
             case "unassign":
-              return `${actor} took the work off ${l.person(ov?.assignee_id as string)}`;
+              return t("{actor} took the work off {who}", { actor, who: l.person(ov?.assignee_id as string) });
             case "start":
-              return `${actor} started ${actor === l.person(assignee) || !assignee ? "their part" : part(h.entity_id, assignee)}`;
+              return actor === l.person(assignee) || !assignee
+                ? t("{actor} started their part", { actor })
+                : t("{actor} started {what}", { actor, what: part(h.entity_id, assignee) });
             case "block":
-              return `${actor} is blocked on ${part(h.entity_id, assignee)}`;
+              return t("{actor} is blocked on {what}", { actor, what: part(h.entity_id, assignee) });
             case "unblock":
-              return `${actor} is working on ${part(h.entity_id, assignee)} again`;
+              return t("{actor} is working on {what} again", { actor, what: part(h.entity_id, assignee) });
             case "submit":
-              return `${actor} sent ${schoolWide ? part(h.entity_id, assignee) : "their part"} for approval`;
+              return schoolWide
+                ? t("{actor} sent {what} for approval", { actor, what: part(h.entity_id, assignee) })
+                : t("{actor} sent their part for approval", { actor });
             case "approve":
-              return `${actor} approved ${part(h.entity_id, assignee)}`;
+              return t("{actor} approved {what}", { actor, what: part(h.entity_id, assignee) });
             case "reject":
-              return `${actor} sent ${part(h.entity_id, assignee)} back${note}`;
+              return t("{actor} sent {what} back", { actor, what: part(h.entity_id, assignee) }) + note;
             case "cancel":
-              return `${actor} cancelled ${part(h.entity_id, assignee)}`;
+              return t("{actor} cancelled {what}", { actor, what: part(h.entity_id, assignee) });
             default:
-              return `${actor} updated ${part(h.entity_id, assignee)}`;
+              return t("{actor} updated {what}", { actor, what: part(h.entity_id, assignee) });
           }
         }
         case "comment":
-          if (h.action === "delete") return `${actor} removed a comment`;
-          return h.action === "update" ? `${actor} edited a comment` : `${actor} commented`;
+          if (h.action === "delete") return t("{actor} removed a comment", { actor });
+          return h.action === "update" ? t("{actor} edited a comment", { actor }) : t("{actor} commented", { actor });
         case "report":
-          if (nv?.submitted_at) return `${actor} handed in a written report`;
-          return h.action === "create" ? `${actor} started a written report` : null; // draft saves are noise
+          if (nv?.submitted_at) return t("{actor} handed in a written report", { actor });
+          return h.action === "create" ? t("{actor} started a written report", { actor }) : null; // draft saves are noise
         case "attachment":
-          return `${actor} attached ${nv?.file_name ? `“${nv.file_name}”` : "a file"}`;
+          return t("{actor} attached {file}", { actor, file: nv?.file_name ? quote(String(nv.file_name)) : t("a file") });
         case "rsvp":
-          return `${actor} replied to the invitation`;
+          return t("{actor} replied to the invitation", { actor });
         default:
-          return `${actor} made a change (${h.action})`;
+          return t("{actor} made a change ({action})", { actor, action: h.action });
       }
     }
   }

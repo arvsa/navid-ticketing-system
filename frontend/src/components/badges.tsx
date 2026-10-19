@@ -5,6 +5,8 @@ import type { IssueType, Priority, RsvpResponse, WorkStatus } from "@/api/types"
 import { priorityLabel, rsvpLabel, typeLabel, workStatusLabel } from "@/lib/labels";
 import { initials } from "@/people/usePeople";
 import { cx } from "./ui";
+import { t } from "@/i18n";
+import { calendarParts, dayNumber, monthName, weekdayShort } from "@/lib/dates";
 
 export function TypeBadge({ type, className }: { type: IssueType; className?: string }) {
   return (
@@ -40,7 +42,7 @@ export function Pill({ fg, bg, children, className }: { fg: string; bg: string; 
 /** Work status. "Waiting for you" when the viewer is the one who approves it. */
 export function StatusBadge({ status, forMe }: { status: WorkStatus; forMe?: boolean }) {
   const v = statusVar[status];
-  const text = status === "pending_approval" && forMe ? "Waiting for you" : workStatusLabel[status];
+  const text = status === "pending_approval" && forMe ? t("Waiting for you") : workStatusLabel[status];
   return (
     <Pill fg={`var(--st-${v})`} bg={`var(--st-${v}-bg)`}>
       {text}
@@ -63,17 +65,17 @@ export function PrivateTag() {
   return (
     <span className="inline-flex items-center gap-1 text-text-2">
       <Lock className="size-3.5" aria-hidden />
-      Private
+      {t("Private")}
     </span>
   );
 }
 
 export function RsvpBadge({ response, mine }: { response: RsvpResponse; mine?: boolean }) {
-  if (response === "going") return <Pill fg="var(--success)" bg="var(--success-soft)">Going</Pill>;
-  if (response === "maybe") return <Pill fg="var(--warning)" bg="var(--warning-soft)">Maybe</Pill>;
-  if (response === "declined") return <Pill fg="var(--st-cxl)" bg="var(--st-cxl-bg)">Can't go</Pill>;
+  if (response === "going") return <Pill fg="var(--success)" bg="var(--success-soft)">{t("Going")}</Pill>;
+  if (response === "maybe") return <Pill fg="var(--warning)" bg="var(--warning-soft)">{t("Maybe")}</Pill>;
+  if (response === "declined") return <Pill fg="var(--st-cxl)" bg="var(--st-cxl-bg)">{t("Can't go")}</Pill>;
   return mine ? (
-    <Pill fg="var(--warning)" bg="var(--warning-soft)">Reply</Pill>
+    <Pill fg="var(--warning)" bg="var(--warning-soft)">{t("Reply")}</Pill>
   ) : (
     <Pill fg="var(--text-2)" bg="var(--sunken)">{rsvpLabel.pending}</Pill>
   );
@@ -145,7 +147,7 @@ export function ProgressBar({ p, className, label }: { p: Progress; className?: 
   return (
     <div
       role="img"
-      aria-label={label ?? `${p.approved} of ${total} approved`}
+      aria-label={label ?? t("{done} of {total} approved", { done: p.approved, total })}
       className={cx("flex h-2 overflow-hidden rounded-full", className)}
       style={{ background: "var(--bar-track)" }}
     >
@@ -161,14 +163,14 @@ export function ProgressBar({ p, className, label }: { p: Progress; className?: 
   );
 }
 
-/** Calendar-page style date block: "THU / 23 / October". */
+/** Calendar-page style date block: "THU / 23 / October" (or "پنجشنبه / ۱ / آبان"). */
 export function DateBlock({ date, size = "md" }: { date: Date; size?: "sm" | "md" }) {
-  const day = date.toLocaleDateString("en-GB", { weekday: "short" }).toUpperCase();
+  const day = weekdayShort(date).toUpperCase();
   if (size === "sm") {
     return (
       <div className="w-12 shrink-0 text-center">
         <div className="text-[12px] font-semibold text-[var(--event)]">{day}</div>
-        <div className="text-[22px] leading-6 font-bold tabular">{date.getDate()}</div>
+        <div className="text-[22px] leading-6 font-bold tabular">{dayNumber(date)}</div>
       </div>
     );
   }
@@ -177,8 +179,8 @@ export function DateBlock({ date, size = "md" }: { date: Date; size?: "sm" | "md
       <div className="py-1 text-[13px] font-semibold" style={{ background: "var(--event)", color: "var(--surface)" }}>
         {day}
       </div>
-      <div className="text-[30px] leading-9 font-bold tabular">{date.getDate()}</div>
-      <div className="pb-1.5 text-[13px] text-text-2">{date.toLocaleDateString("en-GB", { month: "long" })}</div>
+      <div className="text-[30px] leading-9 font-bold tabular">{dayNumber(date)}</div>
+      <div className="pb-1.5 text-[13px] text-text-2">{monthName(calendarParts(date).m)}</div>
     </div>
   );
 }

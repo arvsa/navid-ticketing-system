@@ -20,6 +20,7 @@ import { errorMessage, modeLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { CommentThread } from "@/features/items/Comments";
+import { quote, t, tn, tx } from "@/i18n";
 
 export function MyAssignmentPage() {
   const { number } = useParams({ from: "/authed/shell/items/$number/mine" });
@@ -34,12 +35,12 @@ export function MyAssignmentPage() {
     issue.data.work_items.find((w) => canClaim(viewer, issue.data!, w));
   if (!mine)
     return (
-      <EmptyState title="You don't have a part of this item." action={<Link to="/items/$number" params={{ number }} className="text-primary hover:underline">Open the item</Link>} />
+      <EmptyState title={t("You don't have a part of this item.")} action={<Link to="/items/$number" params={{ number }} className="text-primary hover:underline">{t("Open the item")}</Link>} />
     );
   return <AssignmentView issue={issue.data} work={mine} />;
 }
 
-const STEPS = ["Not started", "Working on it", "Handed in", "Approved"];
+const STEPS = [t("Not started"), t("Working on it"), t("Handed in"), t("Approved")];
 
 function stepOf(w: WorkItem) {
   if (w.status === "approved") return 3;
@@ -56,12 +57,12 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
   const step = stepOf(work);
   const sentBack = isSentBack(work);
   const n = numberOf(issue.key);
-  const sentTo = issue.targets.find((t) => t.id === work.target_id);
+  const sentTo = issue.targets.find((target) => target.id === work.target_id);
   return (
     <div className="space-y-6">
-      <nav aria-label="Breadcrumb" className="text-[17px]">
+      <nav aria-label={t("Breadcrumb")} className="text-[17px]">
         <Link to="/my-work" className="text-primary hover:underline">
-          My work
+          {t("My work")}
         </Link>
         <span className="mx-2 text-text-3">/</span>
         <Link to="/items/$number" params={{ number: n }} className="font-mono text-text-2 hover:underline">
@@ -72,12 +73,12 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
         <div className="flex flex-wrap items-center gap-2 text-[16px] text-text-2">
           <TypeBadge type={issue.type} />
           <span>
-            From {people.short(issue.created_by)}
+            {t("From {name}", { name: people.short(issue.created_by) })}
             {work.sla_due_at && (
               <>
-                {" "}· due <b className="text-text">{formatDateTime(work.sla_due_at, zone)}</b>
+                {" "}· {tx("due {date}", { date: <b className="text-text">{formatDateTime(work.sla_due_at, zone)}</b> })}
                 {!work.is_overdue && dueIn(work.sla_due_at, zone) && ` (${dueIn(work.sla_due_at, zone)})`}
-                {work.is_overdue && <b className="text-danger"> · overdue</b>}
+                {work.is_overdue && <b className="text-danger">{" "}{t("· overdue")}</b>}
               </>
             )}
           </span>
@@ -90,21 +91,21 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
           <Undo2 className="mt-0.5 size-6 shrink-0 text-sent-back" aria-hidden />
           <div>
             <p className="text-[17px] font-semibold text-sent-back">
-              {people.short(work.decided_by).split(" ")[0]} sent this back to you {timeAgo(work.decided_at!).toLowerCase()}
+              {t("{name} sent this back to you {when}", { name: people.short(work.decided_by).split(" ")[0], when: timeAgo(work.decided_at!).toLowerCase() })}
             </p>
-            <p className="mt-1 text-[17px]">“{work.decision_note}”</p>
+            <p className="mt-1 text-[17px]">{quote(work.decision_note ?? "")}</p>
           </div>
         </div>
       )}
 
-      <ol className="grid grid-cols-4 gap-3" aria-label="Progress">
+      <ol className="grid grid-cols-4 gap-3" aria-label={t("Progress")}>
         {STEPS.map((s, i) => (
           <li key={s} aria-current={i === step ? "step" : undefined}>
             <div className={cx("h-1.5 rounded-full", i <= step ? "bg-primary" : "bg-border")} />
             <div className={cx("mt-2 text-[14px] sm:text-[16px]", i === step ? "font-semibold" : "text-text-2")}>
               {s}
-              {i === 1 && i === step && sentBack && <span className="hidden sm:inline"> · sent back</span>}
-              {i === 1 && i === step && work.status === "blocked" && <span className="hidden sm:inline"> · blocked</span>}
+              {i === 1 && i === step && sentBack && <span className="hidden sm:inline">{" "}{t("· sent back")}</span>}
+              {i === 1 && i === step && work.status === "blocked" && <span className="hidden sm:inline">{" "}{t("· blocked")}</span>}
             </div>
           </li>
         ))}
@@ -114,19 +115,19 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
         <div>{issue.type === "report" ? <ReportEditor issue={issue} work={work} /> : <ActionCard issue={issue} work={work} />}</div>
         <div className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-[18px] font-semibold">What was asked</h2>
-            {issue.description ? <p className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p> : <p className="mt-3 text-text-2">No details were given.</p>}
+            <h2 className="text-[18px] font-semibold">{t("What was asked")}</h2>
+            {issue.description ? <p className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p> : <p className="mt-3 text-text-2">{t("No details were given.")}</p>}
             {sentTo && (
               <p className="mt-3 text-[15px] text-text-2">
-                Sent to {targetName(sentTo, people, groups, (id) => branchById.get(id)?.name ?? "branch")}
+                {t("Sent to {name}", { name: targetName(sentTo, people, groups, (id) => branchById.get(id)?.name ?? t("branch")) })}
                 {issue.work_items.length > 1 && ` · ${modeLabel[issue.completion_mode]}`}
               </p>
             )}
           </Card>
           <Card>
-            <h2 className="border-b border-border px-6 py-5 text-[18px] font-semibold">About your {issue.type === "report" ? "report" : "work"}</h2>
+            <h2 className="border-b border-border px-6 py-5 text-[18px] font-semibold">{issue.type === "report" ? t("About your report") : t("About your work")}</h2>
             <div className="px-6 py-5">
-              <CommentThread issue={issue} workItemId={work.id} compact emptyText="Questions about this? Ask here." />
+              <CommentThread issue={issue} workItemId={work.id} compact emptyText={t("Questions about this? Ask here.")} />
             </div>
           </Card>
         </div>
@@ -136,7 +137,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
 }
 
 function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issue: IssueDetail; work: WorkItem; onSubmit: () => void; submitLabel: string; submitting?: boolean; hint: string }) {
-  const t = useTransition();
+  const tr = useTransition();
   const viewer = useViewer();
   const [blockOpen, setBlockOpen] = useState(false);
   const [why, setWhy] = useState("");
@@ -144,37 +145,37 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
   if (work.status === "pending_approval")
     return (
       <div className="border-t border-border bg-surface-2 px-6 py-5 text-text-2">
-        Sent for approval {work.submitted_at ? timeAgo(work.submitted_at) : ""}. You'll be told when it's approved.
+        {t("Sent for approval {when}. You'll be told when it's approved.", { when: work.submitted_at ? timeAgo(work.submitted_at) : "" })}
       </div>
     );
-  if (work.status === "approved") return <div className="border-t border-border bg-success-soft px-6 py-5 font-semibold text-success">Approved. Nothing more to do.</div>;
+  if (work.status === "approved") return <div className="border-t border-border bg-success-soft px-6 py-5 font-semibold text-success">{t("Approved. Nothing more to do.")}</div>;
   if (issue.state !== "open" || work.status === "cancelled") return null;
   const act = (transition: "start" | "claim" | "unblock" | "block", done: string) =>
-    t.mutate({ item: work, transition }, { onSuccess: () => toast.success(done), onError: (e) => toast.error(errorMessage(e)) });
+    tr.mutate({ item: work, transition }, { onSuccess: () => toast.success(done), onError: (e) => toast.error(errorMessage(e)) });
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-2 px-6 py-5">
       {!work.assignee_id && canClaim(viewer, issue, work) ? (
-        <Button variant="primary" size="lg" className="ml-auto" loading={t.isPending} onClick={() => act("claim", "It's yours now")}>
-          I'll take it
+        <Button variant="primary" size="lg" className="ms-auto" loading={tr.isPending} onClick={() => act("claim", t("It's yours now"))}>
+          {t("I'll take it")}
         </Button>
       ) : work.status === "open" ? (
-        <Button variant="primary" size="lg" className="ml-auto" loading={t.isPending} onClick={() => act("start", "Started")}>
-          Start
+        <Button variant="primary" size="lg" className="ms-auto" loading={tr.isPending} onClick={() => act("start", t("Started"))}>
+          {t("Start")}
         </Button>
       ) : work.status === "blocked" ? (
         <>
-          <span className="text-text-2">You said you're blocked.</span>
-          <Button variant="primary" size="lg" className="ml-auto" loading={t.isPending} onClick={() => act("unblock", "Back in progress")}>
-            Continue
+          <span className="text-text-2">{t("You said you're blocked.")}</span>
+          <Button variant="primary" size="lg" className="ms-auto" loading={tr.isPending} onClick={() => act("unblock", t("Back in progress"))}>
+            {t("Continue")}
           </Button>
         </>
       ) : (
         <>
           <Button size="lg" onClick={() => setBlockOpen(true)}>
-            I'm blocked
+            {t("I'm blocked")}
           </Button>
           <span className="text-text-2">{hint}</span>
-          <Button variant="primary" size="lg" className="ml-auto" loading={submitting} onClick={onSubmit}>
+          <Button variant="primary" size="lg" className="ms-auto" loading={submitting} onClick={onSubmit}>
             {submitLabel}
           </Button>
         </>
@@ -182,14 +183,14 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
       <Dialog
         open={blockOpen}
         onOpenChange={setBlockOpen}
-        title="What's holding you up?"
-        description="Your note goes to the conversation about your work, so people can help."
+        title={t("What's holding you up?")}
+        description={t("Your note goes to the conversation about your work, so people can help.")}
         footer={
           <>
-            <Button onClick={() => setBlockOpen(false)}>Cancel</Button>
+            <Button onClick={() => setBlockOpen(false)}>{t("Cancel")}</Button>
             <Button
               variant="primary"
-              loading={t.isPending}
+              loading={tr.isPending}
               onClick={async () => {
                 try {
                   if (why.trim()) await api.post(`/issues/${issue.id}/comments`, { body: why.trim(), work_item_id: work.id });
@@ -197,16 +198,16 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
                 } catch (e) {
                   toast.error(errorMessage(e));
                 }
-                act("block", "Marked as blocked");
+                act("block", t("Marked as blocked"));
                 setBlockOpen(false);
               }}
             >
-              I'm blocked
+              {t("I'm blocked")}
             </Button>
           </>
         }
       >
-        <textarea value={why} onChange={(e) => setWhy(e.target.value)} rows={3} className={inputClass} aria-label="What's holding you up?" placeholder="Optional" />
+        <textarea value={why} onChange={(e) => setWhy(e.target.value)} rows={3} className={inputClass} aria-label={t("What's holding you up?")} placeholder={t("Optional")} />
       </Dialog>
     </div>
   );
@@ -221,28 +222,28 @@ class NothingToSend extends Error {
 
 function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const qc = useQueryClient();
-  const t = useTransition();
+  const tr = useTransition();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const files = useFilePicker();
-  const approver = issue.requires_super_admin_approval ? "A super admin" : "Your approver";
+  const approverHint = issue.requires_super_admin_approval ? t("A super admin is told when you send it.") : t("Your approver is told when you send it.");
   const submit = useMutation({
     // Approvers need something to look at: a note, a file, or both.
     mutationFn: async () => {
       const text = note.trim();
       if (!text && !files.files.length) throw new NothingToSend();
-      const body = text || (files.files.length === 1 ? `Attached ${files.files[0].name}` : `Attached ${files.files.length} files`);
+      const body = text || (files.files.length === 1 ? t("Attached {name}", { name: files.files[0].name }) : t("Attached {n} files", { n: files.files.length }));
       const c = await api.post<{ id: string }>(`/issues/${issue.id}/comments`, { body, work_item_id: work.id });
       const failed = files.files.length ? await uploadAll(issue.id, files.files, { comment_id: c.id }) : [];
       if (!text && failed.length === files.files.length) {
-        reportFailedUploads(failed, "Not sent:");
+        reportFailedUploads(failed, t("Not sent:"));
         throw new NothingToSend(true);
       }
-      reportFailedUploads(failed, "Sent, but");
-      await t.mutateAsync({ item: work, transition: "submit" });
+      reportFailedUploads(failed, t("Sent, but"));
+      await tr.mutateAsync({ item: work, transition: "submit" });
     },
     onSuccess: () => {
-      toast.success("Sent for approval");
+      toast.success(t("Sent for approval"));
       setOpen(false);
       setNote("");
       files.clear();
@@ -251,42 +252,42 @@ function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ["issues", issue.id, "comments"] });
       if (e instanceof NothingToSend) {
-        if (!e.uploadFailed) toast.error("Add a note or a file so your approver can see what you did.");
+        if (!e.uploadFailed) toast.error(t("Add a note or a file so your approver can see what you did."));
       } else toast.error(errorMessage(e));
     },
   });
   return (
     <Card className="overflow-hidden">
       <div className="px-6 py-5">
-        <h2 className="text-[18px] font-semibold">Your part</h2>
+        <h2 className="text-[18px] font-semibold">{t("Your part")}</h2>
         <p className="mt-2 text-text-2">
           {work.status === "open"
-            ? "Start when you begin, so others can see it's in hand."
+            ? t("Start when you begin, so others can see it's in hand.")
             : work.status === "pending_approval"
-              ? "Handed in. Waiting for approval."
+              ? t("Handed in. Waiting for approval.")
               : work.status === "approved"
-                ? "Done and approved."
-                : "When it's done, send it for approval. You can add a note and photos or documents."}
+                ? t("Done and approved.")
+                : t("When it's done, send it for approval. You can add a note and photos or documents.")}
         </p>
       </div>
-      <Footer issue={issue} work={work} onSubmit={() => setOpen(true)} submitLabel="Send for approval" hint={`${approver} is told when you send it.`} />
+      <Footer issue={issue} work={work} onSubmit={() => setOpen(true)} submitLabel={t("Send for approval")} hint={approverHint} />
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        title="Send for approval"
+        title={t("Send for approval")}
         footer={
           <>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={() => setOpen(false)}>{t("Cancel")}</Button>
             <Button variant="primary" loading={submit.isPending} disabled={!note.trim() && !files.files.length} onClick={() => submit.mutate()}>
-              Send for approval
+              {t("Send for approval")}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
-          <p className="text-text-2">Add a note, a file, or both, so your approver can see what you did.</p>
-          <Field label="What did you do?">
-            {(p) => <textarea {...p} value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="e.g. Checked all six kits; restocked plasters in kits 2 and 5." className={inputClass} />}
+          <p className="text-text-2">{t("Add a note, a file, or both, so your approver can see what you did.")}</p>
+          <Field label={t("What did you do?")}>
+            {(p) => <textarea {...p} value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder={t("e.g. Checked all six kits; restocked plasters in kits 2 and 5.")} className={inputClass} />}
           </Field>
           <PendingFiles files={files.files} onRemove={files.remove} />
           <AttachButton onPick={files.add} />
@@ -301,7 +302,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const qc = useQueryClient();
   const viewer = useViewer();
-  const t = useTransition();
+  const tr = useTransition();
   const reports = useReports(issue.id);
   const existing = reports.data?.find((r) => r.work_item_id === work.id && r.author_id === viewer.me.user.id) ?? reports.data?.find((r) => r.work_item_id === work.id);
   const [report, setReport] = useState<Report | undefined>(undefined);
@@ -375,11 +376,11 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
       let submitted = r;
       if (!r.submitted_at || dirty.current) submitted = await api.post<Report>(`/reports/${r.id}/submit`, { version: r.version });
       setReport(submitted);
-      await t.mutateAsync({ item: work, transition: "submit" });
+      await tr.mutateAsync({ item: work, transition: "submit" });
     },
     onSuccess: () => {
       setConfirm(false);
-      toast.success("Handed in. Your approver has been told.");
+      toast.success(t("Handed in. Your approver has been told."));
       qc.invalidateQueries({ queryKey: keys.reports(issue.id) });
     },
     onError: (e) => {
@@ -410,14 +411,14 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   if (reports.isLoading) return <Skeleton className="h-96" />;
   const words = body.trim() ? body.trim().split(/\s+/).length : 0;
   const status =
-    state === "saving" ? "Saving…" : state === "error" ? "Couldn't save — keep typing to retry" : savedAt ? `Draft saved ${formatTime(savedAt)}` : null;
+    state === "saving" ? t("Saving…") : state === "error" ? t("Couldn't save — keep typing to retry") : savedAt ? t("Draft saved {time}", { time: formatTime(savedAt) }) : null;
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-5">
-        <h2 className="text-[18px] font-semibold">Your report</h2>
+        <h2 className="text-[18px] font-semibold">{t("Your report")}</h2>
         {report?.submitted_at && locked ? (
-          <span className="text-text-2">Handed in {timeAgo(report.submitted_at)}</span>
+          <span className="text-text-2">{t("Handed in {when}", { when: timeAgo(report.submitted_at) })}</span>
         ) : (
           status && (
             <span className={cx("inline-flex items-center gap-1.5", state === "error" ? "text-danger" : "text-success")} role="status">
@@ -428,7 +429,7 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
       </div>
       {conflict && (
         <div className="flex flex-wrap items-center gap-3 border-b border-warning-edge bg-warning-soft px-6 py-3 text-warning" role="alert">
-          This report was changed in another window.
+          {t("This report was changed in another window.")}
           <Button
             size="sm"
             onClick={async () => {
@@ -438,7 +439,7 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
               setConflict(false);
             }}
           >
-            Load latest
+            {t("Load latest")}
           </Button>
           <Button
             size="sm"
@@ -451,13 +452,13 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
               setTimeout(save, 0);
             }}
           >
-            Keep mine
+            {t("Keep mine")}
           </Button>
         </div>
       )}
       <div className="space-y-5 px-6 py-5">
-        {work.status === "open" && <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">Press Start below to begin writing.</p>}
-        <Field label="Title">
+        {work.status === "open" && <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Press Start below to begin writing.")}</p>}
+        <Field label={t("Title")}>
           {(p) => (
             <input
               {...p}
@@ -471,18 +472,18 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
         </Field>
         <div>
           <label htmlFor="report-body" className="mb-1.5 block font-semibold">
-            Report
+            {t("Report")}
           </label>
           <div className="overflow-hidden rounded-[12px] border border-input focus-within:border-primary">
             {canWrite && (
-              <div className="flex gap-1 border-b border-border bg-surface-2 px-3 py-2" role="toolbar" aria-label="Formatting">
-                <button type="button" onClick={() => wrap("**")} className="rounded-md px-3 py-1 font-bold hover:bg-sunken" aria-label="Bold">
+              <div className="flex gap-1 border-b border-border bg-surface-2 px-3 py-2" role="toolbar" aria-label={t("Formatting")}>
+                <button type="button" onClick={() => wrap("**")} className="rounded-md px-3 py-1 font-bold hover:bg-sunken" aria-label={t("Bold")}>
                   B
                 </button>
-                <button type="button" onClick={() => wrap("_")} className="rounded-md px-3 py-1 italic hover:bg-sunken" aria-label="Italic">
+                <button type="button" onClick={() => wrap("_")} className="rounded-md px-3 py-1 italic hover:bg-sunken" aria-label={t("Italic")}>
                   I
                 </button>
-                <button type="button" onClick={bullet} className="rounded-md px-3 py-1 hover:bg-sunken" aria-label="Bulleted list">
+                <button type="button" onClick={bullet} className="rounded-md px-3 py-1 hover:bg-sunken" aria-label={t("Bulleted list")}>
                   ≡
                 </button>
               </div>
@@ -499,32 +500,32 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
               className="block min-h-[320px] w-full resize-y bg-surface px-5 py-4 text-[17px] leading-[27px] outline-none disabled:bg-sunken"
             />
           </div>
-          <p className="mt-1 text-[13px] text-text-3">{words} words</p>
+          <p className="mt-1 text-[13px] text-text-3">{tn(words, "{n} word", "{n} words")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {report && <FileList files={report.attachments} />}
           {report && canWrite && <UploadNow issueId={issue.id} parent={{ report_id: report.id }} onDone={() => qc.invalidateQueries({ queryKey: keys.reports(issue.id) }).then(() => reports.refetch().then((r) => setReport(r.data?.find((x) => x.id === report.id) ?? report)))} />}
-          {!report && canWrite && <span className="text-[14px] text-text-3">You can attach files once your draft is saved.</span>}
+          {!report && canWrite && <span className="text-[14px] text-text-3">{t("You can attach files once your draft is saved.")}</span>}
         </div>
       </div>
       <Footer
         issue={issue}
         work={work}
         submitting={handIn.isPending}
-        onSubmit={() => (body.trim() ? setConfirm(true) : toast.error("Write your report first."))}
-        submitLabel="Hand in for approval"
-        hint={`${issue.requires_super_admin_approval ? "A super admin is" : "Your approver is"} told when you hand it in.`}
+        onSubmit={() => (body.trim() ? setConfirm(true) : toast.error(t("Write your report first.")))}
+        submitLabel={t("Hand in for approval")}
+        hint={issue.requires_super_admin_approval ? t("A super admin is told when you hand it in.") : t("Your approver is told when you hand it in.")}
       />
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
-        title="Hand in your report?"
-        description="Your approver will be told. You can still change it if it's sent back."
+        title={t("Hand in your report?")}
+        description={t("Your approver will be told. You can still change it if it's sent back.")}
         footer={
           <>
-            <Button onClick={() => setConfirm(false)}>Keep writing</Button>
+            <Button onClick={() => setConfirm(false)}>{t("Keep writing")}</Button>
             <Button variant="primary" loading={handIn.isPending} onClick={() => handIn.mutate()}>
-              Hand in report
+              {t("Hand in report")}
             </Button>
           </>
         }

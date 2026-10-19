@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import { keys } from "@/api/keys";
 import type { Notification, Page } from "@/api/types";
 import { describeNotification } from "@/lib/notifications";
+import { t } from "@/i18n";
 
 export type LiveStatus = "connecting" | "live" | "reconnecting" | "offline";
 const LiveCtx = createContext<LiveStatus>("connecting");
@@ -102,11 +103,11 @@ export function LiveProvider({ children, onSessionEnded }: { children: ReactNode
         if (page.items[0]) seenNotification.current = Math.max(seenNotification.current, page.items[0].id);
         const first = fresh[0];
         if (first && !location.pathname.includes(`/items/${first.issue_key?.replace("ISS-", "")}`)) {
-          const text = describeNotification(first, () => "Someone").plain;
+          const text = describeNotification(first, () => t("Someone")).plain;
           toast(text, {
-            description: fresh.length > 1 ? `+${fresh.length - 1} more updates in your inbox` : undefined,
+            description: fresh.length > 1 ? t("+{n} more updates in your inbox", { n: fresh.length - 1 }) : undefined,
             action: first.issue_key
-              ? { label: "Open", onClick: () => location.assign(`/items/${first.issue_key!.replace("ISS-", "")}`) }
+              ? { label: t("Open"), onClick: () => location.assign(`/items/${first.issue_key!.replace("ISS-", "")}`) }
               : undefined,
           });
         }

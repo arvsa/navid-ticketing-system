@@ -11,7 +11,7 @@ import { Avatar, ProgressBar, TypeBadge, progressOf } from "@/components/badges"
 import { Dot, Panel, RowLink, StatPill } from "@/components/rows";
 import { EmptyState, ErrorPanel, Skeleton, cx } from "@/components/ui";
 import { canApprove, canAssign, hasGrant, isAdminOf, isSuper, mayApproveIn } from "@/lib/can";
-import { formatDay, formatTime, greeting, inZone, isDueSoon, lateBy, shortAgo, timeAgo } from "@/lib/dates";
+import { dayNumber, formatDay, formatTime, greeting, inZone, isDueSoon, lateBy, shortAgo, timeAgo, weekdayShort } from "@/lib/dates";
 import { isDone, isSentBack, numberOf } from "@/lib/items";
 import { describeNotification } from "@/lib/notifications";
 import { useViewer } from "@/lib/useViewer";
@@ -19,6 +19,7 @@ import { usePeople } from "@/people/usePeople";
 import { WorkButton } from "@/features/work/WorkButton";
 import { RsvpButtons } from "@/features/events/RsvpButtons";
 import { WholeSchool } from "./WholeSchool";
+import { num, t, tn } from "@/i18n";
 
 export function HomePage() {
   const viewer = useViewer();
@@ -33,7 +34,7 @@ function Greeting({ subtitle }: { subtitle?: string }) {
   return (
     <div>
       <h1 className="text-[30px] leading-9 font-bold tracking-tight sm:text-[36px] sm:leading-[44px]">
-        {greeting()}, {viewer.me.user.first_name}
+        {t("{greeting}, {name}", { greeting: greeting(), name: viewer.me.user.first_name })}
       </h1>
       {subtitle && <p className="mt-1 text-[17px] text-text-2">{subtitle}</p>}
     </div>
@@ -93,15 +94,15 @@ function AdminHome() {
   return (
     <div className="space-y-8">
       <div className="space-y-5">
-        <Greeting subtitle={`${branch?.name ?? ""}${decisions ? ` · ${decisions} thing${decisions === 1 ? "" : "s"} need a decision from you` : " · nothing needs you right now"}`} />
+        <Greeting subtitle={`${branch?.name ?? ""} · ${decisions ? tn(decisions, "{n} thing needs a decision from you", "{n} things need a decision from you") : t("nothing needs you right now")}`} />
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
           {mayApprove && (
-            <StatPill value={mine?.awaiting_my_approval ?? toApprove.length} label="to approve" tone={toApprove.length ? "warning" : "neutral"} link={{ to: "/approvals" }} />
+            <StatPill value={mine?.awaiting_my_approval ?? toApprove.length} label={t("to approve")} tone={toApprove.length ? "warning" : "neutral"} link={{ to: "/approvals" }} />
           )}
-          {numbers?.overdue_work_items != null && <StatPill value={numbers.overdue_work_items} label="overdue" tone={numbers.overdue_work_items ? "danger" : "neutral"} onClick={() => setFilter("overdue")} />}
-          {openTotal != null && <StatPill value={openTotal} label="open items" link={{ to: "/items" }} />}
-          {numbers?.due_next_7_days != null && <StatPill value={numbers.due_next_7_days} label="due this week" link={{ to: "/items" }} />}
-          <StatPill value={mine?.upcoming_events.length ?? "—"} label="events soon" link={{ to: "/calendar" }} />
+          {numbers?.overdue_work_items != null && <StatPill value={numbers.overdue_work_items} label={t("overdue")} tone={numbers.overdue_work_items ? "danger" : "neutral"} onClick={() => setFilter("overdue")} />}
+          {openTotal != null && <StatPill value={openTotal} label={t("open items")} link={{ to: "/items" }} />}
+          {numbers?.due_next_7_days != null && <StatPill value={numbers.due_next_7_days} label={t("due this week")} link={{ to: "/items" }} />}
+          <StatPill value={mine?.upcoming_events.length ?? "—"} label={t("events soon")} link={{ to: "/calendar" }} />
         </div>
       </div>
       {dash.error && <ErrorPanel error={dash.error} onRetry={() => dash.refetch()} />}
@@ -109,15 +110,15 @@ function AdminHome() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Panel
-            title="Needs you"
+            title={t("Needs you")}
             action={
               <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {(
                   [
-                    ["all", "All", needs.length, true],
-                    ["approve", "To approve", toApprove.length, mayApprove],
-                    ["overdue", "Overdue", overdue.filter((w) => w.assignee_id).length, true],
-                    ["owner", "No owner", unowned.length, mayAssign],
+                    ["all", t("All"), needs.length, true],
+                    ["approve", t("To approve"), toApprove.length, mayApprove],
+                    ["overdue", t("Overdue"), overdue.filter((w) => w.assignee_id).length, true],
+                    ["owner", t("No owner"), unowned.length, mayAssign],
                   ] as const
                 )
                   .filter(([, , , allowed]) => allowed)
@@ -128,7 +129,7 @@ function AdminHome() {
                     aria-pressed={filter === k}
                     className={cx("h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap", filter === k ? "bg-text text-surface" : "text-text-2 hover:bg-sunken")}
                   >
-                    {label} <span className="tabular opacity-70">{n}</span>
+                    {label} <span className="tabular opacity-70">{num(n)}</span>
                   </button>
                 ))}
               </div>
@@ -141,7 +142,7 @@ function AdminHome() {
                 <Skeleton className="h-12" />
               </div>
             ) : shown.length === 0 ? (
-              <EmptyState title="Nothing here. Nice." />
+              <EmptyState title={t("Nothing here. Nice.")} />
             ) : (
               <ul>
                 {shown.map((n) => {
@@ -161,16 +162,16 @@ function AdminHome() {
                         title={issue?.title ?? "…"}
                         meta={
                           n.kind === "approve"
-                            ? `${people.short(n.w.assignee_id)} handed it in · ${n.w.submitted_at ? shortAgo(n.w.submitted_at) : ""} ago`
+                            ? t("{name} handed it in · {ago} ago", { name: people.short(n.w.assignee_id), ago: n.w.submitted_at ? shortAgo(n.w.submitted_at) : "" })
                             : n.kind === "owner"
-                              ? "Nobody has this yet — hand it to someone"
-                              : `${people.short(n.w.assignee_id)} · ${n.w.status === "blocked" ? "blocked" : n.w.status === "open" ? "not started" : "in progress"}`
+                              ? t("Nobody has this yet — hand it to someone")
+                              : `${people.short(n.w.assignee_id)} · ${n.w.status === "blocked" ? t("blocked") : n.w.status === "open" ? t("not started") : t("in progress")}`
                         }
                         trailing={
                           n.kind === "approve" ? (
-                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">Review</span>
+                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">{t("Review")}</span>
                           ) : n.kind === "owner" ? (
-                            <span className="rounded-full bg-sunken px-2.5 py-0.5 text-[13px] font-semibold">Assign</span>
+                            <span className="rounded-full bg-sunken px-2.5 py-0.5 text-[13px] font-semibold">{t("Assign")}</span>
                           ) : (
                             <span className="text-[14px] font-semibold text-danger">{n.w.sla_due_at && lateBy(n.w.sla_due_at)}</span>
                           )
@@ -183,7 +184,7 @@ function AdminHome() {
             )}
             {filter === "approve" && toApprove.length > shown.length && (
               <Link to="/approvals" className="block rounded-[14px] px-3 py-2.5 text-center font-medium text-primary hover:bg-sunken">
-                See all {toApprove.length}
+                {t("See all {n}", { n: toApprove.length })}
               </Link>
             )}
           </Panel>
@@ -193,7 +194,7 @@ function AdminHome() {
 
         <div className="space-y-6">
           {myOpen.length > 0 && (
-            <Panel title="Your own to-do" action={<Link to="/my-work" className="text-[14px] text-primary hover:underline">My work</Link>}>
+            <Panel title={t("Your own to-do")} action={<Link to="/my-work" className="text-[14px] text-primary hover:underline">{t("My work")}</Link>}>
               <ul>
                 {myOpen.slice(0, 4).map((w) => {
                   const issue = issues.map.get(w.issue_id);
@@ -205,7 +206,7 @@ function AdminHome() {
                         link={{ to: "/items/$number/mine", params: { number: issue ? numberOf(issue.key) : "0" } }}
                         leading={issue && <TypeBadge type={issue.type} />}
                         title={issue?.title ?? "…"}
-                        meta={w.sla_due_at ? (w.is_overdue ? lateBy(w.sla_due_at) : `Due ${formatDay(w.sla_due_at, zone)}`) : undefined}
+                        meta={w.sla_due_at ? (w.is_overdue ? lateBy(w.sla_due_at) : t("Due {date}", { date: formatDay(w.sla_due_at, zone) })) : undefined}
                       />
                       <WorkButton issue={issue} work={w} viewer={viewer} size="sm" />
                     </li>
@@ -230,13 +231,13 @@ function SentOut({ branchId, zone }: { branchId?: string; zone?: string }) {
   const mine = (list.data?.pages[0]?.items ?? []).filter((i) => i.created_by === viewer.me.user.id).slice(0, 5);
   const details = useIssuesById(mine.map((i) => i.id));
   return (
-    <Panel title="Work you sent out" action={<Link to="/items" className="text-[14px] text-primary hover:underline">All items</Link>}>
+    <Panel title={t("Work you sent out")} action={<Link to="/items" className="text-[14px] text-primary hover:underline">{t("All items")}</Link>}>
       {list.isLoading ? (
         <div className="p-2">
           <Skeleton className="h-32" />
         </div>
       ) : mine.length === 0 ? (
-        <EmptyState title="Nothing you sent is still open." />
+        <EmptyState title={t("Nothing you sent is still open.")} />
       ) : (
         <ul>
           {mine.map((s) => (
@@ -255,11 +256,11 @@ function SentRow({ issue, fallbackTitle, type, n, zone }: { issue?: IssueDetail;
   const p = progressOf(work);
   const due = work.filter((w) => !isDone(w)).map((w) => w.sla_due_at).filter(Boolean).sort()[0];
   const meta = issue?.event
-    ? `${formatDay(issue.event.starts_at, zone)} · ${formatTime(issue.event.starts_at, zone)} · ${issue.event.rsvp_counts.going} going`
+    ? `${formatDay(issue.event.starts_at, zone)} · ${formatTime(issue.event.starts_at, zone)} · ${t("{n} going", { n: issue.event.rsvp_counts.going })}`
     : work.length
-      ? `${p.approved} of ${work.length} approved${p.waiting ? ` · ${p.waiting} to review` : ""}${due ? ` · due ${formatDay(due, zone)}` : ""}`
+      ? `${t("{done} of {total} approved", { done: p.approved, total: work.length })}${p.waiting ? ` · ${t("{n} to review", { n: p.waiting })}` : ""}${due ? ` · ${t("due {date}", { date: formatDay(due, zone) })}` : ""}`
       : type === "ticket"
-        ? "Waiting for an answer"
+        ? t("Waiting for an answer")
         : undefined;
   return (
     <RowLink
@@ -279,7 +280,7 @@ function ComingUp() {
   if (!events.length) return null;
   const zone = zoneOf(branchId);
   return (
-    <Panel title="Coming up" action={<Link to="/calendar" className="text-[14px] text-primary hover:underline">Calendar</Link>}>
+    <Panel title={t("Coming up")} action={<Link to="/calendar" className="text-[14px] text-primary hover:underline">{t("Calendar")}</Link>}>
       <ul>
         {events.map((e) => {
           const d = inZone(e.starts_at, zone);
@@ -289,17 +290,17 @@ function ComingUp() {
                 link={{ to: "/items/$number", params: { number: numberOf(e.key) } }}
                 leading={
                   <span className="flex w-11 shrink-0 flex-col items-center rounded-[12px] bg-[var(--event-soft)] py-1 text-[var(--event)]">
-                    <span className="text-[11px] font-semibold uppercase">{d.toLocaleDateString("en-GB", { weekday: "short" })}</span>
-                    <span className="text-[17px] leading-5 font-bold tabular">{d.getDate()}</span>
+                    <span className="max-w-full truncate px-0.5 text-[11px] font-semibold uppercase">{weekdayShort(d)}</span>
+                    <span className="text-[17px] leading-5 font-bold tabular">{dayNumber(d)}</span>
                   </span>
                 }
                 title={e.title}
                 meta={formatTime(e.starts_at, zone)}
                 trailing={
                   e.my_rsvp === "pending" ? (
-                    <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">Reply</span>
+                    <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">{t("Reply")}</span>
                   ) : e.my_rsvp === "going" ? (
-                    <span className="rounded-full bg-success-soft px-2.5 py-0.5 text-[13px] font-semibold text-success">Going</span>
+                    <span className="rounded-full bg-success-soft px-2.5 py-0.5 text-[13px] font-semibold text-success">{t("Going")}</span>
                   ) : undefined
                 }
               />
@@ -311,18 +312,18 @@ function ComingUp() {
   );
 }
 
-function HappeningNow({ title = "Happening now" }: { title?: string }) {
+function HappeningNow({ title = t("Happening now") }: { title?: string }) {
   const list = useNotifications(false, 5);
   const people = usePeople();
   const items = list.data?.pages[0]?.items ?? [];
   return (
-    <Panel title={title} action={<Link to="/inbox" className="text-[14px] text-primary hover:underline">Inbox</Link>}>
+    <Panel title={title} action={<Link to="/inbox" className="text-[14px] text-primary hover:underline">{t("Inbox")}</Link>}>
       {list.isLoading ? (
         <div className="p-2">
           <Skeleton className="h-28" />
         </div>
       ) : items.length === 0 ? (
-        <EmptyState title="No updates yet." />
+        <EmptyState title={t("No updates yet.")} />
       ) : (
         <ul>
           {items.map((n) => {
@@ -366,21 +367,21 @@ function StaffHome() {
       <div className="space-y-5">
         <Greeting subtitle={branch?.name} />
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-          <StatPill value={todo.length} label="to do" tone={todo.length ? "primary" : "neutral"} link={{ to: "/my-work" }} />
-          {overdue > 0 && <StatPill value={overdue} label="overdue" tone="danger" link={{ to: "/my-work" }} />}
-          {replies.length > 0 && <StatPill value={replies.length} label="to reply" tone="warning" link={{ to: "/calendar" }} />}
-          {tickets != null && tickets > 0 && <StatPill value={tickets} label="open questions" link={{ to: "/items", search: { type: "ticket" } }} />}
+          <StatPill value={todo.length} label={t("to do")} tone={todo.length ? "primary" : "neutral"} link={{ to: "/my-work" }} />
+          {overdue > 0 && <StatPill value={overdue} label={t("overdue")} tone="danger" link={{ to: "/my-work" }} />}
+          {replies.length > 0 && <StatPill value={replies.length} label={t("to reply")} tone="warning" link={{ to: "/calendar" }} />}
+          {tickets != null && tickets > 0 && <StatPill value={tickets} label={t("open questions")} link={{ to: "/items", search: { type: "ticket" } }} />}
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <Panel title="To do" action={todo.length > 8 ? <Link to="/my-work" className="text-[14px] text-primary hover:underline">See all {todo.length}</Link> : undefined}>
+        <Panel title={t("To do")} action={todo.length > 8 ? <Link to="/my-work" className="text-[14px] text-primary hover:underline">{t("See all {n}", { n: todo.length })}</Link> : undefined}>
           {myWork.isLoading ? (
             <div className="p-2">
               <Skeleton className="h-40" />
             </div>
           ) : todo.length === 0 ? (
-            <EmptyState title="You're all caught up.">Nothing is waiting for you.</EmptyState>
+            <EmptyState title={t("You're all caught up.")}>{t("Nothing is waiting for you.")}</EmptyState>
           ) : (
             <ul>
               {todo.slice(0, 8).map((w) => (
@@ -392,16 +393,15 @@ function StaffHome() {
 
         <div className="space-y-6">
           {replies.length > 0 && (
-            <Panel title="Reply needed">
+            <Panel title={t("Reply needed")}>
               <ul className="space-y-1">
                 {replies.map((e) => {
-                  const d = inZone(e.starts_at, zoneOf(branchId));
                   return (
                     <li key={e.issue_id} className="rounded-[14px] px-3 py-3">
                       <Link to="/items/$number" params={{ number: numberOf(e.key) }} className="block hover:underline">
                         <span className="font-medium">{e.title}</span>
                         <span className="block text-[14px] text-text-2">
-                          {d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · {formatTime(e.starts_at, zoneOf(branchId))}
+                          {formatDay(e.starts_at, zoneOf(branchId))} · {formatTime(e.starts_at, zoneOf(branchId))}
                         </span>
                       </Link>
                       <div className="mt-2">
@@ -413,7 +413,7 @@ function StaffHome() {
               </ul>
             </Panel>
           )}
-          <HappeningNow title="For you" />
+          <HappeningNow title={t("For you")} />
         </div>
       </div>
     </div>
@@ -437,16 +437,16 @@ function TodoRow({ work, issue, zone }: { work: WorkItem; issue?: IssueDetail; z
         meta={
           sentBack ? (
             <span className="inline-flex items-center gap-1 text-sent-back">
-              <Undo2 className="size-3.5" /> Sent back: {work.decision_note}
+              <Undo2 className="size-3.5" /> {t("Sent back: {note}", { note: work.decision_note })}
             </span>
           ) : issue ? (
-            `From ${people.short(issue.created_by)}`
+            t("From {name}", { name: people.short(issue.created_by) })
           ) : undefined
         }
         trailing={
           work.sla_due_at && (
             <span className={cx("hidden text-[14px] whitespace-nowrap sm:block", late ? "font-semibold text-danger" : soon ? "font-semibold text-warning" : "text-text-2")}>
-              {late ? lateBy(work.sla_due_at) : soon ? "Due tomorrow" : formatDay(work.sla_due_at, zone)}
+              {late ? lateBy(work.sla_due_at) : soon ? t("Due tomorrow") : formatDay(work.sla_due_at, zone)}
             </span>
           )
         }

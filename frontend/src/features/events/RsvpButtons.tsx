@@ -5,6 +5,7 @@ import { useRsvp } from "@/api/hooks";
 import type { RsvpResponse } from "@/api/types";
 import { cx } from "@/components/ui";
 import { errorMessage, rsvpLabel } from "@/lib/labels";
+import { t } from "@/i18n";
 
 const CHOICES: RsvpResponse[] = ["going", "maybe", "declined"];
 
@@ -24,7 +25,7 @@ export function RsvpButtons({
   const rsvp = useRsvp(issueId);
   const chosen = rsvp.isPending ? rsvp.variables?.response : current;
   return (
-    <div role="radiogroup" aria-label="Are you coming?" className="grid grid-cols-3 gap-3">
+    <div role="radiogroup" aria-label={t("Are you coming?")} className="grid grid-cols-3 gap-3">
       {CHOICES.map((r) => {
         const on = chosen === r;
         return (
@@ -37,7 +38,7 @@ export function RsvpButtons({
               rsvp.mutate(
                 { response: r, note: note || undefined },
                 {
-                  onSuccess: () => toast.success(r === "going" ? "You're going" : r === "maybe" ? "Marked as maybe" : "Marked as can't go"),
+                  onSuccess: () => toast.success(r === "going" ? t("You're going") : r === "maybe" ? t("Marked as maybe") : t("Marked as can't go")),
                   onError: (e) => toast.error(errorMessage(e)),
                 },
               )

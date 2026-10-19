@@ -7,8 +7,11 @@ import { ApiError, onApiError } from "@/api/client";
 import { keys } from "@/api/keys";
 import { makeRouter } from "@/app/router";
 import { applyTheme, watchSystemTheme } from "@/app/theme";
+import { applyLang, isRtl } from "@/i18n";
+import "@fontsource-variable/vazirmatn";
 import "@/styles/globals.css";
 
+applyLang();
 applyTheme();
 watchSystemTheme();
 
@@ -43,7 +46,8 @@ createRoot(document.getElementById("root")!).render(
       {/* Radix dialogs and menus switch off pointer events outside themselves;
           toasts must stay clickable (close, Undo) while one is open. */}
       <Toaster
-        position="bottom-right"
+        position={isRtl ? "bottom-left" : "bottom-right"}
+        dir={isRtl ? "rtl" : "ltr"}
         closeButton
         style={{ pointerEvents: "auto" }}
         toastOptions={{ duration: 6000, style: { pointerEvents: "auto" } }}

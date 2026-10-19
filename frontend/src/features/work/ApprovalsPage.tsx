@@ -16,6 +16,7 @@ import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { useApproveWithUndo } from "./approve";
 import { RowLink } from "@/components/rows";
+import { t, tn } from "@/i18n";
 
 export function ApprovalsPage() {
   const viewer = useViewer();
@@ -47,19 +48,19 @@ export function ApprovalsPage() {
   const approveNow = (items: WorkItem[]) => {
     setHidden((h) => new Set([...h, ...items.map((w) => w.id)]));
     setSelected(new Set());
-    approve(items, undefined, items.length === 1 ? `Approved ${people.short(items[0].assignee_id)}'s work` : `Approved ${items.length} pieces of work`);
+    approve(items, undefined, items.length === 1 ? t("Approved {name}'s work", { name: people.short(items[0].assignee_id) }) : t("Approved {n} pieces of work", { n: items.length }));
     setTimeout(() => setHidden(new Set()), 7000);
   };
 
   return (
     <div className="mx-auto max-w-[1100px]">
       <PageHeader
-        title={`Waiting for your approval${mine.length ? ` (${mine.length})` : ""}`}
-        subtitle={branch?.name ?? (isAll ? "All branches" : undefined)}
+        title={mine.length ? t("Waiting for your approval ({n})", { n: mine.length }) : t("Waiting for your approval")}
+        subtitle={branch?.name ?? (isAll ? t("All branches") : undefined)}
         actions={
           chosen.length > 0 && (
             <Button variant="success" size="lg" onClick={() => setConfirm(true)}>
-              Approve selected ({chosen.length})
+              {t("Approve selected ({n})", { n: chosen.length })}
             </Button>
           )
         }
@@ -72,7 +73,7 @@ export function ApprovalsPage() {
         <ErrorPanel error={waiting.error} onRetry={() => waiting.refetch()} />
       ) : groups.size === 0 ? (
         <Card>
-          <EmptyState title="No work is waiting for your approval." />
+          <EmptyState title={t("No work is waiting for your approval.")} />
         </Card>
       ) : (
         <div className="space-y-5">
@@ -86,15 +87,15 @@ export function ApprovalsPage() {
                   <Link to="/items/$number" params={{ number: n }} className="font-semibold hover:underline">
                     {issue.title}
                   </Link>
-                  <span className="text-text-2">· {items.length} waiting</span>
-                  {issue.branch_id === null && <span className="rounded-full bg-primary-soft px-2 text-[13px] font-semibold text-primary-on-soft">School-wide</span>}
+                  <span className="text-text-2">· {t("{n} waiting", { n: items.length })}</span>
+                  {issue.branch_id === null && <span className="rounded-full bg-primary-soft px-2 text-[13px] font-semibold text-primary-on-soft">{t("School-wide")}</span>}
                 </div>
                 <ul className="divide-y divide-border">
                   {items.map((w) => {
                     const p = people.get(w.assignee_id);
                     return (
                       <li key={w.id} className="flex items-center gap-2 px-2">
-                        <input type="checkbox" className="ml-2 size-5 shrink-0" checked={selected.has(w.id)} onChange={() => toggle(w.id)} aria-label={`Select ${people.name(w.assignee_id)}`} />
+                        <input type="checkbox" className="ms-2 size-5 shrink-0" checked={selected.has(w.id)} onChange={() => toggle(w.id)} aria-label={t("Select {name}", { name: people.name(w.assignee_id) })} />
                         <RowLink
                           className="w-auto min-w-0 flex-1"
                           link={{ to: "/items/$number", params: { number: n }, search: { review: w.id } }}
@@ -102,13 +103,13 @@ export function ApprovalsPage() {
                           title={
                             <>
                               {people.name(w.assignee_id)}
-                              {isAll && <span className="ml-2 text-[13px] font-normal text-text-3">{branchById.get(w.branch_id)?.code}</span>}
+                              {isAll && <span className="ms-2 text-[13px] font-normal text-text-3">{branchById.get(w.branch_id)?.code}</span>}
                             </>
                           }
-                          meta={`${issue.type === "report" ? "Handed in" : "Sent"} ${w.submitted_at ? timeAgo(w.submitted_at) : ""}${w.decided_at ? " · handed in again" : ""}`}
+                          meta={`${issue.type === "report" ? t("Handed in {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" }) : t("Sent {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" })}${w.decided_at ? ` · ${t("handed in again")}` : ""}`}
                         />
                         <Button size="sm" variant="success" onClick={() => approveNow([w])}>
-                          Approve
+                          {t("Approve")}
                         </Button>
                       </li>
                     );
@@ -122,18 +123,18 @@ export function ApprovalsPage() {
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Approve ${chosen.length} piece${chosen.length === 1 ? "" : "s"} of work?`}
-        description={chosen.map((w) => people.name(w.assignee_id)).join(", ")}
+        title={tn(chosen.length, "Approve {n} piece of work?", "Approve {n} pieces of work?")}
+        description={chosen.map((w) => people.name(w.assignee_id)).join(t(", "))}
         footer={
           <>
-            <Button onClick={() => setConfirm(false)}>Cancel</Button>
+            <Button onClick={() => setConfirm(false)}>{t("Cancel")}</Button>
             <Button variant="success" onClick={() => (approveNow(chosen), setConfirm(false))}>
-              Approve {chosen.length}
+              {t("Approve {n}", { n: chosen.length })}
             </Button>
           </>
         }
       >
-        <p className="text-text-2">Each person is told straight away. There's no bulk send back: each needs its own note.</p>
+        <p className="text-text-2">{t("Each person is told straight away. There's no bulk send back: each needs its own note.")}</p>
       </Dialog>
     </div>
   );

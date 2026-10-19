@@ -6,13 +6,14 @@ import { upload } from "@/api/client";
 import type { AttachmentMeta } from "@/api/types";
 import { errorMessage } from "@/lib/labels";
 import { cx } from "./ui";
+import { num, t, tn } from "@/i18n";
 
 export const MAX_FILE = 25 * 1024 * 1024;
 
 export function fileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024) return `${num(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${num(Math.round(bytes / 1024))} KB`;
+  return `${num((bytes / 1024 / 1024).toFixed(1))} MB`;
 }
 
 export function FileChip({ file, wide }: { file: AttachmentMeta; wide?: boolean }) {
@@ -69,19 +70,19 @@ const TYPE_BY_EXT: Record<string, string> = {
 };
 const ALLOWED = new Set(Object.values(TYPE_BY_EXT));
 export const ACCEPT = Object.keys(TYPE_BY_EXT).map((e) => `.${e}`).join(",");
-export const ACCEPTED_HINT = "PDF, images (PNG, JPG, GIF, WebP), Word, Excel, PowerPoint, OpenDocument, CSV or text, up to 25 MB.";
+export const ACCEPTED_HINT = t("PDF, images (PNG, JPG, GIF, WebP), Word, Excel, PowerPoint, OpenDocument, CSV or text, up to 25 MB.");
 
 /** The file ready to send, or why it can't be attached. */
 export function checkFile(f: File): { file: File } | { reason: string } {
-  if (f.size === 0) return { reason: `${f.name} is empty.` };
-  if (f.size > MAX_FILE) return { reason: `${f.name} is too big. The limit is 25 MB.` };
+  if (f.size === 0) return { reason: t("{name} is empty.", { name: f.name }) };
+  if (f.size > MAX_FILE) return { reason: t("{name} is too big. The limit is 25 MB.", { name: f.name }) };
   const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
   const type = f.type.toLowerCase();
   if (ALLOWED.has(type)) return { file: f };
   const mapped = TYPE_BY_EXT[ext];
   if (mapped) return { file: new File([f], f.name, { type: mapped, lastModified: f.lastModified }) };
-  const what = ext === "heic" || ext === "heif" ? "iPhone HEIC photos" : ext ? `.${ext} files` : "Files of this kind";
-  return { reason: `${f.name}: ${what} can't be attached. Use ${ACCEPTED_HINT}` };
+  const what = ext === "heic" || ext === "heif" ? t("iPhone HEIC photos") : ext ? t(".{ext} files", { ext }) : t("Files of this kind");
+  return { reason: t("{name}: {what} can't be attached. Use {hint}", { name: f.name, what, hint: ACCEPTED_HINT }) };
 }
 
 /** Picks files and keeps them until `uploadAll` is called with the parent. */
@@ -128,20 +129,20 @@ export async function uploadAll(
 /** A toast that stays until dismissed, listing files that didn't upload. */
 export function reportFailedUploads(failed: { name: string; reason: string }[], context: string) {
   if (!failed.length) return;
-  toast.error(`${context} ${failed.length === 1 ? "1 file didn't" : `${failed.length} files didn't`} upload`, {
+  toast.error(tn(failed.length, "{context} 1 file didn't upload", "{context} {n} files didn't upload", { context }).trim(), {
     description: failed.map((f) => f.reason).join(" · "),
     duration: Infinity,
   });
 }
 
-export function AttachButton({ onPick, label = "Attach files", dashed = true }: { onPick: (files: FileList | null) => void; label?: string; dashed?: boolean }) {
+export function AttachButton({ onPick, label = t("Attach files"), dashed = true }: { onPick: (files: FileList | null) => void; label?: string; dashed?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
       <input ref={ref} type="file" multiple accept={ACCEPT} className="sr-only" tabIndex={-1} onChange={(e) => (onPick(e.target.files), (e.target.value = ""))} />
       <button
         type="button"
-        title={`You can attach ${ACCEPTED_HINT}`}
+        title={t("You can attach {hint}", { hint: ACCEPTED_HINT })}
         onClick={() => ref.current?.click()}
         className={cx(
           "inline-flex h-10 items-center gap-2 rounded-[10px] px-3 text-text-2 hover:bg-surface-2",
@@ -163,7 +164,7 @@ export function PendingFiles({ files, onRemove }: { files: File[]; onRemove: (i:
         <li key={`${f.name}-${i}`} className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-surface-2 px-3 py-1.5 text-[14px]">
           <Paperclip className="size-3.5" aria-hidden /> {f.name}
           <span className="text-text-3">{fileSize(f.size)}</span>
-          <button type="button" onClick={() => onRemove(i)} className="text-text-3 hover:text-danger" aria-label={`Remove ${f.name}`}>
+          <button type="button" onClick={() => onRemove(i)} className="text-text-3 hover:text-danger" aria-label={t("Remove {name}", { name: f.name })}>
             ×
           </button>
         </li>
@@ -177,7 +178,7 @@ export function UploadNow({ issueId, parent, onDone, label }: { issueId: string;
   const [busy, setBusy] = useState(false);
   return (
     <AttachButton
-      label={busy ? "Uploading…" : label ?? "+ Attach a file"}
+      label={busy ? t("Uploading…") : label ?? t("+ Attach a file")}
       onPick={async (list) => {
         const files: File[] = [];
         for (const f of Array.from(list ?? [])) {
@@ -190,7 +191,7 @@ export function UploadNow({ issueId, parent, onDone, label }: { issueId: string;
         const failed = await uploadAll(issueId, files, parent);
         setBusy(false);
         const done = files.length - failed.length;
-        if (done) toast.success(done === 1 ? "File attached" : `${done} files attached`);
+        if (done) toast.success(tn(done, "File attached", "{n} files attached"));
         reportFailedUploads(failed, "");
         onDone();
       }}

@@ -2,6 +2,7 @@
 import { lazy, Suspense, useCallback, useState, type ReactNode } from "react";
 import { Drawer } from "@/components/ui";
 import { NewItemContext, type NewItemOptions } from "./newItemContext";
+import { t } from "@/i18n";
 
 const NewItemModal = lazy(() => import("@/features/create/NewItemModal").then((m) => ({ default: m.NewItemModal })));
 
@@ -11,7 +12,7 @@ export function NewItemProvider({ children }: { children: ReactNode }) {
   return (
     <NewItemContext.Provider value={open}>
       {children}
-      <Drawer open={!!opts} onOpenChange={(o) => !o && setOpts(null)} label="New item" size="xl">
+      <Drawer open={!!opts} onOpenChange={(o) => !o && setOpts(null)} label={t("New item")} size="xl">
         {opts && (
           <Suspense fallback={<div className="h-64" />}>
             <NewItemModal initial={opts} onClose={() => setOpts(null)} />

@@ -6,6 +6,7 @@ import type { Group } from "@/api/types";
 import type { Person } from "@/people/usePeople";
 import { Avatar } from "./badges";
 import { cx, inputClass } from "./ui";
+import { localeTag, quote, t } from "@/i18n";
 
 export type Recipient =
   | { kind: "user"; id: string; branchId: string; label: string }
@@ -21,10 +22,10 @@ export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => 
       <Icon className="size-4 text-text-2" aria-hidden />
       <b>{r.label}</b>
       <span className="text-text-3">
-        {r.kind === "group" ? `group · ${r.count}` : r.kind === "branch" ? "whole branch" : ""}
+        {r.kind === "group" ? t("group · {n}", { n: r.count }) : r.kind === "branch" ? t("whole branch") : ""}
       </span>
       {onRemove && (
-        <button type="button" onClick={onRemove} aria-label={`Remove ${r.label}`} className="ml-1 text-text-3 hover:text-danger">
+        <button type="button" onClick={onRemove} aria-label={t("Remove {name}", { name: r.label })} className="ms-1 text-text-3 hover:text-danger">
           <X className="size-4" />
         </button>
       )}
@@ -40,7 +41,7 @@ export function RecipientPicker({
   groups,
   branches,
   branchId,
-  placeholder = "Add a person or group",
+  placeholder = t("Add a person or group"),
 }: {
   value: Recipient[];
   onChange: (v: Recipient[]) => void;
@@ -61,7 +62,7 @@ export function RecipientPicker({
     if (branchId) {
       for (const g of groups)
         if (!g.archived_at && match(g.name))
-          out.push({ kind: "group", id: g.id, branchId, label: g.is_default ? "All members" : g.name, count: g.member_count });
+          out.push({ kind: "group", id: g.id, branchId, label: g.is_default ? t("All members") : g.name, count: g.member_count });
       for (const p of people)
         if (p.is_active && match(`${p.first_name} ${p.last_name} ${p.email}`))
           out.push({ kind: "user", id: p.id, branchId, label: `${p.first_name} ${p.last_name}` });
@@ -108,13 +109,13 @@ export function RecipientPicker({
           className="z-[80] max-h-[320px] w-[var(--radix-popover-trigger-width)] min-w-[280px] overflow-y-auto rounded-[12px] border border-border bg-surface p-1 shadow-2"
         >
           {options.length === 0 ? (
-            <p className="px-3 py-3 text-text-2">No one matches.</p>
+            <p className="px-3 py-3 text-text-2">{t("No one matches.")}</p>
           ) : (
             options.map((o) => (
               <button
                 key={recipientKey(o)}
                 type="button"
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-sunken"
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-start hover:bg-sunken"
                 onClick={() => {
                   onChange([...value, o]);
                   setQ("");
@@ -128,7 +129,7 @@ export function RecipientPicker({
                   <Building2 className="size-5 text-text-2" />
                 )}
                 <span className="flex-1">{o.label}</span>
-                <span className="text-[13px] text-text-3">{o.kind === "group" ? `${o.count} people` : o.kind === "branch" ? "Whole branch" : "Person"}</span>
+                <span className="text-[13px] text-text-3">{o.kind === "group" ? t("{n} people", { n: o.count }) : o.kind === "branch" ? t("Whole branch") : t("Person")}</span>
               </button>
             ))
           )}
@@ -143,7 +144,7 @@ export function PersonSelect({
   people,
   value,
   onChange,
-  placeholder = "Search people…",
+  placeholder = t("Search people…"),
   exclude = [],
 }: {
   people: Person[];
@@ -157,22 +158,22 @@ export function PersonSelect({
   const list = people
     .filter((p) => p.is_active && !exclude.includes(p.id))
     .filter((p) => !term || `${p.first_name} ${p.last_name} ${p.email}`.toLowerCase().includes(term))
-    .sort((a, b) => a.first_name.localeCompare(b.first_name))
+    .sort((a, b) => a.first_name.localeCompare(b.first_name, localeTag))
     .slice(0, 50);
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-3" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} className={cx(inputClass, "pl-9")} />
+        <Search className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-text-3" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} className={cx(inputClass, "ps-9")} />
       </div>
       <ul className="max-h-[280px] overflow-y-auto rounded-[10px] border border-border" role="listbox">
-        {list.length === 0 && <li className="px-3 py-3 text-text-2">No one matches “{q}”.</li>}
+        {list.length === 0 && <li className="px-3 py-3 text-text-2">{t("No one matches {q}.", { q: quote(q) })}</li>}
         {list.map((p) => (
           <li key={p.id} role="option" aria-selected={value === p.id}>
             <button
               type="button"
               onClick={() => onChange(p.id)}
-              className={cx("flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-sunken", value === p.id && "bg-primary-soft")}
+              className={cx("flex w-full items-center gap-3 px-3 py-2 text-start hover:bg-sunken", value === p.id && "bg-primary-soft")}
             >
               <Avatar first={p.first_name} last={p.last_name} id={p.id} size={28} />
               <span className="min-w-0 flex-1">

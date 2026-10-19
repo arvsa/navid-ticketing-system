@@ -11,19 +11,20 @@ import { keys } from "@/api/keys";
 import type { CatalogEntry, Group, GroupGrant, IssueType, Permission, Scope } from "@/api/types";
 import { Button, Dialog, LoadingRows, Segmented, Switch, cx, inputClass } from "@/components/ui";
 import { permissionInfo, permissionSections, reachLabel, typeLabel } from "@/lib/labels";
+import { quote, t, tn, tx } from "@/i18n";
 
 type Kinds = "all" | IssueType[];
 type Row = { on: boolean; scope: Scope; kinds: Kinds; custom?: boolean };
 type State = Record<string, Row>;
 
 const KIND_OPTIONS: { value: string; label: string; kinds: Kinds }[] = [
-  { value: "all", label: "All kinds", kinds: "all" },
-  { value: "ticket", label: "Tickets only", kinds: ["ticket"] },
-  { value: "action", label: "Actions only", kinds: ["action"] },
-  { value: "report", label: "Reports only", kinds: ["report"] },
-  { value: "event", label: "Events only", kinds: ["event"] },
-  { value: "action,report", label: "Actions and Reports", kinds: ["action", "report"] },
-  { value: "ticket,event", label: "Tickets and Events", kinds: ["ticket", "event"] },
+  { value: "all", label: t("All kinds"), kinds: "all" },
+  { value: "ticket", label: t("Tickets only"), kinds: ["ticket"] },
+  { value: "action", label: t("Actions only"), kinds: ["action"] },
+  { value: "report", label: t("Reports only"), kinds: ["report"] },
+  { value: "event", label: t("Events only"), kinds: ["event"] },
+  { value: "action,report", label: t("Actions and Reports"), kinds: ["action", "report"] },
+  { value: "ticket,event", label: t("Tickets and Events"), kinds: ["ticket", "event"] },
 ];
 const kindsValue = (k: Kinds) => (k === "all" ? "all" : [...k].sort().join(","));
 
@@ -101,8 +102,8 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
     setConfirm(false);
     await qc.invalidateQueries({ queryKey: keys.groupGrants(group.id) });
     qc.invalidateQueries({ queryKey: ["effective-permissions"] });
-    if (failed.length) toast.error(`Some changes didn't save: ${[...new Set(failed)].join(", ")}. Try again.`);
-    else toast.success(`Saved. ${group.member_count} ${group.member_count === 1 ? "person" : "people"} affected.`);
+    if (failed.length) toast.error(t("Some changes didn't save: {list}. Try again.", { list: [...new Set(failed)].join(t(", ")) }));
+    else toast.success(tn(group.member_count, "Saved. {n} person affected.", "Saved. {n} people affected."));
   };
 
   const gained = changed.filter((k) => state[k].on).map((k) => describe(k as Permission, state[k]));
@@ -120,29 +121,25 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden />
         <p>
           {group.is_default ? (
-            <>
-              These are the everyday permissions everyone in {branchName} gets. Changes affect all {group.member_count} people.
-            </>
+            t("These are the everyday permissions everyone in {branch} gets. Changes affect all {n} people.", { branch: branchName, n: group.member_count })
           ) : (
-            <>
-              These add to what <b className="text-text">All members</b> can already do. Changes apply on members' next click, are kept in the history, and other admins are told.
-            </>
+            tx("These add to what {all} can already do. Changes apply on members' next click, are kept in the history, and other admins are told.", { all: <b className="text-text">{t("All members")}</b> })
           )}
         </p>
       </div>
 
       <div className="relative mx-6 mt-5">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-text-3" aria-hidden />
+        <Search className="pointer-events-none absolute top-1/2 start-3.5 size-4 -translate-y-1/2 text-text-3" aria-hidden />
         <input
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search permissions, e.g. approve, export, private"
-          aria-label="Search permissions"
-          className={cx(inputClass, "h-11 rounded-full pl-10")}
+          placeholder={t("Search permissions, e.g. approve, export, private")}
+          aria-label={t("Search permissions")}
+          className={cx(inputClass, "h-11 rounded-full ps-10")}
         />
       </div>
-      {term && !matching.length && <p className="px-6 pt-6 text-text-2">No permissions match “{q}”.</p>}
+      {term && !matching.length && <p className="px-6 pt-6 text-text-2">{t("No permissions match {q}.", { q: quote(q) })}</p>}
 
       {permissionSections.map((sec) => {
         const rows = matching.filter((c) => (permissionInfo[c.key]?.section ?? "people") === sec.key);
@@ -163,15 +160,15 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[17px] font-semibold">{info.title}</span>
-                          {isChanged && <span className="rounded-md bg-warning-soft px-2 text-[13px] font-semibold text-warning">Changed</span>}
+                          {isChanged && <span className="rounded-md bg-warning-soft px-2 text-[13px] font-semibold text-warning">{t("Changed")}</span>}
                         </div>
                         <div className="text-text-2">{info.help || c.description}</div>
-                        {row.custom && <div className="mt-1 text-[13px] text-warning">Custom setup. Changing it here replaces it with the choice shown.</div>}
+                        {row.custom && <div className="mt-1 text-[13px] text-warning">{t("Custom setup. Changing it here replaces it with the choice shown.")}</div>}
                       </div>
                       {row.on && (
                         <div className="flex flex-wrap items-center gap-2">
                           {scopes.length > 1 ? (
-                            <Segmented<Scope> size="sm" label={`Reach for ${info.title}`} value={row.scope} onChange={(scope) => set(c.key, { scope })} options={scopes.map((sc) => ({ value: sc, label: reachLabel(c.key, sc) }))} />
+                            <Segmented<Scope> size="sm" label={t("Reach for {name}", { name: info.title })} value={row.scope} onChange={(scope) => set(c.key, { scope })} options={scopes.map((sc) => ({ value: sc, label: reachLabel(c.key, sc) }))} />
                           ) : (
                             <span className="rounded-full bg-sunken px-3 py-1 text-[14px] text-text-2">{reachLabel(c.key, scopes[0])}</span>
                           )}
@@ -180,9 +177,9 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
                               value={kindsValue(row.kinds)}
                               onChange={(e) => set(c.key, { kinds: KIND_OPTIONS.find((o) => o.value === e.target.value)?.kinds ?? "all" })}
                               className={cx("h-8 rounded-full border border-input bg-surface px-3 text-[14px]", isChanged && "border-warning-edge")}
-                              aria-label={`Kinds for ${info.title}`}
+                              aria-label={t("Kinds for {name}", { name: info.title })}
                             >
-                              {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(", ")}</option>}
+                              {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(t(", "))}</option>}
                               {KIND_OPTIONS.map((o) => (
                                 <option key={o.value} value={o.value}>
                                   {o.label}
@@ -203,27 +200,27 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
 
       <div className="mx-6 mt-6 rounded-[12px] border border-dashed border-border-strong px-5 py-4">
         <p className="flex items-center gap-2 font-semibold">
-          <Lock className="size-4" /> Stays with admins — can't be given to a group
+          <Lock className="size-4" />{" "}{t("Stays with admins — can't be given to a group")}
         </p>
         <p className="mt-1 text-text-2">
-          Creating groups and choosing their permissions · adding people to groups · cancelling one person's assignment · appointing admins · approving work a super admin sent out · exporting several branches
+          {t("Creating groups and choosing their permissions · adding people to groups · cancelling one person's assignment · appointing admins · approving work a super admin sent out · exporting several branches")}
         </p>
       </div>
 
       {changed.length > 0 && (
         <div className="sticky bottom-0 mt-6 flex flex-wrap items-center gap-3 border-t border-border bg-surface-2 px-6 py-4 max-md:bottom-[72px]">
           <span>
-            <b className="text-warning">
-              {changed.length} change{changed.length === 1 ? "" : "s"}
-            </b>{" "}
-            not saved yet · {group.member_count} {group.member_count === 1 ? "person" : "people"} affected
+            {tx("{changes} not saved yet · {affected}", {
+              changes: <b className="text-warning">{tn(changed.length, "{n} change", "{n} changes")}</b>,
+              affected: tn(group.member_count, "{n} person affected", "{n} people affected"),
+            })}
           </span>
-          <div className="ml-auto flex gap-2">
+          <div className="ms-auto flex gap-2">
             <Button size="lg" onClick={() => setState(base)}>
-              Discard
+              {t("Discard")}
             </Button>
             <Button size="lg" variant="primary" onClick={() => setConfirm(true)}>
-              Save changes
+              {t("Save changes")}
             </Button>
           </div>
         </div>
@@ -231,12 +228,12 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Save changes to ${group.is_default ? "All members" : group.name}?`}
+        title={t("Save changes to {name}?", { name: group.is_default ? t("All members") : group.name })}
         footer={
           <>
-            <Button onClick={() => setConfirm(false)}>Keep editing</Button>
+            <Button onClick={() => setConfirm(false)}>{t("Keep editing")}</Button>
             <Button variant="primary" loading={saving} onClick={save}>
-              Save changes
+              {t("Save changes")}
             </Button>
           </>
         }
@@ -244,15 +241,15 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
         <div className="space-y-3">
           {gained.length > 0 && (
             <p>
-              <b>Will be able to:</b> {gained.join("; ")}.
+              <b>{t("Will be able to:")}</b> {gained.join(t("; "))}{t(".")}
             </p>
           )}
           {lost.length > 0 && (
             <p>
-              <b>Will no longer be able to:</b> {lost.join("; ")}.
+              <b>{t("Will no longer be able to:")}</b> {lost.join(t("; "))}{t(".")}
             </p>
           )}
-          <p className="text-text-2">It applies right away to {group.member_count} {group.member_count === 1 ? "person" : "people"}.</p>
+          <p className="text-text-2">{tn(group.member_count, "It applies right away to {n} person.", "It applies right away to {n} people.")}</p>
         </div>
       </Dialog>
     </div>
@@ -260,25 +257,25 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
 }
 
 function describe(key: Permission, row: Row) {
-  const t = permissionInfo[key]?.title.toLowerCase() ?? key;
-  const kinds = row.kinds === "all" ? "" : ` (${row.kinds.map((k) => typeLabel[k]).join(", ")})`;
-  return `${t}${kinds} — ${reachLabel(key, row.scope).toLowerCase()}`;
+  const title = permissionInfo[key]?.title.toLowerCase() ?? key;
+  const kinds = row.kinds === "all" ? "" : ` (${row.kinds.map((k) => typeLabel[k]).join(t(", "))})`;
+  return `${title}${kinds} — ${reachLabel(key, row.scope).toLowerCase()}`;
 }
 
 /** One-line summary for the group list ("Can approve and manage members"). */
 export function summarizeGrants(grants: GroupGrant[] | undefined) {
   if (!grants) return "";
-  if (!grants.length) return "No extra permissions";
+  if (!grants.length) return t("No extra permissions");
   const words: Record<string, string> = {
-    "work_item.approve": "approve",
-    "member.manage": "manage members",
-    "issue.read_private": "see private items",
-    "issue.close": "close items",
-    "export.run": "export",
-    "work_item.assign": "assign work",
-    "issue.target": "give tasks",
-    "dashboard.branch": "see branch numbers",
+    "work_item.approve": t("approve"),
+    "member.manage": t("manage members"),
+    "issue.read_private": t("see private items"),
+    "issue.close": t("close items"),
+    "export.run": t("export"),
+    "work_item.assign": t("assign work"),
+    "issue.target": t("give tasks"),
+    "dashboard.branch": t("see branch numbers"),
   };
   const parts = [...new Set(grants.map((g) => words[g.permission]).filter(Boolean))];
-  return parts.length ? `Can ${parts.slice(0, 3).join(", ")}` : `${grants.length} permission${grants.length === 1 ? "" : "s"}`;
+  return parts.length ? t("Can {list}", { list: parts.slice(0, 3).join(t(", ")) }) : tn(grants.length, "{n} permission", "{n} permissions");
 }

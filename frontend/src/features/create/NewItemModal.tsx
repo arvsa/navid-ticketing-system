@@ -15,17 +15,19 @@ import type { NewItemOptions } from "@/app/newItemContext";
 import { AttachButton, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { RecipientPicker, type Recipient } from "@/components/pickers";
 import { Button, DrawerClose, Field, Segmented, cx, inputClass } from "@/components/ui";
+import { DateInput } from "@/components/DateInput";
 import { canSendType, canSetPrivateIn, creatableTypes, isSuper } from "./rules";
 import { describeReminders, formatDateTime, fromLocalInput, toLocalInput } from "@/lib/dates";
-import { errorMessage, modeTitle, priorityLabel, typeLabel, typePitch } from "@/lib/labels";
+import { errorMessage, modeTitle, priorityLabel, typeLabel, typePitch, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
+import { num, t, tn } from "@/i18n";
 
 const REMINDER_CHOICES = [
-  { mins: 10080, label: "1 week" },
-  { mins: 1440, label: "1 day" },
-  { mins: 60, label: "1 hour" },
-  { mins: 15, label: "15 min" },
+  { mins: 10080, label: t("1 week before") },
+  { mins: 1440, label: t("1 day before") },
+  { mins: 60, label: t("1 hour before") },
+  { mins: 15, label: t("15 min before") },
 ];
 
 type Draft = {
@@ -172,11 +174,11 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
       qc.invalidateQueries({ queryKey: ["issues", "list"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
-      const openIt = { label: "Open", onClick: () => navigate({ to: "/items/$number", params: { number: String(issue.number) } }) };
+      const openIt = { label: t("Open"), onClick: () => navigate({ to: "/items/$number", params: { number: String(issue.number) } }) };
       if (failed.length) {
-        reportFailedUploads(failed, `${issue.key} was created, but`);
+        reportFailedUploads(failed, t("{key} was created, but", { key: issue.key }));
         navigate({ to: "/items/$number", params: { number: String(issue.number) } });
-      } else toast.success(d.recipients.length ? `Sent. ${issue.key} is on its way.` : `${issue.key} created.`, { action: openIt });
+      } else toast.success(d.recipients.length ? t("Sent. {key} is on its way.", { key: issue.key }) : t("{key} created.", { key: issue.key }), { action: openIt });
       onClose();
     },
     onError: (e) => {
@@ -194,49 +196,56 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   };
 
   const problems: string[] = [];
-  if (!d.type) problems.push("Pick what you need.");
-  else if (!kinds.includes(d.type)) problems.push(`You can't create ${typeLabel[d.type].toLowerCase()}s here.`);
-  else if (!d.title.trim()) problems.push("Give it a title.");
-  else if (d.type === "event" && !d.allDay && d.ends <= d.starts) problems.push("The end must be after the start.");
-  else if (d.type === "action" && canSend && !d.recipients.length) problems.push("Choose who it's for.");
-  else if (createBranch === null && d.recipients.length === 0) problems.push("Add at least one branch, or choose a single branch above.");
-  else if (createBranch === null && d.recipients.some((r) => r.kind !== "branch")) problems.push("School-wide items go to whole branches.");
+  const cantCreate = (type: IssueType) => t("You can't create {kinds} here.", { kinds: typePlural[type].toLowerCase() });
+  if (!d.type) problems.push(t("Pick what you need."));
+  else if (!kinds.includes(d.type)) problems.push(cantCreate(d.type));
+  else if (!d.title.trim()) problems.push(t("Give it a title."));
+  else if (d.type === "event" && !d.allDay && d.ends <= d.starts) problems.push(t("The end must be after the start."));
+  else if (d.type === "action" && canSend && !d.recipients.length) problems.push(t("Choose who it's for."));
+  else if (createBranch === null && d.recipients.length === 0) problems.push(t("Add at least one branch, or choose a single branch above."));
+  else if (createBranch === null && d.recipients.some((r) => r.kind !== "branch")) problems.push(t("School-wide items go to whole branches."));
 
-  const dueText = hasWork && d.recipients.length ? `, due ${formatDateTime(fromLocalInput(d.due, zone), zone)}` : "";
+  const dueText = hasWork && d.recipients.length ? t(", due {when}", { when: formatDateTime(fromLocalInput(d.due, zone), zone) }) : "";
   const summary = !d.type
     ? ""
     : d.type === "report"
       ? d.recipients.length
-        ? `${pieces} ${pieces === 1 ? "report" : "reports"} to write${dueText}. Each comes back to you to approve.`
-        : "You file this report yourself."
+        ? tn(pieces, "{n} report to write{due}. Each comes back to you to approve.", "{n} reports to write{due}. Each comes back to you to approve.", { due: dueText })
+        : t("You file this report yourself.")
       : d.type === "action"
         ? createBranch === null
-          ? `Goes to ${d.recipients.length} branch${d.recipients.length === 1 ? "" : "es"}${dueText}. Super admins approve.`
-          : `${pieces || "No"} ${pieces === 1 ? "task" : "tasks"}${dueText}. Each comes back to you to approve.`
+          ? tn(d.recipients.length, "Goes to {n} branch{due}. Super admins approve.", "Goes to {n} branches{due}. Super admins approve.", { due: dueText })
+          : pieces
+            ? tn(pieces, "{n} task{due}. Each comes back to you to approve.", "{n} tasks{due}. Each comes back to you to approve.", { due: dueText })
+            : t("No tasks{due}. Each comes back to you to approve.", { due: dueText })
         : d.type === "ticket"
           ? d.recipients.length
-            ? `${headcount} ${headcount === 1 ? "person is" : "people are"} told straight away.`
-            : "It goes to the branch admins."
+            ? tn(headcount, "{n} person is told straight away.", "{n} people are told straight away.")
+            : t("It goes to the branch admins.")
           : d.recipients.length
-            ? `${headcount} invited${d.reminders.length ? `, reminded ${describeReminders(d.reminders)} before` : ""}.`
+            ? d.reminders.length
+              ? t("{n} invited, reminded {when} before.", { n: headcount, when: describeReminders(d.reminders) })
+              : t("{n} invited.", { n: headcount })
             : createBranch === null
-              ? "School-wide events need at least one branch invited."
-              : "Just on your calendar until you invite someone.";
+              ? t("School-wide events need at least one branch invited.")
+              : t("Just on your calendar until you invite someone.");
 
   const sendLabel =
     d.type === "report"
       ? d.recipients.length
-        ? `Request ${pieces > 1 ? `${pieces} reports` : "report"}`
-        : "Create report"
+        ? pieces > 1
+          ? t("Request {n} reports", { n: pieces })
+          : t("Request report")
+        : t("Create report")
       : d.type === "action"
         ? pieces > 1
-          ? `Send ${pieces} tasks`
-          : "Send task"
+          ? t("Send {n} tasks", { n: pieces })
+          : t("Send task")
         : d.type === "event"
-          ? "Create event"
+          ? t("Create event")
           : d.type === "ticket"
-            ? "Ask"
-            : "Send";
+            ? t("Ask")
+            : t("Send");
 
   const branchPeople = createBranch ? people.inBranch(createBranch) : [];
   const showBranchPicker = options.length > 1 || superAdmin;
@@ -244,34 +253,34 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   return (
     <>
       <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-        <h2 className="text-[20px] font-bold">New {d.type ? typeLabel[d.type].toLowerCase() : "item"}</h2>
+        <h2 className="text-[20px] font-bold">{d.type ? t("New {kind}", { kind: typeLabel[d.type].toLowerCase() }) : t("New item")}</h2>
         {showBranchPicker ? (
           <select
             value={d.branch}
             onChange={(e) => set({ branch: e.target.value, recipients: [] })}
             className="h-8 rounded-full border border-border bg-surface-2 px-3 text-[14px] text-text-2"
-            aria-label="Create in"
+            aria-label={t("Create in")}
           >
-            {superAdmin && <option value="school">School-wide (several branches)</option>}
+            {superAdmin && <option value="school">{t("School-wide (several branches)")}</option>}
             {options
               .filter((o) => superAdmin || creatableTypes(viewer, o.id).length > 0)
               .map((o) => (
                 <option key={o.id} value={o.id}>
-                  in {o.name}
+                  {t("in {name}", { name: o.name })}
                 </option>
               ))}
           </select>
         ) : (
-          <span className="text-text-2">in {branch?.name}</span>
+          <span className="text-text-2">{t("in {name}", { name: branch?.name })}</span>
         )}
-        <DrawerClose className="ml-auto rounded-full p-2 text-text-2 hover:bg-sunken" aria-label="Close">
+        <DrawerClose className="ms-auto rounded-full p-2 text-text-2 hover:bg-sunken" aria-label={t("Close")}>
           <X className="size-5" />
         </DrawerClose>
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
         {!initial.onlyType && (
-        <div role="radiogroup" aria-label="What do you need?" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div role="radiogroup" aria-label={t("What do you need?")} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["ticket", "action", "report", "event"] as IssueType[])
             .filter((k) => kinds.includes(k))
             .map((k) => {
@@ -284,7 +293,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   aria-checked={on}
                   onClick={() => set({ type: k, due: defaultDue(k) })}
                   className={cx(
-                    "rounded-[16px] border px-4 py-3 text-left transition-colors",
+                    "rounded-[16px] border px-4 py-3 text-start transition-colors",
                     on ? "border-transparent" : "border-border hover:border-border-strong hover:bg-surface-2",
                   )}
                   style={on ? { background: `var(--${k}-soft)`, boxShadow: `inset 0 0 0 2px var(--${k})` } : undefined}
@@ -298,12 +307,12 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
             })}
         </div>
         )}
-        {initial.onlyType && d.type && !kinds.includes(d.type) && <p className="text-text-2">You can't create {typeLabel[d.type].toLowerCase()}s here.</p>}
-        {!initial.onlyType && kinds.length === 0 && <p className="text-text-2">You can't create items here.</p>}
+        {initial.onlyType && d.type && !kinds.includes(d.type) && <p className="text-text-2">{cantCreate(d.type)}</p>}
+        {!initial.onlyType && kinds.length === 0 && <p className="text-text-2">{t("You can't create items here.")}</p>}
 
         {d.type && (
           <>
-            <Field label="Title" error={error?.field === "title" ? error.text : d.title.length > 180 ? `${200 - d.title.length} characters left` : null}>
+            <Field label={t("Title")} error={error?.field === "title" ? error.text : d.title.length > 180 ? t("{n} characters left", { n: 200 - d.title.length }) : null}>
               {(p) => (
                 <input
                   {...p}
@@ -311,7 +320,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   value={d.title}
                   onChange={(e) => set({ title: e.target.value })}
                   maxLength={200}
-                  placeholder={d.type === "report" ? "Term 1 science report" : d.type === "event" ? "Parent evening" : d.type === "ticket" ? "Where do I order lab supplies?" : "Update fire-exit signs"}
+                  placeholder={d.type === "report" ? t("Term 1 science report") : d.type === "event" ? t("Parent evening") : d.type === "ticket" ? t("Where do I order lab supplies?") : t("Update fire-exit signs")}
                   className={cx(inputClass, "h-12 text-[17px]")}
                 />
               )}
@@ -320,29 +329,29 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
             {d.type === "event" && (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Starts">
+                  <Field label={t("Starts")}>
                     {(p) => (
-                      <input {...p} type={d.allDay ? "date" : "datetime-local"} value={d.allDay ? d.starts.slice(0, 10) : d.starts} onChange={(e) => set({ starts: d.allDay ? `${e.target.value}T00:00` : e.target.value })} className={inputClass} />
+                      <DateInput {...p} mode={d.allDay ? "date" : "datetime"} value={d.allDay ? d.starts.slice(0, 10) : d.starts} onChange={(v) => set({ starts: d.allDay ? `${v}T00:00` : v })} />
                     )}
                   </Field>
-                  <Field label="Ends" error={error?.field === "event" ? error.text : null}>
+                  <Field label={t("Ends")} error={error?.field === "event" ? error.text : null}>
                     {(p) => (
-                      <input {...p} type={d.allDay ? "date" : "datetime-local"} value={d.allDay ? d.ends.slice(0, 10) : d.ends} onChange={(e) => set({ ends: d.allDay ? `${e.target.value}T23:59` : e.target.value })} className={inputClass} />
+                      <DateInput {...p} mode={d.allDay ? "date" : "datetime"} value={d.allDay ? d.ends.slice(0, 10) : d.ends} onChange={(v) => set({ ends: d.allDay ? `${v}T23:59` : v })} />
                     )}
                   </Field>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                   <label className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={d.allDay} onChange={(e) => set({ allDay: e.target.checked })} className="size-4" /> All day
+                    <input type="checkbox" checked={d.allDay} onChange={(e) => set({ allDay: e.target.checked })} className="size-4" />{" "}{t("All day")}
                   </label>
-                  <input value={d.location} onChange={(e) => set({ location: e.target.value })} placeholder="Where? (optional)" aria-label="Where" className={cx(inputClass, "h-10 flex-1 py-0")} />
+                  <input value={d.location} onChange={(e) => set({ location: e.target.value })} placeholder={t("Where? (optional)")} aria-label={t("Where")} className={cx(inputClass, "h-10 flex-1 py-0")} />
                 </div>
               </div>
             )}
 
             {canSend && (
               <div className="space-y-1.5">
-                <span className="block font-semibold">{d.type === "event" ? "Who's invited?" : d.type === "ticket" ? "Who should answer?" : "Send to"}</span>
+                <span className="block font-semibold">{d.type === "event" ? t("Who's invited?") : d.type === "ticket" ? t("Who should answer?") : t("Send to")}</span>
                 <RecipientPicker
                   value={d.recipients}
                   onChange={(recipients) => set({ recipients })}
@@ -350,21 +359,21 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   groups={groups.data ?? []}
                   branches={createBranch === null ? options.map((o) => ({ id: o.id, name: o.name })) : undefined}
                   branchId={createBranch}
-                  placeholder={createBranch === null ? "Add a branch" : "Add a person or group"}
+                  placeholder={createBranch === null ? t("Add a branch") : t("Add a person or group")}
                 />
                 <p className={cx("text-[13px]", error?.field === "recipients" ? "text-danger" : "text-text-3")}>
-                  {error?.field === "recipients" ? error.text : d.type === "ticket" ? "Leave it empty to ask the branch admins." : createBranch === null ? "School-wide items go to whole branches." : ""}
+                  {error?.field === "recipients" ? error.text : d.type === "ticket" ? t("Leave it empty to ask the branch admins.") : createBranch === null ? t("School-wide items go to whole branches.") : ""}
                 </p>
               </div>
             )}
 
             {hasWork && groupGoing && (
               <Segmented<CompletionMode>
-                label="How should groups do this?"
+                label={t("How should groups do this?")}
                 value={d.mode}
                 onChange={(mode) => set({ mode })}
                 options={[
-                  { value: "per_member", label: modeTitle.per_member.title + (headcount && createBranch ? ` (${headcount})` : "") },
+                  { value: "per_member", label: modeTitle.per_member.title + (headcount && createBranch ? ` (${num(headcount)})` : "") },
                   { value: "shared", label: modeTitle.shared.title },
                 ]}
               />
@@ -372,11 +381,11 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
 
             <div className="flex flex-wrap items-end gap-3">
               {hasWork && d.recipients.length > 0 && (
-                <Field label="Due" error={error?.field === "due" ? error.text : null}>
-                  {(p) => <input {...p} type="datetime-local" value={d.due} min={toLocalInput(new Date(), zone)} onChange={(e) => set({ due: e.target.value })} className={cx(inputClass, "w-auto")} />}
+                <Field label={t("Due")} error={error?.field === "due" ? error.text : null}>
+                  {(p) => <DateInput {...p} mode="datetime" value={d.due} min={toLocalInput(new Date(), zone)} onChange={(due) => set({ due })} className="w-auto" />}
                 </Field>
               )}
-              <Field label="Priority">
+              <Field label={t("Priority")}>
                 {(p) => (
                   <select {...p} value={d.priority} onChange={(e) => set({ priority: e.target.value as Priority })} className={cx(inputClass, "w-auto")}>
                     {PRIORITIES.map((x) => (
@@ -388,25 +397,25 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                 )}
               </Field>
               {canSetPrivateIn(viewer, createBranch, d.type) && (
-                <label className="mb-2.5 inline-flex items-center gap-2" title="Only the people it's sent to and admins will see it.">
+                <label className="mb-2.5 inline-flex items-center gap-2" title={t("Only the people it's sent to and admins will see it.")}>
                   <input type="checkbox" checked={d.isPrivate} onChange={(e) => set({ isPrivate: e.target.checked })} className="size-4" />
-                  <Lock className="size-4 text-text-2" /> Private
+                  <Lock className="size-4 text-text-2" />{" "}{t("Private")}
                 </label>
               )}
             </div>
 
             {showMore || d.description || files.files.length || d.type === "event" ? (
               <div className="space-y-2">
-                <Field label="Details" optional>
+                <Field label={t("Details")} optional>
                   {(p) => (
-                    <textarea {...p} value={d.description} onChange={(e) => set({ description: e.target.value })} rows={4} placeholder={d.type === "report" ? "What should the report cover?" : ""} className={inputClass} />
+                    <textarea {...p} value={d.description} onChange={(e) => set({ description: e.target.value })} rows={4} placeholder={d.type === "report" ? t("What should the report cover?") : ""} className={inputClass} />
                   )}
                 </Field>
                 <PendingFiles files={files.files} onRemove={files.remove} />
                 <div className="flex flex-wrap items-center gap-2">
                   <AttachButton onPick={files.add} />
                   {d.type === "event" && (
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Reminders">
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("Reminders")}>
                       {REMINDER_CHOICES.map((r) => {
                         const on = d.reminders.includes(r.mins);
                         return (
@@ -417,7 +426,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                             onClick={() => set({ reminders: on ? d.reminders.filter((m) => m !== r.mins) : [...d.reminders, r.mins] })}
                             className={cx("h-9 rounded-full border px-3 text-[14px]", on ? "border-transparent bg-primary-soft font-semibold text-primary-on-soft" : "border-border text-text-2")}
                           >
-                            {r.label} before
+                            {r.label}
                           </button>
                         );
                       })}
@@ -427,7 +436,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               </div>
             ) : (
               <button type="button" className="font-medium text-primary hover:underline" onClick={() => setShowMore(true)}>
-                + Add details or files
+                {t("+ Add details or files")}
               </button>
             )}
           </>
@@ -437,10 +446,10 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
       <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-2 px-6 py-4">
         <p className="min-w-0 flex-1 text-[14px] text-text-2">{problems[0] && d.type ? problems[0] : summary}</p>
         <Button variant="ghost" onClick={discard}>
-          Discard
+          {t("Discard")}
         </Button>
         <Button variant="primary" disabled={problems.length > 0} loading={create.isPending} onClick={() => (setError(null), create.mutate())}>
-          {create.isPending ? "Sending…" : sendLabel}
+          {create.isPending ? t("Sending…") : sendLabel}
         </Button>
       </div>
     </>

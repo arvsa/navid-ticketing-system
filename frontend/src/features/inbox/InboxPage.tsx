@@ -5,17 +5,18 @@ import { useState } from "react";
 import { useMarkRead, useNotifications, useUnreadCount } from "@/api/hooks";
 import type { Notification } from "@/api/types";
 import { Button, Card, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx } from "@/components/ui";
-import { timeAgo } from "@/lib/dates";
+import { timeAgo, weekStartsOn } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
 import { describeNotification } from "@/lib/notifications";
 import { usePeople } from "@/people/usePeople";
+import { t } from "@/i18n";
 
 function bucket(n: Notification) {
   const d = new Date(n.created_at);
-  if (isToday(d)) return "Today";
-  if (isYesterday(d)) return "Yesterday";
-  if (isThisWeek(d, { weekStartsOn: 1 })) return "This week";
-  return "Earlier";
+  if (isToday(d)) return t("Today");
+  if (isYesterday(d)) return t("Yesterday");
+  if (isThisWeek(d, { weekStartsOn })) return t("This week");
+  return t("Earlier");
 }
 
 export function InboxPage() {
@@ -32,11 +33,11 @@ export function InboxPage() {
   return (
     <div className="mx-auto max-w-[900px]">
       <PageHeader
-        title="Inbox"
+        title={t("Inbox")}
         actions={
           (unread.data ?? 0) > 0 && (
             <Button onClick={() => mark.mutate("all")} loading={mark.isPending && mark.variables === "all"}>
-              Mark all as read
+              {t("Mark all as read")}
             </Button>
           )
         }
@@ -45,8 +46,8 @@ export function InboxPage() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "all", label: "All" },
-          { value: "unread", label: "Unread", count: unread.data ?? null, badge: true },
+          { value: "all", label: t("All") },
+          { value: "unread", label: t("Unread"), count: unread.data ?? null, badge: true },
         ]}
       />
       <div className="mt-6 space-y-6">
@@ -58,8 +59,8 @@ export function InboxPage() {
           <ErrorPanel error={list.error} onRetry={() => list.refetch()} />
         ) : items.length === 0 ? (
           <Card>
-            <EmptyState title={tab === "unread" ? "You've read everything." : "No updates yet."}>
-              {tab === "all" && "New work, mentions and reminders will show here."}
+            <EmptyState title={tab === "unread" ? t("You've read everything.") : t("No updates yet.")}>
+              {tab === "all" && t("New work, mentions and reminders will show here.")}
             </EmptyState>
           </Card>
         ) : (
@@ -73,7 +74,7 @@ export function InboxPage() {
                     return (
                       <li key={n.id}>
                         <button
-                          className="flex w-full items-start gap-3 px-5 py-4 text-left hover:bg-surface-2"
+                          className="flex w-full items-start gap-3 px-5 py-4 text-start hover:bg-surface-2"
                           onClick={() => {
                             if (!n.read_at) mark.mutate(n.id);
                             if (n.issue_key) navigate({ to: "/items/$number", params: { number: numberOf(n.issue_key) } });
@@ -96,7 +97,7 @@ export function InboxPage() {
                               {timeAgo(n.created_at)}
                             </span>
                           </span>
-                          {!n.read_at && <span className="sr-only">Unread</span>}
+                          {!n.read_at && <span className="sr-only">{t("Unread")}</span>}
                         </button>
                       </li>
                     );
@@ -109,11 +110,11 @@ export function InboxPage() {
         {list.hasNextPage && (
           <div className="text-center">
             <Button onClick={() => list.fetchNextPage()} loading={list.isFetchingNextPage}>
-              Load more
+              {t("Load more")}
             </Button>
           </div>
         )}
-        <p className="text-center text-[13px] text-text-3">Read updates are kept for 90 days.</p>
+        <p className="text-center text-[13px] text-text-3">{t("Read updates are kept for 90 days.")}</p>
       </div>
     </div>
   );

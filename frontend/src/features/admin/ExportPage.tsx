@@ -3,25 +3,31 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { endOfDay, startOfDay, startOfMonth, subMonths, endOfMonth } from "date-fns";
+import { addDays, endOfDay, startOfDay } from "date-fns";
 import { ApiError, qs } from "@/api/client";
 import type { IssueType } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
-import { Button, Card, Chip, EmptyState, Field, PageHeader, cx, inputClass } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, PageHeader, cx } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { errorMessage, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
+import { calendar, t } from "@/i18n";
+import { addMonthsTo, dateIn, monthOf } from "@/lib/dates";
+import { DateInput } from "@/components/DateInput";
 
 type Range = "this" | "last" | "three" | "sept" | "custom";
 
 function rangeOf(r: Range, from: string, to: string): [Date, Date] {
+  // Months follow the reader's calendar; the school year starts 1 September, or 1 Mehr.
   const now = new Date();
-  if (r === "this") return [startOfMonth(now), now];
-  if (r === "last") return [startOfMonth(subMonths(now, 1)), endOfMonth(subMonths(now, 1))];
-  if (r === "three") return [startOfMonth(subMonths(now, 2)), now];
+  const month = monthOf(now);
+  if (r === "this") return [dateIn(month, 1), now];
+  if (r === "last") return [dateIn(addMonthsTo(month, -1), 1), endOfDay(addDays(dateIn(month, 1), -1))];
+  if (r === "three") return [dateIn(addMonthsTo(month, -2), 1), now];
   if (r === "sept") {
-    const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    return [new Date(y, 8, 1), now];
+    const startMonth = calendar === "persian" ? 7 : 9;
+    const y = month.m >= startMonth ? month.y : month.y - 1;
+    return [dateIn({ y, m: startMonth }, 1), now];
   }
   return [startOfDay(new Date(from)), endOfDay(new Date(to))];
 }
@@ -38,12 +44,12 @@ export function ExportPage() {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (!allowed.length) return <EmptyState title="You can't export from any branch." />;
+  if (!allowed.length) return <EmptyState title={t("You can't export from any branch.")} />;
   const wholeSchool = superAdmin && chosen.length === 0;
 
   const run = async () => {
     const [a, b] = rangeOf(range, from, to);
-    if (b <= a) return toast.error("The end date must be after the start date.");
+    if (b <= a) return toast.error(t("The end date must be after the start date."));
     setBusy(true);
     try {
       const res = await fetch(
@@ -72,7 +78,7 @@ export function ExportPage() {
       link.download = name;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success("Export downloaded");
+      toast.success(t("Export downloaded"));
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -84,17 +90,17 @@ export function ExportPage() {
 
   return (
     <div className="mx-auto max-w-[760px]">
-      <PageHeader title="Export to Excel" subtitle="Tickets, actions, reports and events for a date range." />
+      <PageHeader title={t("Export to Excel")} subtitle={t("Tickets, actions, reports and events for a date range.")} />
       <Card className="space-y-8 p-6">
         <fieldset>
-          <legend className="mb-3 text-[17px] font-semibold">Branches</legend>
+          <legend className="mb-3 text-[17px] font-semibold">{t("Branches")}</legend>
           {allowed.length === 1 && !superAdmin ? (
             <p>{allowed[0].name}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {superAdmin && (
                 <Chip active={wholeSchool} onClick={() => setChosen([])}>
-                  Whole school
+                  {t("Whole school")}
                 </Chip>
               )}
               {allowed.map((o) => (
@@ -104,10 +110,10 @@ export function ExportPage() {
               ))}
             </div>
           )}
-          {!superAdmin && allowed.length > 1 && <p className="mt-2 text-[14px] text-text-3">Only super admins can export several branches at once.</p>}
+          {!superAdmin && allowed.length > 1 && <p className="mt-2 text-[14px] text-text-3">{t("Only super admins can export several branches at once.")}</p>}
         </fieldset>
         <fieldset>
-          <legend className="mb-3 text-[17px] font-semibold">Include</legend>
+          <legend className="mb-3 text-[17px] font-semibold">{t("Include")}</legend>
           <div className="flex flex-wrap gap-4">
             {(["ticket", "action", "report", "event"] as IssueType[]).map((t) => (
               <label key={t} className="inline-flex items-center gap-2">
@@ -118,15 +124,15 @@ export function ExportPage() {
           </div>
         </fieldset>
         <fieldset>
-          <legend className="mb-3 text-[17px] font-semibold">Dates</legend>
+          <legend className="mb-3 text-[17px] font-semibold">{t("Dates")}</legend>
           <div className="flex flex-wrap gap-2">
             {(
               [
-                ["this", "This month"],
-                ["last", "Last month"],
-                ["three", "Last 3 months"],
-                ["sept", "Since 1 September"],
-                ["custom", "Custom"],
+                ["this", t("This month")],
+                ["last", t("Last month")],
+                ["three", t("Last 3 months")],
+                ["sept", calendar === "persian" ? t("Since 1 Mehr") : t("Since 1 September")],
+                ["custom", t("Custom")],
               ] as [Range, string][]
             ).map(([v, l]) => (
               <Chip key={v} active={range === v} onClick={() => setRange(v)}>
@@ -136,12 +142,12 @@ export function ExportPage() {
           </div>
           {range === "custom" && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="From">{(p) => <input {...p} type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} />}</Field>
-              <Field label="To">{(p) => <input {...p} type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} />}</Field>
+              <Field label={t("From")}>{(p) => <DateInput {...p} mode="date" value={from} onChange={setFrom} />}</Field>
+              <Field label={t("To")}>{(p) => <DateInput {...p} mode="date" value={to} onChange={setTo} />}</Field>
             </div>
           )}
         </fieldset>
-        <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">Private items and staff-only comments are included only if you can see them. This export is recorded in the history.</p>
+        <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Private items and staff-only comments are included only if you can see them. This export is recorded in the history.")}</p>
         <Button
           variant="primary"
           size="lg"
@@ -151,7 +157,7 @@ export function ExportPage() {
           disabled={!types.length || (!wholeSchool && !chosen.length) || (range === "custom" && (!from || !to))}
           onClick={run}
         >
-          {busy ? "Preparing your file…" : "Download Excel file"}
+          {busy ? t("Preparing your file…") : t("Download Excel file")}
         </Button>
       </Card>
     </div>

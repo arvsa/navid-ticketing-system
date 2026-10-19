@@ -13,6 +13,7 @@ import { isSentBack, numberOf } from "@/lib/items";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { WorkButton } from "./WorkButton";
+import { t } from "@/i18n";
 
 type Tab = "todo" | "waiting" | "done";
 
@@ -40,36 +41,36 @@ export function MyWorkPage() {
     if (tab !== "todo") return [{ title: null as string | null, items: list }];
     const weekEnd = Date.now() + 7 * 86400_000;
     return [
-      { title: "Overdue", items: list.filter((w) => w.is_overdue) },
-      { title: "This week", items: list.filter((w) => !w.is_overdue && w.sla_due_at && new Date(w.sla_due_at).getTime() <= weekEnd) },
-      { title: "Later", items: list.filter((w) => !w.is_overdue && w.sla_due_at && new Date(w.sla_due_at).getTime() > weekEnd) },
-      { title: "No due date", items: list.filter((w) => !w.sla_due_at) },
+      { title: t("Overdue"), items: list.filter((w) => w.is_overdue) },
+      { title: t("This week"), items: list.filter((w) => !w.is_overdue && w.sla_due_at && new Date(w.sla_due_at).getTime() <= weekEnd) },
+      { title: t("Later"), items: list.filter((w) => !w.is_overdue && w.sla_due_at && new Date(w.sla_due_at).getTime() > weekEnd) },
+      { title: t("No due date"), items: list.filter((w) => !w.sla_due_at) },
     ].filter((s) => s.items.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.data, tab]);
 
   const empty = {
-    todo: "Nothing on your plate. New work appears here the moment it's sent.",
-    waiting: "Nothing is waiting for approval.",
-    done: "Finished work will show here.",
+    todo: t("Nothing on your plate. New work appears here the moment it's sent."),
+    waiting: t("Nothing is waiting for approval."),
+    done: t("Finished work will show here."),
   }[tab];
 
   return (
     <div className="mx-auto max-w-[1100px]">
-      <PageHeader title="My work" />
+      <PageHeader title={t("My work")} />
       <Tabs
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "todo", label: "To do", count: groups.todo.length },
-          { value: "waiting", label: "Waiting for approval", count: groups.waiting.length },
-          { value: "done", label: "Done" },
+          { value: "todo", label: t("To do"), count: groups.todo.length },
+          { value: "waiting", label: t("Waiting for approval"), count: groups.waiting.length },
+          { value: "done", label: t("Done") },
         ]}
       />
       {tab === "todo" && grabs.length > 0 && (
         <Card className="mt-6">
           <h2 className="border-b border-border px-6 py-4 font-semibold">
-            Up for grabs ({grabs.length}) <span className="font-normal text-text-2">— shared work for your groups</span>
+            {t("Up for grabs ({n})", { n: grabs.length })} <span className="font-normal text-text-2">{t("— shared work for your groups")}</span>
           </h2>
           <ul className="divide-y divide-border">
             {grabs.map((w) => (
@@ -92,7 +93,7 @@ export function MyWorkPage() {
         ) : (
           sections.map((s) => (
             <section key={s.title ?? "all"}>
-              {s.title && <h2 className={cx("mb-2 font-semibold", s.title === "Overdue" && "text-danger")}>{s.title}</h2>}
+              {s.title && <h2 className={cx("mb-2 font-semibold", s.title === t("Overdue") && "text-danger")}>{s.title}</h2>}
               <Card>
                 <ul className="divide-y divide-border">
                   {s.items.map((w) => (
@@ -115,8 +116,8 @@ function WorkRow({ w, issue, branchCode, zone }: { w: WorkItem; issue?: IssueDet
     ? w.is_overdue
       ? { text: lateBy(w.sla_due_at), cls: "font-semibold text-danger" }
       : isDueSoon(w.sla_due_at)
-        ? { text: "Due tomorrow", cls: "font-semibold text-warning" }
-        : { text: `Due ${formatDay(w.sla_due_at, zone)}`, cls: "text-text-2" }
+        ? { text: t("Due tomorrow"), cls: "font-semibold text-warning" }
+        : { text: t("Due {date}", { date: formatDay(w.sla_due_at, zone) }), cls: "text-text-2" }
     : null;
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-4 sm:flex-nowrap">
@@ -131,18 +132,18 @@ function WorkRow({ w, issue, branchCode, zone }: { w: WorkItem; issue?: IssueDet
           <span className="flex flex-wrap gap-x-2 text-[14px] text-text-2">
             {issue && <span className="font-mono text-text-3">{issue.key}</span>}
             {branchCode && <span>· {branchCode}</span>}
-            {issue && <span>· from {people.short(issue.created_by)}</span>}
+            {issue && <span>· {t("from {name}", { name: people.short(issue.created_by) })}</span>}
             {isSentBack(w) && (
               <span className="inline-flex items-center gap-1 font-semibold text-sent-back">
-                · <Undo2 className="size-3.5" /> Sent back
+                · <Undo2 className="size-3.5" />{" "}{t("Sent back")}
               </span>
             )}
           </span>
         </span>
       </Link>
       <StatusBadge status={w.status} />
-      {due && <span className={cx("w-32 text-right", due.cls)}>{due.text}</span>}
-      <div className="w-40 text-right">
+      {due && <span className={cx("w-32 text-end", due.cls)}>{due.text}</span>}
+      <div className="w-40 text-end">
         <WorkButton issue={issue} work={w} viewer={viewer} />
       </div>
     </li>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { LiveProvider } from "@/realtime/live";
 import { useMe } from "@/auth/session";
 import { BranchProvider } from "./BranchContext";
+import { t } from "@/i18n";
 
 export function SignedIn() {
   const me = useMe();
@@ -15,7 +16,7 @@ export function SignedIn() {
     <LiveProvider
       onSessionEnded={() => {
         qc.clear();
-        toast("You were signed out. Please sign in again.");
+        toast(t("You were signed out. Please sign in again."));
         router.navigate({ to: "/sign-in", search: { redirect: location.pathname } });
       }}
     >
