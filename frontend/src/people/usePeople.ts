@@ -18,6 +18,11 @@ export type Person = {
   adminOf: string[];
 };
 
+/** Shown for people we can't name: the API returns ids only (gap G-2) and
+ * we only see member lists of our own branches. Super admins belong to no
+ * branch, so they land here too unless the item tells us more. */
+export const UNKNOWN_PERSON = "Someone outside your branch";
+
 export type Directory = {
   get: (id?: string | null) => Person | undefined;
   name: (id?: string | null) => string;
@@ -82,11 +87,11 @@ export function usePeople(): Directory {
     get,
     name: (id) => {
       const p = get(id);
-      return p ? `${p.first_name} ${p.last_name}`.trim() : "Former member";
+      return p ? `${p.first_name} ${p.last_name}`.trim() : UNKNOWN_PERSON;
     },
     short: (id) => {
       const p = get(id);
-      return p ? shortName(p.first_name, p.last_name) : "Former member";
+      return p ? shortName(p.first_name, p.last_name) : UNKNOWN_PERSON;
     },
     inBranch: (branchId) => [...map.values()].filter((p) => p.branchIds.includes(branchId)),
     all: [...map.values()],

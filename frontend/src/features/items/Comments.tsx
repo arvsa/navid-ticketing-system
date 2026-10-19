@@ -9,12 +9,13 @@ import { useComments } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { Comment, IssueDetail } from "@/api/types";
 import { Avatar } from "@/components/badges";
-import { AttachButton, FileList, PendingFiles, uploadAll, useFilePicker } from "@/components/files";
+import { AttachButton, FileList, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { Button, EmptyState, LoadingRows, Menu, MenuItem, cx, inputClass } from "@/components/ui";
 import { canComment, canModerate, canStaffOnly } from "@/lib/can";
 import { formatDateTime, timeAgo } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
+import { useItemLabels } from "@/lib/items";
 import { usePeople, type Person } from "@/people/usePeople";
 
 function draftKey(issueId: string, workItemId?: string) {
@@ -99,6 +100,7 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(c.body ?? "");
   const author = people.get(c.author_id);
+  const labels = useItemLabels(issue);
   const mine = c.author_id === viewer.me.user.id;
   const invalidate = () => qc.invalidateQueries({ queryKey: ["issues", issue.id, "comments"] });
   const edit = useMutation({
@@ -120,7 +122,7 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
       <Avatar first={author?.first_name} last={author?.last_name} id={c.author_id} size={compact ? 36 : 40} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <b>{mine ? "You" : people.short(c.author_id)}</b>
+          <b>{mine ? "You" : labels.person(c.author_id)}</b>
           <time dateTime={c.created_at} title={formatDateTime(c.created_at)} className="text-[14px] text-text-3">
             {timeAgo(c.created_at)}
           </time>
@@ -196,13 +198,15 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
   const send = useMutation({
     mutationFn: async () => {
       const ids = mentions.filter((p) => body.includes(`@${p.first_name} ${p.last_name}`)).map((p) => p.id);
+      const text = body.trim() || (files.files.length === 1 ? `Attached ${files.files[0].name}` : `Attached ${files.files.length} files`);
       const c = await api.post<Comment>(`/issues/${issue.id}/comments`, {
-        body: body.trim(),
+        body: text,
         is_internal_only: staffOnly,
         mention_user_ids: [...new Set(ids)].slice(0, 50),
         work_item_id: workItemId ?? null,
       });
-      if (files.files.length) await uploadAll(issue.id, files.files, { comment_id: c.id });
+      const failed = files.files.length ? await uploadAll(issue.id, files.files, { comment_id: c.id }) : [];
+      reportFailedUploads(failed, "Your comment was posted, but");
       return c;
     },
     onSuccess: () => {
@@ -243,7 +247,7 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
       className={cx("space-y-2 rounded-[12px]", staffOnly && "bg-staff-bg p-3")}
       onSubmit={(e) => {
         e.preventDefault();
-        if (body.trim()) send.mutate();
+        if (body.trim() || files.files.length) send.mutate();
       }}
     >
       <label className="block text-[14px] text-text-2" htmlFor={`composer-${key}`}>
@@ -263,7 +267,7 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
               } else if (e.key === "Escape") setQuery(null);
               else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                if (body.trim()) send.mutate();
+                if (body.trim() || files.files.length) send.mutate();
               }
             }}
             rows={compact ? 2 : 3}
@@ -271,7 +275,7 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
             className={cx(inputClass, "resize-y")}
           />
           {compact && (
-            <Button type="submit" variant="dark" size="lg" loading={send.isPending} disabled={!body.trim()} className="h-auto">
+            <Button type="submit" variant="dark" size="lg" loading={send.isPending} disabled={!body.trim() && !files.files.length} className="h-auto">
               Send
             </Button>
           )}
@@ -291,8 +295,8 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
       </div>
       {hidden.length > 0 && <p className="text-[13px] text-text-3">This item is private. People it isn't sent to won't see it or be told.</p>}
       <PendingFiles files={files.files} onRemove={files.remove} />
-      <div className={cx("flex flex-wrap items-center gap-3", compact && !allowStaffOnly && "hidden")}>
-        {!compact && <AttachButton onPick={files.add} label="Attach" dashed={false} />}
+      <div className="flex flex-wrap items-center gap-3">
+        <AttachButton onPick={files.add} label="Attach" dashed={false} />
         {allowStaffOnly && (
           <label className="inline-flex items-center gap-2 text-[14px]">
             <input type="checkbox" checked={staffOnly} onChange={(e) => setStaffOnly(e.target.checked)} className="size-4" />
@@ -300,7 +304,7 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
           </label>
         )}
         {!compact && (
-          <Button type="submit" variant="primary" className="ml-auto" loading={send.isPending} disabled={!body.trim()}>
+          <Button type="submit" variant="primary" className="ml-auto" loading={send.isPending} disabled={!body.trim() && !files.files.length}>
             Comment
           </Button>
         )}

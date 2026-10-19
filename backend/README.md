@@ -64,6 +64,10 @@ To run the tests: `cargo test` (with the database from step 1 running).
   every endpoint, who may call it, its fields and a curl example. After
   changing endpoints, regenerate it with `python3 scripts/gen_api_docs.py`
   (the server must be running).
+- **Command-line tools:** [`docs/binaries.html`](docs/binaries.html) describes
+  every `cargo run --bin ...` tool, and
+  [`docs/password-rotation.html`](docs/password-rotation.html) walks through
+  creating the first super admin and rotating passwords.
 - **Every endpoint**, with its parameters and responses, is listed in the
   OpenAPI document at
   [`/api/openapi.json`](http://127.0.0.1:8080/api/openapi.json). Paste it into

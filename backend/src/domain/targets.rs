@@ -24,7 +24,9 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-/// `{user_id}`, `{group_id}` or `{branch_id}` (super admins only).
+/// A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
+/// branch; super admins only), e.g. `{"group_id": "..."}`. Zero or several
+/// fields set is `422 invalid_target`. Send one target per recipient.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TargetInput {
     pub user_id: Option<Uuid>,
@@ -227,7 +229,7 @@ pub async fn add(
                     action: "create",
                     old_value: None,
                     new_value: Some(json!({
-                        "issue_id": issue.id, "target_id": target_id, "assignee_id": assignee, "sla_due_at": sla_due_at,
+                        "issue_id": issue.id, "target_id": target_id, "assignee_id": assignee, "sla_due_at": audit::time(sla_due_at),
                     })),
                 },
             )

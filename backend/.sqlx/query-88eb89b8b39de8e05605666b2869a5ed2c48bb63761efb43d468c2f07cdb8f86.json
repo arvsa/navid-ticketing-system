@@ -1,0 +1,146 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH rows AS (\n            SELECT a.id, a.entity_type, a.entity_id, a.branch_id, w.assignee_id, a.actor_id, a.action,\n                   a.old_value, a.new_value, a.created_at,\n                   -- One transaction's rows share created_at (now() is the transaction start).\n                   min(a.id) OVER (PARTITION BY a.created_at) AS batch_id\n            FROM audit_log a\n            LEFT JOIN work_item w ON a.entity_type = 'work_item' AND w.id::text = a.entity_id\n            WHERE (a.entity_type = 'issue' AND a.entity_id = $1::uuid::text)\n               OR (a.entity_type = 'issue_target'\n                   AND a.entity_id IN (SELECT id::text FROM issue_target WHERE issue_id = $1))\n               OR (a.entity_type = 'work_item'\n                   AND a.entity_id IN (SELECT id::text FROM work_item WHERE issue_id = $1))\n               OR (a.entity_type = 'issue_comment'\n                   AND a.entity_id IN (SELECT id::text FROM issue_comment\n                                       WHERE issue_id = $1 AND ($4 OR NOT is_internal_only)))\n        )\n        SELECT id AS \"id!\", entity_type AS \"entity_type!\", entity_id AS \"entity_id!\", branch_id, assignee_id,\n               actor_id, action AS \"action!\", old_value, new_value, batch_id AS \"batch_id!\",\n               created_at AS \"created_at!\"\n        FROM rows\n        WHERE $2::bigint IS NULL OR id > $2\n        ORDER BY id\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "entity_type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_id!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "entity_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "assignee_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item",
+            "name": "assignee_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "actor_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "action!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "old_value",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "old_value"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "new_value",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "new_value"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "batch_id!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "audit_log",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "88eb89b8b39de8e05605666b2869a5ed2c48bb63761efb43d468c2f07cdb8f86"
+}

@@ -1,4 +1,4 @@
-// Profile (UX_SPEC §4.16): who I am, where, what I can do, password, theme.
+// Profile (UX_SPEC §4.16): who I am, my branches and groups, password, theme.
 import { useState } from "react";
 import { Shield } from "lucide-react";
 import { toast } from "sonner";
@@ -7,7 +7,9 @@ import { getTheme, setTheme, type Theme } from "@/app/theme";
 import { Avatar } from "@/components/badges";
 import { Button, Card, Field, PageHeader, Segmented, inputClass } from "@/components/ui";
 import { formatDateTime } from "@/lib/dates";
-import { errorMessage, permissionInfo, scopeLabel, typeLabel } from "@/lib/labels";
+import { errorMessage } from "@/lib/labels";
+import { useGroupDirectory } from "@/lib/items";
+import { useViewer } from "@/lib/useViewer";
 
 export function ProfilePage() {
   const me = useSession();
@@ -16,6 +18,8 @@ export function ProfilePage() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [theme, setT] = useState<Theme>(getTheme);
+  const viewer = useViewer();
+  const groups = useGroupDirectory();
   const u = me.user;
   return (
     <div className="mx-auto max-w-[860px] space-y-6">
@@ -35,35 +39,39 @@ export function ProfilePage() {
       </Card>
 
       <Card className="p-6">
-        <h2 className="mb-4 text-[20px] font-semibold">What you can do</h2>
-        {me.memberships.length === 0 && <p className="text-text-2">You aren't a member of any branch.</p>}
-        <div className="space-y-6">
-          {me.memberships.map((m) => (
-            <section key={m.branch.id}>
-              <h3 className="font-semibold">
-                {m.branch.name} <span className="font-normal text-text-3">· {m.is_admin ? "Admin" : "Member"}</span>
-              </h3>
-              {m.is_admin ? (
-                <p className="mt-1 flex items-center gap-2 text-text-2">
-                  <Shield className="size-4" /> You can do everything here except school-level tasks.
+        <h2 className="mb-1 text-[20px] font-semibold">Your branches and groups</h2>
+        <p className="mb-4 text-text-2">Work sent to these groups comes to you. Ask an admin if one is missing.</p>
+        {me.memberships.length === 0 && <p className="text-text-2">{u.is_super_admin ? "As a super admin you work across every branch." : "You aren't a member of any branch."}</p>}
+        <ul className="space-y-4">
+          {me.memberships.map((m) => {
+            const mine = (viewer.myGroups?.[m.branch.id] ?? []).map((id) => groups.get(id)).filter(Boolean);
+            return (
+              <li key={m.branch.id}>
+                <p className="font-semibold">
+                  {m.branch.name} <span className="font-normal text-text-3">· {m.is_admin ? "Admin" : "Member"}</span>
                 </p>
-              ) : (
-                <ul className="mt-2 grid gap-x-6 gap-y-1 text-text-2 sm:grid-cols-2">
-                  {m.grants.map((g, i) => (
-                    <li key={i}>
-                      {permissionInfo[g.permission]?.title ?? g.permission}
-                      <span className="text-text-3">
-                        {" "}
-                        · {scopeLabel[g.scope].toLowerCase()}
-                        {g.issue_type && ` · ${typeLabel[g.issue_type]}s`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-        </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {viewer.myGroups?.[m.branch.id] === undefined ? (
+                    <span className="text-text-3">Loading…</span>
+                  ) : (
+                    mine
+                      .sort((a, b) => Number(b!.is_default) - Number(a!.is_default) || a!.name.localeCompare(b!.name))
+                      .map((g) => (
+                        <span key={g!.id} className="rounded-full bg-sunken px-3 py-1">
+                          {g!.is_default ? "All members" : g!.name}
+                        </span>
+                      ))
+                  )}
+                  {m.is_admin && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-primary-on-soft">
+                      <Shield className="size-3.5" /> Branch admin
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </Card>
 
       <Card className="p-6">

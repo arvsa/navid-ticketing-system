@@ -11,7 +11,7 @@ import { keys } from "@/api/keys";
 import type { IssueDetail, Report, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { TypeBadge } from "@/components/badges";
-import { AttachButton, FileList, PendingFiles, UploadNow, uploadAll, useFilePicker } from "@/components/files";
+import { AttachButton, FileList, PendingFiles, UploadNow, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, Skeleton, cx, inputClass } from "@/components/ui";
 import { canClaim, isMine } from "@/lib/can";
 import { dueIn, formatDateTime, formatTime, timeAgo } from "@/lib/dates";
@@ -212,6 +212,13 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
   );
 }
 
+/** Sending for approval with neither a note nor a file that uploaded. */
+class NothingToSend extends Error {
+  constructor(public uploadFailed = false) {
+    super("nothing to send");
+  }
+}
+
 function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const qc = useQueryClient();
   const t = useTransition();
@@ -220,19 +227,33 @@ function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const files = useFilePicker();
   const approver = issue.requires_super_admin_approval ? "A super admin" : "Your approver";
   const submit = useMutation({
+    // Approvers need something to look at: a note, a file, or both.
     mutationFn: async () => {
-      if (note.trim() || files.files.length) {
-        const c = await api.post<{ id: string }>(`/issues/${issue.id}/comments`, { body: note.trim() || "Files for my submission", work_item_id: work.id });
-        if (files.files.length) await uploadAll(issue.id, files.files, { comment_id: c.id });
+      const text = note.trim();
+      if (!text && !files.files.length) throw new NothingToSend();
+      const body = text || (files.files.length === 1 ? `Attached ${files.files[0].name}` : `Attached ${files.files.length} files`);
+      const c = await api.post<{ id: string }>(`/issues/${issue.id}/comments`, { body, work_item_id: work.id });
+      const failed = files.files.length ? await uploadAll(issue.id, files.files, { comment_id: c.id }) : [];
+      if (!text && failed.length === files.files.length) {
+        reportFailedUploads(failed, "Not sent:");
+        throw new NothingToSend(true);
       }
+      reportFailedUploads(failed, "Sent, but");
       await t.mutateAsync({ item: work, transition: "submit" });
     },
     onSuccess: () => {
       toast.success("Sent for approval");
       setOpen(false);
+      setNote("");
+      files.clear();
       qc.invalidateQueries({ queryKey: ["issues", issue.id, "comments"] });
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: ["issues", issue.id, "comments"] });
+      if (e instanceof NothingToSend) {
+        if (!e.uploadFailed) toast.error("Add a note or a file so your approver can see what you did.");
+      } else toast.error(errorMessage(e));
+    },
   });
   return (
     <Card className="overflow-hidden">
@@ -256,15 +277,16 @@ function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
         footer={
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button variant="primary" loading={submit.isPending} onClick={() => submit.mutate()}>
+            <Button variant="primary" loading={submit.isPending} disabled={!note.trim() && !files.files.length} onClick={() => submit.mutate()}>
               Send for approval
             </Button>
           </>
         }
       >
         <div className="space-y-3">
-          <Field label="Note" optional>
-            {(p) => <textarea {...p} value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={inputClass} />}
+          <p className="text-text-2">Add a note, a file, or both, so your approver can see what you did.</p>
+          <Field label="What did you do?">
+            {(p) => <textarea {...p} value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="e.g. Checked all six kits; restocked plasters in kits 2 and 5." className={inputClass} />}
           </Field>
           <PendingFiles files={files.files} onRemove={files.remove} />
           <AttachButton onPick={files.add} />

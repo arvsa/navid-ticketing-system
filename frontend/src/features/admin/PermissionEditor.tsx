@@ -3,14 +3,14 @@
 // sequence by the save bar (gap G-13).
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Info, Lock } from "lucide-react";
+import { Info, Lock, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
 import { useCatalog, useGroupGrants } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { CatalogEntry, Group, GroupGrant, IssueType, Permission, Scope } from "@/api/types";
-import { Button, Dialog, LoadingRows, Segmented, Switch, cx } from "@/components/ui";
-import { permissionInfo, permissionSections, scopeLabel, typeLabel } from "@/lib/labels";
+import { Button, Dialog, LoadingRows, Segmented, Switch, cx, inputClass } from "@/components/ui";
+import { permissionInfo, permissionSections, reachLabel, typeLabel } from "@/lib/labels";
 
 type Kinds = "all" | IssueType[];
 type Row = { on: boolean; scope: Scope; kinds: Kinds; custom?: boolean };
@@ -62,6 +62,7 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
   const base = useMemo(() => (catalog.data && grants.data ? fromGrants(catalog.data, grants.data) : null), [catalog.data, grants.data]);
   const [state, setState] = useState<State | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => setState(base), [base]);
 
@@ -106,6 +107,12 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
 
   const gained = changed.filter((k) => state[k].on).map((k) => describe(k as Permission, state[k]));
   const lost = changed.filter((k) => !state[k].on).map((k) => permissionInfo[k as Permission]?.title.toLowerCase() ?? k);
+  const term = q.trim().toLowerCase();
+  const matching = catalog.data.filter((c) => {
+    if (!term) return true;
+    const info = permissionInfo[c.key];
+    return `${info?.title ?? ""} ${info?.help ?? ""} ${c.description} ${c.key}`.toLowerCase().includes(term);
+  });
 
   return (
     <div className="pb-4">
@@ -124,8 +131,21 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
         </p>
       </div>
 
+      <div className="relative mx-6 mt-5">
+        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-text-3" aria-hidden />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search permissions, e.g. approve, export, private"
+          aria-label="Search permissions"
+          className={cx(inputClass, "h-11 rounded-full pl-10")}
+        />
+      </div>
+      {term && !matching.length && <p className="px-6 pt-6 text-text-2">No permissions match “{q}”.</p>}
+
       {permissionSections.map((sec) => {
-        const rows = catalog.data!.filter((c) => (permissionInfo[c.key]?.section ?? "people") === sec.key);
+        const rows = matching.filter((c) => (permissionInfo[c.key]?.section ?? "people") === sec.key);
         if (!rows.length) return null;
         return (
           <section key={sec.key} className="mt-6">
@@ -135,41 +155,44 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
                 const row = state[c.key];
                 const info = permissionInfo[c.key] ?? { title: c.description, help: "" };
                 const isChanged = changed.includes(c.key);
+                const scopes = c.allowed_scopes.filter((sc) => !(c.key === "issue.read" && sc === "own") || row.scope === sc);
                 return (
-                  <li key={c.key} className={cx("flex flex-wrap items-center gap-4 px-6 py-4 sm:flex-nowrap", isChanged && "bg-warning-soft/60")}>
+                  <li key={c.key} className={cx("flex gap-4 px-6 py-4", isChanged && "bg-warning-soft/60")}>
                     <Switch checked={row.on} onChange={(on) => set(c.key, { on })} label={info.title} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[17px] font-semibold">{info.title}</span>
-                        {isChanged && <span className="rounded-md bg-warning-soft px-2 text-[13px] font-semibold text-warning">Changed</span>}
+                    <div className="min-w-0 flex-1 space-y-2.5">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[17px] font-semibold">{info.title}</span>
+                          {isChanged && <span className="rounded-md bg-warning-soft px-2 text-[13px] font-semibold text-warning">Changed</span>}
+                        </div>
+                        <div className="text-text-2">{info.help || c.description}</div>
+                        {row.custom && <div className="mt-1 text-[13px] text-warning">Custom setup. Changing it here replaces it with the choice shown.</div>}
                       </div>
-                      <div className="text-text-2">{info.help || c.description}</div>
-                      {row.custom && <div className="mt-1 text-[13px] text-warning">Custom setup. Changing it here replaces it with the choice shown.</div>}
+                      {row.on && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {scopes.length > 1 ? (
+                            <Segmented<Scope> size="sm" label={`Reach for ${info.title}`} value={row.scope} onChange={(scope) => set(c.key, { scope })} options={scopes.map((sc) => ({ value: sc, label: reachLabel(c.key, sc) }))} />
+                          ) : (
+                            <span className="rounded-full bg-sunken px-3 py-1 text-[14px] text-text-2">{reachLabel(c.key, scopes[0])}</span>
+                          )}
+                          {c.per_issue_type && (
+                            <select
+                              value={kindsValue(row.kinds)}
+                              onChange={(e) => set(c.key, { kinds: KIND_OPTIONS.find((o) => o.value === e.target.value)?.kinds ?? "all" })}
+                              className={cx("h-8 rounded-full border border-input bg-surface px-3 text-[14px]", isChanged && "border-warning-edge")}
+                              aria-label={`Kinds for ${info.title}`}
+                            >
+                              {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(", ")}</option>}
+                              {KIND_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {row.on && (
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        {c.allowed_scopes.length > 1 ? (
-                          <Segmented<Scope> size="sm" label={`Reach for ${info.title}`} value={row.scope} onChange={(scope) => set(c.key, { scope })} options={c.allowed_scopes.map((s) => ({ value: s, label: s === "own" ? "Their own" : s === "targeted" ? "Sent to them" : c.key === "issue.edit" ? "Anyone's" : scopeLabel[s] }))} />
-                        ) : (
-                          <span className="text-text-2">{scopeLabel[c.allowed_scopes[0]]}</span>
-                        )}
-                        {c.per_issue_type && (
-                          <select
-                            value={kindsValue(row.kinds)}
-                            onChange={(e) => set(c.key, { kinds: KIND_OPTIONS.find((o) => o.value === e.target.value)?.kinds ?? "all" })}
-                            className={cx("h-8 rounded-[10px] border border-input bg-surface px-2 text-[14px]", isChanged && "border-warning-edge")}
-                            aria-label={`Kinds for ${info.title}`}
-                          >
-                            {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(", ")}</option>}
-                            {KIND_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    )}
                   </li>
                 );
               })}
@@ -239,7 +262,7 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
 function describe(key: Permission, row: Row) {
   const t = permissionInfo[key]?.title.toLowerCase() ?? key;
   const kinds = row.kinds === "all" ? "" : ` (${row.kinds.map((k) => typeLabel[k]).join(", ")})`;
-  return `${t}${kinds} — ${scopeLabel[row.scope].toLowerCase()}`;
+  return `${t}${kinds} — ${reachLabel(key, row.scope).toLowerCase()}`;
 }
 
 /** One-line summary for the group list ("Can approve and manage members"). */

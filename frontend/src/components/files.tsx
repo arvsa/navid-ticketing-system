@@ -45,6 +45,45 @@ export function FileList({ files, wide }: { files: AttachmentMeta[]; wide?: bool
   );
 }
 
+// The backend accepts only these types and trusts the type the browser
+// reports (backend/src/domain/attachments.rs, ALLOWED_TYPES). Browsers report
+// no type for some files, so known extensions are mapped here.
+const TYPE_BY_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  txt: "text/plain",
+  csv: "text/csv",
+  doc: "application/msword",
+  xls: "application/vnd.ms-excel",
+  ppt: "application/vnd.ms-powerpoint",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+};
+const ALLOWED = new Set(Object.values(TYPE_BY_EXT));
+export const ACCEPT = Object.keys(TYPE_BY_EXT).map((e) => `.${e}`).join(",");
+export const ACCEPTED_HINT = "PDF, images (PNG, JPG, GIF, WebP), Word, Excel, PowerPoint, OpenDocument, CSV or text, up to 25 MB.";
+
+/** The file ready to send, or why it can't be attached. */
+export function checkFile(f: File): { file: File } | { reason: string } {
+  if (f.size === 0) return { reason: `${f.name} is empty.` };
+  if (f.size > MAX_FILE) return { reason: `${f.name} is too big. The limit is 25 MB.` };
+  const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+  const type = f.type.toLowerCase();
+  if (ALLOWED.has(type)) return { file: f };
+  const mapped = TYPE_BY_EXT[ext];
+  if (mapped) return { file: new File([f], f.name, { type: mapped, lastModified: f.lastModified }) };
+  const what = ext === "heic" || ext === "heif" ? "iPhone HEIC photos" : ext ? `.${ext} files` : "Files of this kind";
+  return { reason: `${f.name}: ${what} can't be attached. Use ${ACCEPTED_HINT}` };
+}
+
 /** Picks files and keeps them until `uploadAll` is called with the parent. */
 export function useFilePicker() {
   const [files, setFiles] = useState<File[]>([]);
@@ -53,9 +92,9 @@ export function useFilePicker() {
     add: (list: FileList | null) => {
       const ok: File[] = [];
       for (const f of Array.from(list ?? [])) {
-        if (f.size > MAX_FILE) toast.error(`${f.name} is too big. The limit is 25 MB.`);
-        else if (f.size === 0) toast.error(`${f.name} is empty.`);
-        else ok.push(f);
+        const r = checkFile(f);
+        if ("file" in r) ok.push(r.file);
+        else toast.error(r.reason, { duration: 10000 });
       }
       setFiles((prev) => [...prev, ...ok]);
     },
@@ -64,26 +103,45 @@ export function useFilePicker() {
   };
 }
 
-export async function uploadAll(issueId: string, files: File[], parent: { comment_id?: string; report_id?: string } = {}) {
-  let failed = 0;
+/** Uploads in turn; returns the files that failed, with the reason. */
+export async function uploadAll(
+  issueId: string,
+  files: File[],
+  parent: { comment_id?: string; report_id?: string } = {},
+): Promise<{ name: string; reason: string }[]> {
+  const failed: { name: string; reason: string }[] = [];
   for (const f of files) {
+    const r = checkFile(f);
+    if ("reason" in r) {
+      failed.push({ name: f.name, reason: r.reason });
+      continue;
+    }
     try {
-      await upload(issueId, f, parent);
+      await upload(issueId, r.file, parent);
     } catch (e) {
-      failed++;
-      toast.error(`${f.name}: ${errorMessage(e)}`);
+      failed.push({ name: f.name, reason: errorMessage(e) });
     }
   }
   return failed;
+}
+
+/** A toast that stays until dismissed, listing files that didn't upload. */
+export function reportFailedUploads(failed: { name: string; reason: string }[], context: string) {
+  if (!failed.length) return;
+  toast.error(`${context} ${failed.length === 1 ? "1 file didn't" : `${failed.length} files didn't`} upload`, {
+    description: failed.map((f) => f.reason).join(" · "),
+    duration: Infinity,
+  });
 }
 
 export function AttachButton({ onPick, label = "Attach files", dashed = true }: { onPick: (files: FileList | null) => void; label?: string; dashed?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
-      <input ref={ref} type="file" multiple className="sr-only" tabIndex={-1} onChange={(e) => (onPick(e.target.files), (e.target.value = ""))} />
+      <input ref={ref} type="file" multiple accept={ACCEPT} className="sr-only" tabIndex={-1} onChange={(e) => (onPick(e.target.files), (e.target.value = ""))} />
       <button
         type="button"
+        title={`You can attach ${ACCEPTED_HINT}`}
         onClick={() => ref.current?.click()}
         className={cx(
           "inline-flex h-10 items-center gap-2 rounded-[10px] px-3 text-text-2 hover:bg-surface-2",
@@ -121,15 +179,19 @@ export function UploadNow({ issueId, parent, onDone, label }: { issueId: string;
     <AttachButton
       label={busy ? "Uploading…" : label ?? "+ Attach a file"}
       onPick={async (list) => {
-        const files = Array.from(list ?? []).filter((f) => {
-          if (f.size > MAX_FILE) toast.error(`${f.name} is too big. The limit is 25 MB.`);
-          return f.size > 0 && f.size <= MAX_FILE;
-        });
+        const files: File[] = [];
+        for (const f of Array.from(list ?? [])) {
+          const r = checkFile(f);
+          if ("file" in r) files.push(r.file);
+          else toast.error(r.reason, { duration: 10000 });
+        }
         if (!files.length) return;
         setBusy(true);
         const failed = await uploadAll(issueId, files, parent);
         setBusy(false);
-        if (failed < files.length) toast.success(files.length - failed === 1 ? "File attached" : `${files.length - failed} files attached`);
+        const done = files.length - failed.length;
+        if (done) toast.success(done === 1 ? "File attached" : `${done} files attached`);
+        reportFailedUploads(failed, "");
         onDone();
       }}
     />

@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getAll } from "@/api/client";
 import type { Group, IssueDetail, Target, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
-import type { Directory } from "@/people/usePeople";
-import { canApprove, canClaim, isMine, type Viewer } from "./can";
+import { UNKNOWN_PERSON, usePeople, type Directory } from "@/people/usePeople";
+import { canApprove, canClaim, canComment, isMine, type Viewer } from "./can";
 
 export const numberOf = (key: string) => key.replace(/^ISS-/, "");
 
@@ -65,7 +65,7 @@ export type PrimaryAction =
 export function primaryAction(issue: IssueDetail, v: Viewer): PrimaryAction {
   if (issue.state !== "open") return { kind: "none" };
   const myId = v.me.user.id;
-  if (issue.type === "ticket") return issue.created_by === myId ? { kind: "close-question" } : { kind: "reply" };
+  if (issue.type === "ticket") return issue.created_by === myId ? { kind: "close-question" } : canComment(v, issue) ? { kind: "reply" } : { kind: "none" };
   if (issue.type === "event") {
     const ended = issue.event ? new Date(issue.event.ends_at).getTime() < Date.now() : false;
     if (issue.event?.my_rsvp != null && !ended) return { kind: "rsvp" };
@@ -86,3 +86,39 @@ export function primaryAction(issue: IssueDetail, v: Viewer): PrimaryAction {
   }
   return { kind: "comment" };
 }
+
+/** Names for one item's people and branches, using what the item tells us
+ * when the directory can't (gap G-2): only super admins create school-wide
+ * items or approve work that needs a super admin, so those are the School
+ * office. Branches outside the viewer's own are counted, not named. */
+export function useItemLabels(issue: IssueDetail) {
+  const people = usePeople();
+  const groups = useGroupDirectory();
+  const { branchById, options } = useBranch();
+  const branchName = (id?: string | null) =>
+    (id && (branchById.get(id)?.name ?? options.find((o) => o.id === id)?.name)) || null;
+  const person = (id?: string | null, short = true) => {
+    const p = people.get(id);
+    if (p) return short ? people.short(id) : people.name(id);
+    if (!id) return "Nobody";
+    // The backend sets requires_super_admin_approval exactly when a super admin
+    // created the item, and only super admins create school-wide items.
+    if (id === issue.created_by && (issue.branch_id === null || issue.requires_super_admin_approval)) return SCHOOL_OFFICE;
+    if (issue.requires_super_admin_approval && issue.work_items.some((w) => w.decided_by === id)) return SCHOOL_OFFICE;
+    return UNKNOWN_PERSON;
+  };
+  const known: string[] = [];
+  let otherBranches = 0;
+  for (const t of issue.targets) {
+    if (t.kind === "branch") {
+      const n = branchName(t.branch_id);
+      if (n) known.push(n);
+      else otherBranches++;
+    } else known.push(targetName(t, people, groups, (id) => branchName(id) ?? "another branch"));
+  }
+  if (otherBranches) known.push(`${otherBranches} other branch${otherBranches === 1 ? "" : "es"}`);
+  const sentTo = known.length <= 1 ? known.join("") : `${known.slice(0, -1).join(", ")} and ${known[known.length - 1]}`;
+  return { person, branchName, sentTo };
+}
+
+export const SCHOOL_OFFICE = "School office";

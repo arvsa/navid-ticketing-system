@@ -84,11 +84,22 @@ export const scopeLabel: Record<Scope, string> = {
   branch: "Whole branch",
 };
 
+/** What a grant's reach means for one permission, in plain words. */
+export function reachLabel(perm: Permission, scope: Scope): string {
+  if (perm.startsWith("work_item.")) return scope === "branch" ? "Any work in the branch" : scope === "targeted" ? "Work sent to them" : "Their own work";
+  if (perm.startsWith("issue.") || perm.startsWith("comment.")) {
+    if (scope === "own") return "Items they created";
+    if (scope === "targeted") return "Items sent to them";
+    return "Any item in the branch";
+  }
+  return scopeLabel[scope];
+}
+
 export const permissionInfo: Record<
   Permission,
   { title: string; help: string; section: PermissionSection }
 > = {
-  "issue.read": { title: "See items", help: "Items in the branch that aren't private", section: "seeing" },
+  "issue.read": { title: "See items", help: "Items that aren't private. Everyone always sees what they created.", section: "seeing" },
   "issue.read_private": {
     title: "See private items",
     help: "Including ones not sent to them",
@@ -103,7 +114,7 @@ export const permissionInfo: Record<
   "issue.edit": { title: "Edit items", help: "Title, details, priority and event times", section: "creating" },
   "issue.target": {
     title: "Give tasks to others",
-    help: "Send items to people and groups",
+    help: "Choose who an item goes to, and add people later",
     section: "creating",
   },
   "issue.close": {

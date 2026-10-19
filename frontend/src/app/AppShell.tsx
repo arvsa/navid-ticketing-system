@@ -183,7 +183,7 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
         {shortName(me.user.first_name, me.user.last_name)} · {me.user.email}
       </MenuLabel>
       <MenuItem onSelect={() => navigate({ to: "/profile" })}>
-        <User className="size-4" /> Profile and permissions
+        <User className="size-4" /> Your profile
       </MenuItem>
       {extra && extra.length > 0 && (
         <>

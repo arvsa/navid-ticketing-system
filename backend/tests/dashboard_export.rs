@@ -433,11 +433,11 @@ async fn exported_sheets_match_the_filtered_data(pool: PgPool) {
         assert_eq!(book.rows("Reports").len(), submitted, "{who}: report rows");
 
         // Comment counts include internal comments only for those who see them.
-        let printer = book.rows("Tickets").into_iter().find(|r| text(&r[1]) == "Printer").unwrap();
+        let printer = book.rows("Tickets").into_iter().find(|r| text(&r[2]) == "Printer").unwrap();
         let expected_comments = if who == "exporter" { 1.0 } else { 2.0 };
-        assert_eq!(printer[7], Data::Float(expected_comments), "{who}: comment count");
+        assert_eq!(printer[8], Data::Float(expected_comments), "{who}: comment count");
         // Private issues only for those who can read them.
-        let titles: Vec<String> = book.rows("Tickets").iter().map(|r| text(&r[1])).collect();
+        let titles: Vec<String> = book.rows("Tickets").iter().map(|r| text(&r[2])).collect();
         assert_eq!(titles.contains(&"HR".to_owned()), who != "exporter", "{who}");
     }
     assert_eq!(audit_count(&c.app.db, "export", "export").await, 3);
@@ -460,7 +460,7 @@ async fn multi_branch_exports_are_for_super_admins_only(pool: PgPool) {
 
     // Super admins: several or all.
     let mut book = open_book(export(&c, "root", &both).await).await;
-    let branches: Vec<String> = book.rows("Tickets").iter().map(|r| text(&r[2])).collect();
+    let branches: Vec<String> = book.rows("Tickets").iter().map(|r| text(&r[3])).collect();
     assert!(branches.contains(&"AAA".to_owned()) && branches.contains(&"BBB".to_owned()));
     let all = export(&c, "root", "").await;
     assert!(all.headers[header::CONTENT_DISPOSITION].to_str().unwrap().contains("export-all-"));
@@ -492,8 +492,8 @@ async fn export_filters_types_dates_and_formats_times_in_the_branch_timezone(poo
     let created =
         sqlx::query_scalar!("SELECT created_at FROM issue WHERE title = 'Printer'").fetch_one(&c.app.db).await.unwrap();
     let mut book = open_book(export(&c, "admin_a", &format!("branch_ids={a}&types=ticket")).await).await;
-    let row = book.rows("Tickets").into_iter().find(|r| text(&r[1]) == "Printer").unwrap();
-    let Data::DateTime(cell) = &row[4] else { panic!("created at should be a date: {:?}", row[4]) };
+    let row = book.rows("Tickets").into_iter().find(|r| text(&r[2]) == "Printer").unwrap();
+    let Data::DateTime(cell) = &row[5] else { panic!("created at should be a date: {:?}", row[5]) };
     let tokyo = created.to_offset(time::UtcOffset::from_hms(9, 0, 0).unwrap());
     let excel_epoch = time::macros::datetime!(1899-12-30 0:00);
     let expected = (time::PrimitiveDateTime::new(tokyo.date(), tokyo.time()) - excel_epoch).as_seconds_f64() / 86_400.0;

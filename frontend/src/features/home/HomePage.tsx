@@ -10,7 +10,7 @@ import { useBranch } from "@/app/BranchContext";
 import { Avatar, ProgressBar, TypeBadge, progressOf } from "@/components/badges";
 import { Dot, Panel, RowLink, StatPill } from "@/components/rows";
 import { EmptyState, ErrorPanel, Skeleton, cx } from "@/components/ui";
-import { isAdminOf, isSuper, hasGrant } from "@/lib/can";
+import { canApprove, canAssign, hasGrant, isAdminOf, isSuper, mayApproveIn } from "@/lib/can";
 import { formatDay, formatTime, greeting, inZone, isDueSoon, lateBy, shortAgo, timeAgo } from "@/lib/dates";
 import { isDone, isSentBack, numberOf } from "@/lib/items";
 import { describeNotification } from "@/lib/notifications";
@@ -51,26 +51,38 @@ function AdminHome() {
   const dash = useDashboard(branchId);
   const numbers = dash.data?.branches.find((b) => b.branch_id === branchId);
   const mine = dash.data?.mine;
-  const waiting = useWorkItems({ branch_id: branchId, status: "pending_approval" });
+  // Only offer what this person can act on: the server would refuse the rest.
+  const mayApprove = !!branchId && mayApproveIn(viewer, branchId);
+  const mayAssign = !!branchId && (isAdminOf(viewer, branchId) || hasGrant(viewer, branchId, "work_item.assign"));
+  const waiting = useWorkItems({ branch_id: branchId, status: "pending_approval" }, mayApprove);
   const active = useWorkItems({ branch_id: branchId });
   const myWork = useWorkItems({ assignee: "me", branch_id: branchId });
   const [filter, setFilter] = useState<Need["kind"] | "all">("all");
 
-  const toApprove = (waiting.data ?? []).filter((w) => w.assignee_id !== viewer.me.user.id);
   const live = (active.data ?? []).filter((w) => !isDone(w));
   const overdue = live.filter((w) => w.is_overdue).sort((a, b) => (a.sla_due_at ?? "").localeCompare(b.sla_due_at ?? ""));
-  const unowned = live.filter((w) => !w.assignee_id);
+  const waitingRaw = mayApprove ? (waiting.data ?? []).filter((w) => w.assignee_id !== viewer.me.user.id) : [];
+  const unownedRaw = mayAssign ? live.filter((w) => !w.assignee_id) : [];
   const myOpen = (myWork.data ?? []).filter((w) => !isDone(w) && w.status !== "pending_approval");
+  const issues = useIssuesById([...waitingRaw, ...unownedRaw, ...overdue.slice(0, 20), ...myOpen.slice(0, 4)].map((w) => w.issue_id));
+  // Item-level rules (never your own work, school-wide work only for super admins…).
+  const toApprove = waitingRaw.filter((w) => {
+    const issue = issues.map.get(w.issue_id);
+    return issue ? canApprove(viewer, issue, w) : false;
+  });
+  const unowned = unownedRaw.filter((w) => {
+    const issue = issues.map.get(w.issue_id);
+    return issue ? canAssign(viewer, issue, w) : false;
+  });
   const needs: Need[] = [
     ...toApprove.map((w) => ({ kind: "approve" as const, w })),
     ...unowned.map((w) => ({ kind: "owner" as const, w })),
     ...overdue.filter((w) => w.assignee_id).map((w) => ({ kind: "overdue" as const, w })),
   ];
   const shown = needs.filter((n) => filter === "all" || n.kind === filter).slice(0, 7);
-  const issues = useIssuesById([...shown.map((n) => n.w.issue_id), ...myOpen.slice(0, 4).map((w) => w.issue_id)]);
   const openTotal = numbers?.open_issues_by_type ? Object.values(numbers.open_issues_by_type).reduce((a, b) => a + b, 0) : null;
   const decisions = toApprove.length + unowned.length;
-  const loading = waiting.isLoading || active.isLoading;
+  const loading = (mayApprove && waiting.isLoading) || active.isLoading || issues.isLoading;
 
   const open = (n: Need) => {
     const issue = issues.map.get(n.w.issue_id);
@@ -83,7 +95,9 @@ function AdminHome() {
       <div className="space-y-5">
         <Greeting subtitle={`${branch?.name ?? ""}${decisions ? ` · ${decisions} thing${decisions === 1 ? "" : "s"} need a decision from you` : " · nothing needs you right now"}`} />
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-          <StatPill value={toApprove.length} label="to approve" tone={toApprove.length ? "warning" : "neutral"} link={{ to: "/approvals" }} />
+          {mayApprove && (
+            <StatPill value={mine?.awaiting_my_approval ?? toApprove.length} label="to approve" tone={toApprove.length ? "warning" : "neutral"} link={{ to: "/approvals" }} />
+          )}
           {numbers?.overdue_work_items != null && <StatPill value={numbers.overdue_work_items} label="overdue" tone={numbers.overdue_work_items ? "danger" : "neutral"} onClick={() => setFilter("overdue")} />}
           {openTotal != null && <StatPill value={openTotal} label="open items" link={{ to: "/items" }} />}
           {numbers?.due_next_7_days != null && <StatPill value={numbers.due_next_7_days} label="due this week" link={{ to: "/items" }} />}
@@ -100,12 +114,14 @@ function AdminHome() {
               <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {(
                   [
-                    ["all", "All", needs.length],
-                    ["approve", "To approve", toApprove.length],
-                    ["overdue", "Overdue", overdue.filter((w) => w.assignee_id).length],
-                    ["owner", "No owner", unowned.length],
+                    ["all", "All", needs.length, true],
+                    ["approve", "To approve", toApprove.length, mayApprove],
+                    ["overdue", "Overdue", overdue.filter((w) => w.assignee_id).length, true],
+                    ["owner", "No owner", unowned.length, mayAssign],
                   ] as const
-                ).map(([k, label, n]) => (
+                )
+                  .filter(([, , , allowed]) => allowed)
+                  .map(([k, label, n]) => (
                   <button
                     key={k}
                     onClick={() => setFilter(k)}
@@ -184,7 +200,7 @@ function AdminHome() {
                   return (
                     <li key={w.id} className="flex items-center gap-1">
                       <RowLink
-                        className="flex-1"
+                        className="w-auto min-w-0 flex-1"
                         chevron={false}
                         link={{ to: "/items/$number/mine", params: { number: issue ? numberOf(issue.key) : "0" } }}
                         leading={issue && <TypeBadge type={issue.type} />}
@@ -413,7 +429,7 @@ function TodoRow({ work, issue, zone }: { work: WorkItem; issue?: IssueDetail; z
   return (
     <li className="flex items-center gap-1">
       <RowLink
-        className="flex-1"
+        className="w-auto min-w-0 flex-1"
         chevron={false}
         link={{ to: "/items/$number/mine", params: { number: issue ? numberOf(issue.key) : "0" } }}
         leading={issue ? <TypeBadge type={issue.type} /> : <Skeleton className="h-6 w-16" />}

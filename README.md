@@ -39,13 +39,6 @@ You only need [Docker](https://www.docker.com).
    | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
    | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
 
-How it fits together:
-
-```text
-browser ──► frontend (nginx, :8000) ──/api──► backend (:8080) ──► postgres (:5432)
-              serves the built app
-```
-
 The frontend and `/api` are served from the same address, so the session
 cookie and the backend's `Origin` check work without CORS. The backend applies
 database migrations when it starts.
@@ -77,15 +70,6 @@ cp .env.example .env
 
 Data lives in two Docker volumes: `pgdata` (the database) and `attachments`
 (uploaded files). Back them up together.
-
-## Developing
-
-For day-to-day work, run only the database in Docker and the apps on your
-machine, so changes reload straight away:
-
-```sh
-docker compose up -d postgres
-```
 
 Then follow [backend/README.md](backend/README.md) (`cargo run`, on
 `http://127.0.0.1:8080`) and [frontend/README.md](frontend/README.md)

@@ -57,7 +57,8 @@ export function StatPill({
 
 const rowCls = "group flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-left transition-colors hover:bg-sunken";
 
-/** A list row that is one big link (or button), with a chevron on the right. */
+/** A list row that is one big link (or button), with a chevron on the right.
+ * Next to a button, pass className="w-auto min-w-0 flex-1" so it leaves room. */
 export function RowLink({
   link,
   onClick,

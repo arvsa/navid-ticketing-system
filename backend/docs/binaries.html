@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command-line Tools</title>
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --text: #1d2125; --muted: #5d6670; --line: #e3e5e8;
+  --accent: #2f5d8a; --code-bg: #f2f3f5; --side: #f4f5f6; --warn: #8a5a1f; --warn-bg: #fbf3e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181b; --panel: #1c2024; --text: #e6e8ea; --muted: #9aa3ab; --line: #2c3238;
+    --accent: #7fb0e0; --code-bg: #23282d; --side: #181c1f; --warn: #e0b070; --warn-bg: #2a2418;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181b; --panel: #1c2024; --text: #e6e8ea; --muted: #9aa3ab; --line: #2c3238;
+  --accent: #7fb0e0; --code-bg: #23282d; --side: #181c1f; --warn: #e0b070; --warn-bg: #2a2418;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0; }
+pre code { background: none; padding: 0; }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+aside { background: var(--side); border-right: 1px solid var(--line); position: sticky; top: 0; height: 100vh;
+  overflow-y: auto; padding: 18px 14px 40px; }
+aside .brand { font-weight: 650; font-size: 16px; margin: 0 6px 4px; }
+aside .sub { color: var(--muted); font-size: 13px; margin: 0 6px 14px; }
+aside a { display: block; padding: 3px 6px; font-size: 14px; border-radius: 4px; }
+aside a:hover { background: var(--panel); text-decoration: none; }
+aside a code { background: none; padding: 0; }
+.nav-title { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 6px 4px; }
+main { padding: 32px 40px 80px; max-width: 900px; }
+h1 { font-size: 28px; margin: 0 0 6px; }
+h2 { font-size: 21px; margin: 40px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 0 0 6px; }
+h4 { font-size: 13px; margin: 16px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.lead { color: var(--muted); margin: 0 0 22px; }
+.tool { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 0 0 14px; }
+.tool .what { margin: 4px 0 0; }
+.needs { display: inline-block; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0 8px; margin-left: 6px; vertical-align: 2px; font-weight: normal; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 4px 0; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td:first-child { white-space: nowrap; }
+.note { background: var(--warn-bg); border-left: 3px solid var(--warn); padding: 8px 12px; border-radius: 4px; margin: 12px 0 0; font-size: 14px; }
+.code-wrap { position: relative; margin-top: 8px; }
+.copy { position: absolute; top: 6px; right: 6px; font-size: 12px; padding: 3px 8px; border-radius: 4px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+.theme { float: right; font-size: 12px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); cursor: pointer; }
+@media (max-width: 860px) {
+  .layout { display: block; }
+  aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  main { padding: 22px 16px 60px; }
+  td:first-child { white-space: normal; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand">Command-line tools</div>
+  <div class="sub">School ticketing backend</div>
+  <a href="#basics">Basics</a>
+  <a href="#common-flags">Common flags</a>
+  <div class="nav-title">Server and database</div>
+  <a href="#backend"><code>backend</code></a>
+  <a href="#admin"><code>admin</code></a>
+  <a href="#users"><code>users</code></a>
+  <div class="nav-title">Through the API</div>
+  <a href="#health"><code>health</code></a>
+  <a href="#login"><code>login</code></a>
+  <a href="#whoami"><code>whoami</code></a>
+  <a href="#change_password"><code>change_password</code></a>
+  <a href="#logout"><code>logout</code></a>
+  <div class="nav-title">More</div>
+  <a href="password-rotation.html">Tutorial: rotating passwords</a>
+  <a href="api.html">API reference</a>
+</aside>
+<main>
+<button class="theme" id="theme" type="button">Theme</button>
+<h1>Command-line tools</h1>
+<p class="lead">The programs in <code>src/bin</code>: running the server, setting up accounts and trying the API from the terminal.</p>
+
+<h2 id="basics">Basics</h2>
+<p>Run each tool from the project folder with <code>cargo run --bin NAME</code>. Flags for the tool go after <code>--</code>:</p>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login -- --email admin@north.demo.school</code></pre></div>
+<p>Every tool has <code>--help</code>, for example <code>cargo run --bin users -- --help</code>.</p>
+<p>There are two kinds of tool:</p>
+<ul>
+  <li><strong>Database tools</strong> (<code>admin</code>, <code>users</code>) talk to Postgres directly. They need only the database (<code>docker compose up -d</code>), not the server, and read <code>DATABASE_URL</code> from <code>.env</code>.</li>
+  <li><strong>API tools</strong> (<code>health</code>, <code>login</code>, <code>whoami</code>, <code>change_password</code>, <code>logout</code>) call the running server (<code>cargo run</code>) like any client would. The ones that need a session share it through <code>cookies.txt</code>, which <code>login</code> writes and <code>logout</code> deletes. curl can use the same file: <code>curl -b cookies.txt ...</code>.</li>
+</ul>
+
+<h2 id="common-flags">Common flags of the API tools</h2>
+<table>
+  <tr><th>Flag</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>--url</code></td><td><code>http://127.0.0.1:8080</code></td><td>The server's address.</td></tr>
+  <tr><td><code>--cookie-file</code></td><td><code>cookies.txt</code></td><td>Where the session is saved and read. Use different files to stay signed in as several people.</td></tr>
+  <tr><td><code>--origin</code></td><td><code>APP_ORIGIN</code> from <code>.env</code>, else <code>http://localhost:5173</code></td><td>Sent as the <code>Origin</code> header on changes; must match the server's <code>APP_ORIGIN</code>. Not used by <code>health</code> and <code>whoami</code>.</td></tr>
+</table>
+
+<h2 id="server">Server and database</h2>
+
+<section class="tool" id="backend">
+  <h3><code>backend</code> <span class="needs">database</span></h3>
+  <p class="what">The API server. It's the default binary, so plain <code>cargo run</code> starts it. It applies new database migrations on start and listens on <code>BIND_ADDR</code> (<code>127.0.0.1:8080</code>).</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run</code></pre></div>
+  <p>It is configured only through <code>.env</code>; see <a href="REFERENCE.md">REFERENCE.md</a> for every setting.</p>
+</section>
+
+<section class="tool" id="admin">
+  <h3><code>admin</code> <span class="needs">database</span></h3>
+  <p class="what">Operator tasks that need no sign-in. They're recorded in the audit log as done by the system.</p>
+
+  <h4>create-super-admin</h4>
+  <p>Creates the first super admin (or another one) with a random temporary password, printed once. The account must choose its own password at first sign-in.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- create-super-admin --email you@school.org --first-name Ada --last-name Lovelace</code></pre></div>
+
+  <h4>reset-password</h4>
+  <p>Gives any account a new temporary password (printed once), forces a change at the next sign-in, clears a lockout and signs the account out everywhere. Works for super admins too, including a locked-out one.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- reset-password --email jane@school.org</code></pre></div>
+
+  <h4>seed-demo</h4>
+  <p>Fills an <em>empty</em> database with three branches, about 90 people and some issues. Every demo account's password is <code>demo-password</code>. It refuses to run if any branch exists.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- seed-demo</code></pre></div>
+</section>
+
+<section class="tool" id="users">
+  <h3><code>users</code> <span class="needs">database</span></h3>
+  <p class="what">Lists the accounts as a table: email, name, branches (with <code>(admin)</code> where they're an admin) and notes such as <em>super admin</em>, <em>deactivated</em>, <em>locked</em> or <em>must change password</em>. Read-only.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin users
+cargo run --bin users -- --branch NORTH
+cargo run --bin users -- --search jane</code></pre></div>
+  <table>
+    <tr><th>Flag</th><th>Meaning</th></tr>
+    <tr><td><code>--branch CODE</code></td><td>Only current members of that branch.</td></tr>
+    <tr><td><code>--search TEXT</code></td><td>Only users whose email or name contains the text.</td></tr>
+  </table>
+  <p class="note">Passwords can't be shown: the database stores only argon2 hashes of them.</p>
+</section>
+
+<h2 id="api-tools">Through the API</h2>
+<p>These need the server running (<code>cargo run</code>) in another terminal.</p>
+
+<section class="tool" id="health">
+  <h3><code>health</code> <span class="needs">server</span></h3>
+  <p class="what">Checks <code>GET /api/healthz</code> and prints <code>OK</code> (server and database up), <code>UNHEALTHY</code> (server up, database not) or <code>DOWN</code> (server not reachable). The exit code is non-zero unless it's <code>OK</code>, so scripts can use it.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin health</code></pre></div>
+</section>
+
+<section class="tool" id="login">
+  <h3><code>login</code> <span class="needs">server</span></h3>
+  <p class="what">Signs in and saves the session to the cookie file. Without flags it signs in as the demo super admin.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login
+cargo run --bin login -- --email jane@school.org --password 'her-password'</code></pre></div>
+  <table>
+    <tr><th>Flag</th><th>Default</th></tr>
+    <tr><td><code>--email</code></td><td><code>superadmin@demo.school</code></td></tr>
+    <tr><td><code>--password</code></td><td><code>demo-password</code></td></tr>
+  </table>
+  <p>If the account has a temporary password, it says so: nothing but <a href="#change_password"><code>change_password</code></a>, <a href="#whoami"><code>whoami</code></a> and <a href="#logout"><code>logout</code></a> works until a new password is chosen.</p>
+  <p class="note">A wrong email, wrong password, deactivated account and locked account all give the same "invalid email or password", on purpose. Five wrong passwords lock an account for 15 minutes.</p>
+</section>
+
+<section class="tool" id="whoami">
+  <h3><code>whoami</code> <span class="needs">server</span></h3>
+  <p class="what">Shows who the saved session belongs to (name, email, super admin or not, branches and roles), or that you're signed out. Non-zero exit code when signed out.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin whoami</code></pre></div>
+</section>
+
+<section class="tool" id="change_password">
+  <h3><code>change_password</code> <span class="needs">server</span></h3>
+  <p class="what">Changes the password of whoever is signed in. Any user can run it for their own account, including right after signing in with a temporary password (use the temporary one as the current password). The session in the cookie file stays signed in; every other session of the account is signed out.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin change_password -- --current-password 'old-password' --new-password 'new-password'</code></pre></div>
+  <table>
+    <tr><th>Flag</th><th>Meaning</th></tr>
+    <tr><td><code>--current-password</code></td><td>Required. The password you signed in with.</td></tr>
+    <tr><td><code>--new-password</code></td><td>Required. 8 to 128 characters.</td></tr>
+  </table>
+  <p>See the <a href="password-rotation.html">password rotation tutorial</a> for the full flow.</p>
+</section>
+
+<section class="tool" id="logout">
+  <h3><code>logout</code> <span class="needs">server</span></h3>
+  <p class="what">Ends the saved session on the server and deletes the cookie file. If the session had already expired it just deletes the file. If the server can't be reached, the file is kept so you can try again.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin logout</code></pre></div>
+</section>
+
+<p class="note">Passwords given as flags end up in your shell history. On a shared machine, put a space before the command (zsh and bash skip such lines when configured to) or clear the history afterwards.</p>
+</main>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.parentElement.querySelector('pre').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = 'Copied';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 1200);
+      });
+    });
+  });
+  var root = document.documentElement, key = 'api-docs-theme';
+  try { var saved = localStorage.getItem(key); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  document.getElementById('theme').addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') ? root.getAttribute('data-theme') === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 use serde_json::Value;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{db::Tx, error::AppResult};
@@ -34,4 +35,11 @@ pub async fn record(tx: &mut Tx, entry: AuditEntry) -> AppResult<()> {
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+/// A time for `old_value` / `new_value`, in RFC 3339 like every other time in
+/// the API. `json!` on an `OffsetDateTime` would write serde's default
+/// `[year, day_of_year, hour, ...]` list instead.
+pub fn time(t: Option<OffsetDateTime>) -> Value {
+    t.and_then(|t| t.format(&Rfc3339).ok()).map_or(Value::Null, Value::String)
 }

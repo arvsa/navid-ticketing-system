@@ -2,20 +2,19 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, EyeOff, Info, Lock, MoreHorizontal, Unlock, X } from "lucide-react";
+import { CheckCircle2, Info, Lock, MoreHorizontal, Unlock, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { setIssue, useComments, useHistory, useIssue, useIssueByNumber, useTransition } from "@/api/hooks";
-import { keys } from "@/api/keys";
 import type { IssueDetail, Target } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Pill, PriorityText, TypeBadge } from "@/components/badges";
-import { FileList, UploadNow } from "@/components/files";
+import { FileList } from "@/components/files";
 import { Button, Card, ErrorPanel, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
 import { canClose, canEdit, canSetPrivate, canTarget, isAdminOf, isSuper } from "@/lib/can";
 import { formatDateTime, formatDay, timeAgo, zoneSuffix } from "@/lib/dates";
-import { describeHistory } from "@/lib/history";
-import { isDone, numberOf, primaryAction, targetName, useGroupDirectory } from "@/lib/items";
+import { historyLines } from "@/lib/history";
+import { isDone, numberOf, primaryAction, targetName, useGroupDirectory, useItemLabels } from "@/lib/items";
 import { errorMessage, modeLabel, stateLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -62,7 +61,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const viewer = useViewer();
   const people = usePeople();
   const groups = useGroupDirectory();
-  const { zoneOf, branchById } = useBranch();
+  const { zoneOf } = useBranch();
   const search = useSearch({ from: "/authed/shell/items/$number" });
   const navigate = useNavigate({ from: "/items/$number" });
   const setSearch = (patch: Partial<ItemSearch>) => navigate({ search: (s: ItemSearch) => ({ ...s, ...patch }), replace: true });
@@ -74,22 +73,16 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const cancel = useIssueAction(issue, "cancel");
   const zone = zoneOf(issue.branch_id) ?? zoneOf(issue.work_items[0]?.branch_id);
   const hasWork = issue.type === "action" || issue.type === "report";
-  const tab = search.tab ?? (hasWork && issue.work_items.length > 0 ? "people" : "discussion");
-  const branchName = (id: string) => branchById.get(id)?.name ?? "A branch";
+  const tab = search.tab ?? "discussion";
+  const labels = useItemLabels(issue);
+  const branchName = (id: string) => labels.branchName(id) ?? "another branch";
   const live = issue.work_items.filter((w) => !isDone(w));
   const due = live.map((w) => w.sla_due_at).filter(Boolean).sort()[0] ?? issue.work_items.map((w) => w.sla_due_at).filter(Boolean).sort()[0];
   const commentCount = (comments.data ?? []).filter((c) => !c.work_item_id && !c.deleted).length;
-  const allFiles = issue.attachments;
   const primary = primaryAction(issue, viewer);
   const schoolWideForBranchAdmin = issue.requires_super_admin_approval && !isSuper(viewer);
 
-  const watch = useMutation({
-    mutationFn: () => (issue.watching ? api.del(`/issues/${issue.id}/watch`) : api.put(`/issues/${issue.id}/watch`)),
-    onMutate: () => issue && setIssueWatching(!issue.watching),
-    onError: (e) => (toast.error(errorMessage(e)), setIssueWatching(issue.watching)),
-  });
   const qc = useQueryClient();
-  const setIssueWatching = (w: boolean) => qc.setQueryData<IssueDetail>(keys.issue(issue.id), (old) => (old ? { ...old, watching: w } : old));
   const setPrivate = useMutation({
     mutationFn: () => api.patch<IssueDetail>(`/issues/${issue.id}`, { version: issue.version, is_private: !issue.is_private }),
     onSuccess: (u) => (setIssue(qc, u), toast.success(u.is_private ? "Now private" : "Now visible to the branch")),
@@ -101,14 +94,13 @@ function ItemView({ issue }: { issue: IssueDetail }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const sentTo = issue.targets.map((t) => targetName(t, people, groups, branchName));
   const subtitle = (
     <>
       {issue.type === "ticket" ? "Asked by " : issue.targets.length === 0 ? (issue.type === "event" ? "Organised by " : "Filed by ") : "Sent by "}
-      {issue.created_by === viewer.me.user.id ? "you" : people.short(issue.created_by)}
-      {sentTo.length > 0 && (
+      {issue.created_by === viewer.me.user.id ? "you" : labels.person(issue.created_by)}
+      {labels.sentTo && (
         <>
-          {" "}to <b className="text-text">{sentTo.join(", ")}</b>
+          {" "}to <b className="text-text">{labels.sentTo}</b>
         </>
       )}
       {hasWork && issue.work_items.length > 1 && ` · ${modeLabel[issue.completion_mode]}`}
@@ -163,9 +155,6 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const actions = (
     <div className="flex flex-wrap items-center gap-2">
       <PrimaryButton issue={issue} onClose={() => setDialog("close")} onEdit={() => setDialog("edit")} onReview={(id) => setSearch({ review: id })} />
-      <Button size="lg" icon={issue.watching ? <Eye className="size-5" /> : <EyeOff className="size-5" />} onClick={() => watch.mutate()} aria-pressed={issue.watching}>
-        {issue.watching ? "Watching" : "Watch"}
-      </Button>
       {canEdit(viewer, issue) && primary.kind !== "edit-event" && (
         <Button size="lg" onClick={() => setDialog("edit")}>
           Edit
@@ -188,13 +177,13 @@ function ItemView({ issue }: { issue: IssueDetail }) {
       {issue.state === "closed" && (
         <Banner tone="success" icon={<CheckCircle2 className="size-5" />}>
           {issue.type === "ticket" ? "Answered and closed" : "Closed"}
-          {issue.closed_by ? ` by ${people.short(issue.closed_by)}` : " automatically"}
+          {issue.closed_by ? ` by ${labels.person(issue.closed_by)}` : " automatically"}
           {issue.closed_at && ` · ${formatDay(issue.closed_at, zone)}`}
         </Banner>
       )}
       {issue.state === "cancelled" && (
         <Banner tone="danger" icon={<X className="size-5" />}>
-          Cancelled{issue.closed_by ? ` by ${people.short(issue.closed_by)}` : ""}. {issue.type === "event" ? "Invitees were told." : "Everyone involved was told."}
+          Cancelled{issue.closed_by ? ` by ${labels.person(issue.closed_by)}` : ""}. {issue.type === "event" ? "Invitees were told." : "Everyone involved was told."}
         </Banner>
       )}
       {schoolWideForBranchAdmin && issue.work_items.some((w) => isAdminOf(viewer, w.branch_id)) && (
@@ -231,7 +220,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
                     <Lock className="size-4" /> Private
                   </span>
                 )}
-                {issue.requires_super_admin_approval && (
+                {issue.requires_super_admin_approval && hasWork && (
                   <span className="inline-flex items-center gap-1 text-text-2">
                     <Lock className="size-4" /> A super admin signs this off
                   </span>
@@ -243,14 +232,15 @@ function ItemView({ issue }: { issue: IssueDetail }) {
             {actions}
           </div>
 
-          {issue.description && (
-            <Card className="px-6 py-5">
-              <p className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>
+          {(issue.description || issue.attachments.some((a) => !a.comment_id && !a.report_id)) && (
+            <Card className="space-y-4 px-6 py-5">
+              {issue.description && <p className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>}
+              <FileList files={issue.attachments.filter((a) => !a.comment_id && !a.report_id)} />
             </Card>
           )}
           {issue.type === "ticket" && issue.targets.length === 0 && <p className="text-text-2">Asked the branch admins.</p>}
           {issue.type === "report" && issue.work_items.length === 0 && <SelfReport issue={issue} />}
-          {hasWork && issue.work_items.length > 0 && <StatusTiles issue={issue} filter={filter} onFilter={setFilter} />}
+          {hasWork && issue.work_items.length > 0 && <StatusTiles issue={issue} filter={filter} onFilter={(f) => (setFilter(f), setSearch({ tab: "people" }))} />}
         </>
       )}
 
@@ -280,9 +270,8 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         value={tab}
         onChange={(t) => setSearch({ tab: t })}
         tabs={[
-          ...(hasWork && issue.work_items.length > 0 ? [{ value: "people" as const, label: "People", count: issue.work_items.filter((w) => w.status !== "cancelled").length }] : []),
           { value: "discussion" as const, label: "Discussion", count: commentCount },
-          { value: "files" as const, label: "Files", count: allFiles.length },
+          ...(hasWork && issue.work_items.length > 0 ? [{ value: "people" as const, label: "People", count: issue.work_items.filter((w) => w.status !== "cancelled").length }] : []),
           { value: "history" as const, label: "History" },
         ]}
       />
@@ -293,26 +282,28 @@ function ItemView({ issue }: { issue: IssueDetail }) {
           <CommentThread issue={issue} />
         </Card>
       )}
-      {tab === "files" && (
-        <Card className="space-y-4 p-6">
-          {allFiles.length === 0 ? <p className="text-text-2">No files yet.</p> : <FileList files={allFiles} wide />}
-          {issue.state === "open" && <UploadNow issueId={issue.id} label="Attach files" onDone={() => qc.invalidateQueries({ queryKey: keys.issue(issue.id) })} />}
-          <p className="text-[13px] text-text-3">Files can be up to 25 MB. Files can't be removed once attached.</p>
-        </Card>
-      )}
       {tab === "history" && (
         <Card className="p-6">
           {history.isLoading ? (
             <Skeleton className="h-32" />
           ) : (
-            <ol className="space-y-4">
-              {(history.data ?? []).map((h) => (
-                <li key={h.id} className="flex gap-3">
-                  <span className="mt-2 size-2 shrink-0 rounded-full bg-border-strong" aria-hidden />
+            <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[3px] before:w-px before:bg-border">
+              {historyLines(history.data ?? [], issue, {
+                person: labels.person,
+                branchName: labels.branchName,
+                target: (v) =>
+                  v?.kind === "user"
+                    ? labels.person(v.user_id as string)
+                    : v?.kind === "group"
+                      ? groups.get(v.group_id as string)?.name ?? "a group"
+                      : labels.branchName(v?.branch_id as string) ?? "another branch",
+              }).map((h) => (
+                <li key={h.id} className="relative flex gap-4">
+                  <span className="mt-2 size-[7px] shrink-0 rounded-full bg-border-strong" aria-hidden />
                   <div>
-                    <div className="break-anywhere">{describeHistory(h, people.short)}</div>
-                    <time className="text-[14px] text-text-3" dateTime={h.created_at} title={formatDateTime(h.created_at, zone)}>
-                      {timeAgo(h.created_at)}
+                    <div className="break-anywhere">{h.text}</div>
+                    <time className="text-[14px] text-text-3" dateTime={h.at} title={formatDateTime(h.at, zone)}>
+                      {timeAgo(h.at)}
                     </time>
                   </div>
                 </li>

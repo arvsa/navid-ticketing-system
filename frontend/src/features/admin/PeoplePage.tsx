@@ -12,7 +12,7 @@ import { PersonSelect } from "@/components/pickers";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, LoadingRows, PageHeader, Segmented, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf } from "@/lib/can";
 import { formatDay } from "@/lib/dates";
-import { errorMessage, permissionInfo, scopeLabel, typeLabel } from "@/lib/labels";
+import { errorMessage, permissionInfo, reachLabel, typeLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { ConfirmDialog } from "@/features/items/ItemDialogs";
@@ -69,7 +69,8 @@ function GroupsTab({ branchId, branchName, selected, onSelect, onOpen }: { branc
   const [creating, setCreating] = useState(false);
   const admin = isAdminOf(viewer, branchId);
   const list = groups.data ?? [];
-  const active = list.filter((g) => !g.archived_at).sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name));
+  const [gq, setGq] = useState("");
+  const active = list.filter((g) => !g.archived_at && (!gq.trim() || (g.is_default ? "all members" : g.name.toLowerCase()).includes(gq.trim().toLowerCase()))).sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name));
   const archived = list.filter((g) => g.archived_at);
   const current = list.find((g) => g.id === selected) ?? active.find((g) => !g.is_default) ?? active[0];
   if (groups.isLoading) return <LoadingRows />;
@@ -78,6 +79,17 @@ function GroupsTab({ branchId, branchName, selected, onSelect, onOpen }: { branc
     <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
       <div className="space-y-6">
         <Card className="p-2">
+          {list.length > 5 && (
+            <input
+              type="search"
+              value={gq}
+              onChange={(e) => setGq(e.target.value)}
+              placeholder="Find a group"
+              aria-label="Find a group"
+              className={cx(inputClass, "mb-1 h-10 rounded-full py-0")}
+            />
+          )}
+          {gq && active.length === 0 && <p className="px-4 py-3 text-text-2">No group matches “{gq}”.</p>}
           <ul>
             {active.map((g) => (
               <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
@@ -174,7 +186,7 @@ function ReadOnlyGrants({ groupId }: { groupId: string }) {
           <b>{permissionInfo[g.permission]?.title ?? g.permission}</b>
           <span className="text-text-2">
             {" "}
-            · {scopeLabel[g.scope]}
+            · {reachLabel(g.permission, g.scope)}
             {g.issue_type && ` · ${typeLabel[g.issue_type]}s`}
           </span>
         </li>
@@ -188,6 +200,7 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
   const people = usePeople();
   const members = useMembers(branchId, { groupId: group.id });
   const [adding, setAdding] = useState(false);
+  const [mq, setMq] = useState("");
   const [pick, setPick] = useState<string | null>(null);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["branches", branchId] });
@@ -204,9 +217,22 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
     onError: (e) => toast.error(errorMessage(e)),
   });
   const ids = new Set((members.data ?? []).map((m) => m.user_id));
+  const term = mq.trim().toLowerCase();
+  const shown = (members.data ?? []).filter((m) => !term || `${m.first_name} ${m.last_name} ${m.email}`.toLowerCase().includes(term));
   return (
     <div className="px-6 py-5">
       {group.is_default && <p className="mb-4 rounded-[10px] bg-sunken px-4 py-3 text-text-2">Everyone in the branch is in this group automatically.</p>}
+      {(members.data?.length ?? 0) > 6 && (
+        <input
+          type="search"
+          value={mq}
+          onChange={(e) => setMq(e.target.value)}
+          placeholder={`Search ${members.data?.length} members by name or email`}
+          aria-label="Search members"
+          className={cx(inputClass, "mb-3 h-11 rounded-full")}
+        />
+      )}
+      {term && shown.length === 0 && <p className="py-3 text-text-2">No one matches “{mq}”.</p>}
       {editable && (
         <div className="mb-4">
           {adding ? (
@@ -232,7 +258,7 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
         <p className="text-text-2">No one is in this group yet. Add people to give them its permissions.</p>
       ) : (
         <ul className="divide-y divide-border">
-          {members.data.map((m) => (
+          {shown.map((m) => (
             <li key={m.user_id} className="flex items-center gap-3 py-3">
               <button onClick={() => onOpen(m.user_id)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-left hover:bg-surface-2">
                 <Avatar first={m.first_name} last={m.last_name} id={m.user_id} size={36} />

@@ -2,7 +2,8 @@
 //! branch (admins, `export.run`) or several or all branches (super admins).
 //!
 //! Sheets: Tickets, Actions (one row per work item), Reports (one row per
-//! submitted report), Events. Bold, frozen header row with an auto-filter;
+//! submitted report), Events. Every sheet has the issue's type after its
+//! number; on Reports it is the type of the issue the report was filed on. Bold, frozen header row with an auto-filter;
 //! dates in the row's branch timezone. Contents go through the same
 //! visibility filter as every list, and comment counts include internal
 //! comments only for actors who may see them.
@@ -147,11 +148,12 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
     let reports = if want(IssueType::Report) {
         sqlx::query!(
             r#"
-            SELECT i.number, i.title, b.code AS "branch?", coalesce(b.timezone, 'UTC') AS "timezone!",
+            SELECT i.number, ty.code AS "issue_type!", i.title, b.code AS "branch?", coalesce(b.timezone, 'UTC') AS "timezone!",
                    u.first_name || ' ' || u.last_name AS "author!", r.submitted_at AS "submitted_at!",
                    coalesce(w.status::text, 'self_filed') AS "approval!", left(r.body, $6) AS "body!"
             FROM issue_report r
             JOIN issue i ON i.id = r.issue_id
+            JOIN issue_type ty ON ty.id = i.type_id
             LEFT JOIN work_item w ON w.id = r.work_item_id
             LEFT JOIN branch b ON b.id = coalesce(w.branch_id, i.branch_id)
             JOIN app_user u ON u.id = r.author_id
@@ -234,6 +236,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             &header,
             &[
                 ("Number", 10.0),
+                ("Type", 9.0),
                 ("Title", 40.0),
                 ("Branch", 10.0),
                 ("Created by", 22.0),
@@ -247,15 +250,16 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         for (i, t) in tickets.iter().enumerate() {
             let r = (i + 1) as u32;
             ws.write_string(r, 0, format!("ISS-{}", t.number)).map_err(x)?;
-            ws.write_string(r, 1, &t.title).map_err(x)?;
-            ws.write_string(r, 2, t.branch.as_deref().unwrap_or("")).map_err(x)?;
-            ws.write_string(r, 3, &t.created_by).map_err(x)?;
-            write_time(ws, r, 4, Some(t.created_at), &t.timezone, &date).map_err(x)?;
-            ws.write_string(r, 5, &t.state).map_err(x)?;
-            write_time(ws, r, 6, t.closed_at, &t.timezone, &date).map_err(x)?;
-            ws.write_number(r, 7, t.comments as f64).map_err(x)?;
+            ws.write_string(r, 1, "ticket").map_err(x)?;
+            ws.write_string(r, 2, &t.title).map_err(x)?;
+            ws.write_string(r, 3, t.branch.as_deref().unwrap_or("")).map_err(x)?;
+            ws.write_string(r, 4, &t.created_by).map_err(x)?;
+            write_time(ws, r, 5, Some(t.created_at), &t.timezone, &date).map_err(x)?;
+            ws.write_string(r, 6, &t.state).map_err(x)?;
+            write_time(ws, r, 7, t.closed_at, &t.timezone, &date).map_err(x)?;
+            ws.write_number(r, 8, t.comments as f64).map_err(x)?;
         }
-        finish(ws, tickets.len(), 7).map_err(x)?;
+        finish(ws, tickets.len(), 8).map_err(x)?;
     }
     if want(IssueType::Action) {
         let ws = sheet(
@@ -264,6 +268,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             &header,
             &[
                 ("Number", 10.0),
+                ("Type", 9.0),
                 ("Title", 40.0),
                 ("Branch", 10.0),
                 ("Assignee", 22.0),
@@ -279,17 +284,18 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         for (i, a) in actions.iter().enumerate() {
             let r = (i + 1) as u32;
             ws.write_string(r, 0, format!("ISS-{}", a.number)).map_err(x)?;
-            ws.write_string(r, 1, &a.title).map_err(x)?;
-            ws.write_string(r, 2, &a.branch).map_err(x)?;
-            ws.write_string(r, 3, a.assignee.as_deref().unwrap_or("")).map_err(x)?;
-            ws.write_string(r, 4, &a.status).map_err(x)?;
-            write_time(ws, r, 5, a.sla_due_at, &a.timezone, &date).map_err(x)?;
-            ws.write_string(r, 6, if a.is_overdue { "yes" } else { "no" }).map_err(x)?;
-            write_time(ws, r, 7, a.submitted_at, &a.timezone, &date).map_err(x)?;
-            ws.write_string(r, 8, a.decided_by.as_deref().unwrap_or("")).map_err(x)?;
-            write_time(ws, r, 9, a.decided_at, &a.timezone, &date).map_err(x)?;
+            ws.write_string(r, 1, "action").map_err(x)?;
+            ws.write_string(r, 2, &a.title).map_err(x)?;
+            ws.write_string(r, 3, &a.branch).map_err(x)?;
+            ws.write_string(r, 4, a.assignee.as_deref().unwrap_or("")).map_err(x)?;
+            ws.write_string(r, 5, &a.status).map_err(x)?;
+            write_time(ws, r, 6, a.sla_due_at, &a.timezone, &date).map_err(x)?;
+            ws.write_string(r, 7, if a.is_overdue { "yes" } else { "no" }).map_err(x)?;
+            write_time(ws, r, 8, a.submitted_at, &a.timezone, &date).map_err(x)?;
+            ws.write_string(r, 9, a.decided_by.as_deref().unwrap_or("")).map_err(x)?;
+            write_time(ws, r, 10, a.decided_at, &a.timezone, &date).map_err(x)?;
         }
-        finish(ws, actions.len(), 9).map_err(x)?;
+        finish(ws, actions.len(), 10).map_err(x)?;
     }
     if want(IssueType::Report) {
         let ws = sheet(
@@ -298,6 +304,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             &header,
             &[
                 ("Number", 10.0),
+                ("Type", 9.0),
                 ("Issue title", 36.0),
                 ("Branch", 10.0),
                 ("Author", 22.0),
@@ -310,14 +317,15 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         for (i, rep) in reports.iter().enumerate() {
             let r = (i + 1) as u32;
             ws.write_string(r, 0, format!("ISS-{}", rep.number)).map_err(x)?;
-            ws.write_string(r, 1, &rep.title).map_err(x)?;
-            ws.write_string(r, 2, rep.branch.as_deref().unwrap_or("")).map_err(x)?;
-            ws.write_string(r, 3, &rep.author).map_err(x)?;
-            write_time(ws, r, 4, Some(rep.submitted_at), &rep.timezone, &date).map_err(x)?;
-            ws.write_string(r, 5, &rep.approval).map_err(x)?;
-            ws.write_string(r, 6, &rep.body).map_err(x)?;
+            ws.write_string(r, 1, &rep.issue_type).map_err(x)?;
+            ws.write_string(r, 2, &rep.title).map_err(x)?;
+            ws.write_string(r, 3, rep.branch.as_deref().unwrap_or("")).map_err(x)?;
+            ws.write_string(r, 4, &rep.author).map_err(x)?;
+            write_time(ws, r, 5, Some(rep.submitted_at), &rep.timezone, &date).map_err(x)?;
+            ws.write_string(r, 6, &rep.approval).map_err(x)?;
+            ws.write_string(r, 7, &rep.body).map_err(x)?;
         }
-        finish(ws, reports.len(), 6).map_err(x)?;
+        finish(ws, reports.len(), 7).map_err(x)?;
     }
     if want(IssueType::Event) {
         let ws = sheet(
@@ -326,6 +334,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             &header,
             &[
                 ("Number", 10.0),
+                ("Type", 9.0),
                 ("Title", 36.0),
                 ("Branch", 10.0),
                 ("Starts", 17.0),
@@ -341,16 +350,17 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         for (i, e) in events.iter().enumerate() {
             let r = (i + 1) as u32;
             ws.write_string(r, 0, format!("ISS-{}", e.number)).map_err(x)?;
-            ws.write_string(r, 1, &e.title).map_err(x)?;
-            ws.write_string(r, 2, e.branch.as_deref().unwrap_or("")).map_err(x)?;
-            write_time(ws, r, 3, Some(e.starts_at), &e.timezone, &date).map_err(x)?;
-            write_time(ws, r, 4, Some(e.ends_at), &e.timezone, &date).map_err(x)?;
-            ws.write_string(r, 5, e.location.as_deref().unwrap_or("")).map_err(x)?;
-            for (col, n) in [(6, e.going), (7, e.maybe), (8, e.declined), (9, e.pending)] {
+            ws.write_string(r, 1, "event").map_err(x)?;
+            ws.write_string(r, 2, &e.title).map_err(x)?;
+            ws.write_string(r, 3, e.branch.as_deref().unwrap_or("")).map_err(x)?;
+            write_time(ws, r, 4, Some(e.starts_at), &e.timezone, &date).map_err(x)?;
+            write_time(ws, r, 5, Some(e.ends_at), &e.timezone, &date).map_err(x)?;
+            ws.write_string(r, 6, e.location.as_deref().unwrap_or("")).map_err(x)?;
+            for (col, n) in [(7, e.going), (8, e.maybe), (9, e.declined), (10, e.pending)] {
                 ws.write_number(r, col, n as f64).map_err(x)?;
             }
         }
-        finish(ws, events.len(), 9).map_err(x)?;
+        finish(ws, events.len(), 10).map_err(x)?;
     }
     let bytes = wb.save_to_buffer().map_err(x)?;
 

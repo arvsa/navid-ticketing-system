@@ -693,3 +693,68 @@ async fn watching_and_unread_flags(pool: PgPool) {
         [("issue", "create"), ("issue_target", "add"), ("work_item", "create"), ("work_item", "start")]
     );
 }
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn history_names_the_branch_assignee_and_batch_with_rfc3339_times(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let admin = as_user(&app, "admin_a@example.com").await;
+    let plain = as_user(&app, "plain_a@example.com").await;
+    let due = (OffsetDateTime::now_utc() + Duration::days(2)).replace_nanosecond(123_456_000).unwrap();
+    let res = post_issue(
+        &app,
+        &admin,
+        json!({
+            "branch_id": org.branch_a, "type": "action", "title": "Job", "targets": [{ "user_id": org.plain_a }],
+            "sla_due_at": due.format(&Rfc3339).unwrap(),
+        }),
+    )
+    .await;
+    let id = id_of(&res);
+    let item = items(&res)[0]["id"].as_str().unwrap().to_owned();
+    call(&app, &plain, Method::POST, &format!("/api/work-items/{item}/start"), Some(json!({ "version": 1 }))).await;
+
+    let history = call(&app, &plain, Method::GET, &format!("/api/issues/{id}/history"), None).await;
+    let rows = history.body["items"].as_array().unwrap();
+    assert_eq!(rows.len(), 4);
+    // Creating writes the issue, its target and its work item in one batch; starting is another.
+    let first = &rows[0]["id"];
+    assert!(rows[..3].iter().all(|r| &r["batch_id"] == first));
+    assert_eq!(rows[3]["batch_id"], rows[3]["id"]);
+
+    let created = &rows[2];
+    let at = OffsetDateTime::parse(created["new_value"]["sla_due_at"].as_str().unwrap(), &Rfc3339).unwrap();
+    assert_eq!(at, due);
+    for work in &rows[2..] {
+        assert_eq!(work["branch_id"], json!(org.branch_a));
+        assert_eq!(work["assignee_id"], json!(org.plain_a));
+    }
+    assert_eq!(rows[0]["branch_id"], json!(org.branch_a));
+    assert_eq!(rows[0]["assignee_id"], Value::Null);
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn migration_0006_rewrites_list_dates_as_rfc3339(pool: PgPool) {
+    // 21 October 2026 (day 294), 13:43:00.066599174 at +02:00, as serde's default form wrote it.
+    sqlx::raw_sql(
+        r#"INSERT INTO audit_log (entity_type, entity_id, action, new_value) VALUES
+           ('work_item', 'a', 'create', '{"sla_due_at": [2026, 294, 13, 43, 0, 66599174, 2, 0, 0], "x": 1}'),
+           ('work_item', 'b', 'create', '{"sla_due_at": [2026, 294, 13, 43, 0, 0, 0, 0, 0]}'),
+           ('work_item', 'c', 'create', '{"sla_due_at": "2026-10-21T13:43:00Z"}')"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0006_audit_sla_rfc3339.sql")).execute(&pool).await.unwrap();
+
+    let rows: Vec<(String, Value)> =
+        sqlx::query_as("SELECT entity_id, new_value FROM audit_log WHERE entity_type = 'work_item' ORDER BY entity_id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rows[0].1, json!({ "sla_due_at": "2026-10-21T11:43:00.066599174Z", "x": 1 }));
+    assert_eq!(rows[1].1, json!({ "sla_due_at": "2026-10-21T13:43:00Z" }));
+    assert_eq!(rows[2].1, json!({ "sla_due_at": "2026-10-21T13:43:00Z" }));
+    // The log is append-only again.
+    assert!(sqlx::query("UPDATE audit_log SET action = 'x'").execute(&pool).await.is_err());
+}

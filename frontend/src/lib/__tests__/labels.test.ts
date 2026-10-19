@@ -35,7 +35,22 @@ describe("primaryAction", () => {
   const v = { me: me() };
   it("closed items have no primary", () => expect(primaryAction(issue({ state: "closed" }), v).kind).toBe("none"));
   it("ticket creator closes the question", () => expect(primaryAction(issue({ type: "ticket", created_by: "me" }), v).kind).toBe("close-question"));
-  it("others reply to tickets", () => expect(primaryAction(issue({ type: "ticket" }), v).kind).toBe("reply"));
+  it("members who may comment reply to tickets", () => {
+    const member = me();
+    member.memberships[0].grants = [{ permission: "comment.create", issue_type: null, scope: "branch" }];
+    expect(primaryAction(issue({ type: "ticket" }), { me: member }).kind).toBe("reply");
+  });
+  it("no Reply without permission to comment", () => expect(primaryAction(issue({ type: "ticket" }), v).kind).toBe("none"));
+  it("members can reply to a school-wide ticket sent to their branch", () => {
+    const member = me();
+    member.memberships[0].grants = [{ permission: "comment.create", issue_type: null, scope: "branch" }];
+    const ticket = issue({
+      type: "ticket",
+      branch_id: null,
+      targets: [{ id: "t", kind: "branch", branch_id: "br", created_at: "" }],
+    });
+    expect(primaryAction(ticket, { me: member }).kind).toBe("reply");
+  });
   it("my unstarted work starts", () => expect(primaryAction(issue({ work_items: [work({})] }), v).kind).toBe("start"));
   it("my action in progress is sent for approval", () =>
     expect(primaryAction(issue({ work_items: [work({ status: "in_progress" })] }), v).kind).toBe("submit"));

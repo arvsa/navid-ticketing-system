@@ -10,9 +10,9 @@ import { Avatar, StatusBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
 import { PersonSelect } from "@/components/pickers";
 import { Button, Drawer, DrawerClose, Field, cx, inputClass } from "@/components/ui";
-import { canApprove, canAssign, canCancelWork, isAdminOf, isSuper } from "@/lib/can";
+import { canApprove, canAssign, canCancelWork, isAdminOf, isSuper, membership } from "@/lib/can";
 import { formatDay, lateBy, timeAgo } from "@/lib/dates";
-import { isSentBack, sortWork } from "@/lib/items";
+import { isSentBack, sortWork, useItemLabels } from "@/lib/items";
 import { errorMessage, workStatusLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -60,7 +60,7 @@ function subline(w: WorkItem, report: Report | undefined, myId: string, name: (i
   if (w.status === "approved") return `Approved${w.decided_by ? ` by ${w.decided_by === myId ? "you" : name(w.decided_by)}` : ""}${w.decided_at ? ` ${timeAgo(w.decided_at)}` : ""}`;
   if (w.status === "pending_approval") return `Submitted ${w.submitted_at ? timeAgo(w.submitted_at) : ""}`;
   if (w.status === "cancelled") return "No longer needed";
-  if (!w.assignee_id) return "Not picked up yet";
+  if (!w.assignee_id) return "Waiting for the branch admin to hand it to someone";
   const parts: string[] = [];
   if (isSentBack(w)) parts.push(`Sent back by ${w.decided_by === myId ? "you" : name(w.decided_by)} ${timeAgo(w.decided_at!)}`);
   if (report && !report.submitted_at) parts.push(`draft saved ${timeAgo(report.updated_at)}`);
@@ -74,17 +74,26 @@ function subline(w: WorkItem, report: Report | undefined, myId: string, name: (i
 export function PeopleList({ issue, filter, reviewing, onReview }: { issue: IssueDetail; filter: Bucket | null; reviewing?: string; onReview: (id: string) => void }) {
   const viewer = useViewer();
   const people = usePeople();
-  const { zoneOf, branchById } = useBranch();
+  const { zoneOf } = useBranch();
   const reports = useReports(issue.id, issue.type === "report");
   const byWork = new Map((reports.data ?? []).map((r) => [r.work_item_id, r]));
   const [showApproved, setShowApproved] = useState(false);
   const myId = viewer.me.user.id;
-  const all = sortWork(issue.work_items, myId).filter((w) => w.status !== "cancelled");
+  const labels = useItemLabels(issue);
+  const schoolWide = issue.branch_id === null;
+  const everything = sortWork(issue.work_items, myId).filter((w) => w.status !== "cancelled");
+  // On school-wide items, each branch handles its own part; only super admins see them all.
+  const all = schoolWide && !isSuper(viewer) ? everything.filter((w) => membership(viewer, w.branch_id)) : everything;
+  const otherBranches = new Set(everything.filter((w) => !all.includes(w)).map((w) => w.branch_id)).size;
   let rows = filter ? all.filter((w) => bucketOf(w.status) === filter) : all;
   const approved = rows.filter((w) => w.status === "approved");
   if (!filter && !showApproved && approved.length > 0 && approved.length < rows.length) rows = rows.filter((w) => w.status !== "approved");
-  const schoolWide = issue.branch_id === null;
-  if (all.length === 0) return <p className="px-6 py-8 text-center text-text-2">No one has a part of this yet.</p>;
+  if (all.length === 0)
+    return (
+      <p className="px-6 py-8 text-center text-text-2">
+        {otherBranches ? `This went to ${otherBranches} other branch${otherBranches === 1 ? "" : "es"}. Each handles its own part.` : "No one has a part of this yet."}
+      </p>
+    );
   return (
     <div className="rounded-[22px] bg-surface p-2 shadow-1 ring-1 ring-border">
       <ul>
@@ -106,10 +115,10 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
-                    {schoolWide && <span className="text-text-2">{branchById.get(w.branch_id)?.name} · </span>}
-                    {isMe ? "You" : w.assignee_id ? people.short(w.assignee_id) : "Nobody yet"}
+                    {schoolWide && labels.branchName(w.branch_id) && <span className="text-text-2">{labels.branchName(w.branch_id)} · </span>}
+                    {isMe ? "You" : w.assignee_id ? labels.person(w.assignee_id) : "Not assigned yet"}
                   </span>
-                  <span className="block truncate text-[14px] text-text-2">{subline(w, byWork.get(w.id), myId, people.short, zoneOf(w.branch_id))}</span>
+                  <span className="block truncate text-[14px] text-text-2">{subline(w, byWork.get(w.id), myId, labels.person, zoneOf(w.branch_id))}</span>
                 </span>
                 {approve ? (
                   <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">Review</span>
@@ -124,6 +133,11 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
           );
         })}
       </ul>
+      {otherBranches > 0 && (
+        <p className="px-3 py-2 text-[14px] text-text-3">
+          {otherBranches} other branch{otherBranches === 1 ? "" : "es"} {otherBranches === 1 ? "has" : "have"} {otherBranches === 1 ? "its" : "their"} own part.
+        </p>
+      )}
       {!filter && approved.length > 0 && approved.length < all.length && (
         <button onClick={() => setShowApproved(!showApproved)} className="flex w-full items-center gap-2 rounded-[14px] px-3 py-3 font-medium text-success hover:bg-sunken">
           {showApproved ? <ChevronDown className="size-5 rotate-180" /> : <Check className="size-5" />}
@@ -170,6 +184,7 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
   const approve = canApprove(viewer, issue, w);
   const person = people.get(w.assignee_id);
   const first = person?.first_name ?? "them";
+  const labels = useItemLabels(issue);
   const report = reports.data?.find((r) => r.work_item_id === w.id);
   const goNext = () => (next ? onSelect(next.id) : onClose());
   const branchPeople = people.inBranch(w.branch_id);
@@ -185,7 +200,7 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
             </p>
           )}
           <h2 className="text-[22px] font-bold">
-            {w.assignee_id ? `${people.short(w.assignee_id)}'s ${issue.type === "report" ? "report" : "work"}` : "Nobody has this yet"}
+            {w.assignee_id ? `${labels.person(w.assignee_id)}'s ${issue.type === "report" ? "report" : "work"}` : `${labels.branchName(w.branch_id) ?? "This part"} · not assigned yet`}
           </h2>
         </div>
         <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label="Close">
@@ -200,7 +215,7 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
         </p>
         {w.decision_note && w.status !== "pending_approval" && (
           <div className="rounded-[10px] bg-sunken p-3 text-[15px]">
-            <b>Note from {people.short(w.decided_by)}:</b> “{w.decision_note}”
+            <b>Note from {labels.person(w.decided_by)}:</b> “{w.decision_note}”
           </div>
         )}
         {issue.type === "report" &&

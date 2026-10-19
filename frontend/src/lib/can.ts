@@ -88,18 +88,27 @@ export function canTarget(v: Viewer, issue: IssueDetail) {
   return adminCanManage(v, issue) || grantApplies(v, issue, "issue.target");
 }
 
+/** The branch the viewer acts in for this item. School-wide items have no
+ * branch of their own, so it's the first branch they were sent to that the
+ * viewer belongs to. */
+export function issueBranch(v: Viewer, issue: IssueDetail): string | undefined {
+  if (issue.branch_id) return issue.branch_id;
+  const sentTo = [...issue.targets.map((t) => t.branch_id), ...issue.work_items.map((w) => w.branch_id)];
+  return sentTo.find((b) => membership(v, b)) ?? sentTo[0];
+}
+
 export function canComment(v: Viewer, issue: IssueDetail) {
-  const branchId = issue.branch_id ?? issue.work_items[0]?.branch_id;
+  const branchId = issueBranch(v, issue);
   return isAdminOf(v, branchId) || isSuper(v) || grantApplies(v, issue, "comment.create", branchId) || issue.created_by === v.me.user.id;
 }
 
 export function canStaffOnly(v: Viewer, issue: IssueDetail) {
-  const branchId = issue.branch_id ?? issue.work_items[0]?.branch_id;
+  const branchId = issueBranch(v, issue);
   return isAdminOf(v, branchId) || grantApplies(v, issue, "comment.internal", branchId);
 }
 
 export function canModerate(v: Viewer, issue: IssueDetail) {
-  const branchId = issue.branch_id ?? issue.work_items[0]?.branch_id;
+  const branchId = issueBranch(v, issue);
   return isAdminOf(v, branchId) || grantApplies(v, issue, "comment.moderate", branchId);
 }
 

@@ -96,7 +96,7 @@ export function ApprovalsPage() {
                       <li key={w.id} className="flex items-center gap-2 px-2">
                         <input type="checkbox" className="ml-2 size-5 shrink-0" checked={selected.has(w.id)} onChange={() => toggle(w.id)} aria-label={`Select ${people.name(w.assignee_id)}`} />
                         <RowLink
-                          className="flex-1"
+                          className="w-auto min-w-0 flex-1"
                           link={{ to: "/items/$number", params: { number: n }, search: { review: w.id } }}
                           leading={<Avatar first={p?.first_name} last={p?.last_name} id={w.assignee_id ?? ""} size={40} />}
                           title={

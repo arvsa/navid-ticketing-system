@@ -69,6 +69,10 @@ pub struct IssueDetail {
     #[serde(with = "time::serde::rfc3339::option")]
     pub closed_at: Option<OffsetDateTime>,
     pub closed_by: Option<Uuid>,
+    /// A super admin created the issue (always true for school-wide issues),
+    /// so only super admins may edit, close, cancel, retarget, change privacy,
+    /// or approve and cancel its work. Applies to every type: on tickets and
+    /// events it still controls the editing rules. Fixed at creation.
     pub requires_super_admin_approval: bool,
     pub created_by: Uuid,
     pub version: i32,
@@ -912,15 +916,36 @@ pub async fn mark_read(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<
     Ok(())
 }
 
+/// One audit row about the issue.
+///
+/// | `entity_type`   | `action`                                                        |
+/// |-----------------|-----------------------------------------------------------------|
+/// | `issue`         | `create`, `update`, `close`, `cancel`, `auto_close`             |
+/// | `issue_target`  | `add`, `remove`                                                 |
+/// | `work_item`     | `create`, `start`, `block`, `unblock`, `submit`, `approve`, `reject`, `claim`, `assign`, `cancel`, `unassign` |
+/// | `issue_comment` | `delete`                                                        |
+///
+/// `old_value` / `new_value` hold only the changed fields; times in them are
+/// RFC 3339.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct HistoryEntry {
     pub id: i64,
     pub entity_type: String,
     pub entity_id: String,
+    /// The branch the row is about: the work item's or target's branch, or the
+    /// issue's (`null` for a school-wide issue).
+    pub branch_id: Option<Uuid>,
+    /// `work_item` entries: the item's current assignee (`null` = unassigned).
+    pub assignee_id: Option<Uuid>,
+    /// `null` = the system (jobs, auto-close).
     pub actor_id: Option<Uuid>,
     pub action: String,
     pub old_value: Option<Value>,
     pub new_value: Option<Value>,
+    /// Rows written by one request share a `batch_id` (the `id` of the first
+    /// of them), e.g. an issue with its targets and work items, or an approval
+    /// and the auto-close it caused.
+    pub batch_id: i64,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -935,18 +960,28 @@ pub async fn history(db: &PgPool, actor: &Actor, issue_id: Uuid, page: &PagePara
     let rows = sqlx::query_as!(
         HistoryEntry,
         r#"
-        SELECT a.id, a.entity_type, a.entity_id, a.actor_id, a.action, a.old_value, a.new_value, a.created_at
-        FROM audit_log a
-        WHERE ((a.entity_type = 'issue' AND a.entity_id = $1::uuid::text)
-            OR (a.entity_type = 'issue_target'
-                AND a.entity_id IN (SELECT id::text FROM issue_target WHERE issue_id = $1))
-            OR (a.entity_type = 'work_item'
-                AND a.entity_id IN (SELECT id::text FROM work_item WHERE issue_id = $1))
-            OR (a.entity_type = 'issue_comment'
-                AND a.entity_id IN (SELECT id::text FROM issue_comment
-                                    WHERE issue_id = $1 AND ($4 OR NOT is_internal_only))))
-          AND ($2::bigint IS NULL OR a.id > $2)
-        ORDER BY a.id
+        WITH rows AS (
+            SELECT a.id, a.entity_type, a.entity_id, a.branch_id, w.assignee_id, a.actor_id, a.action,
+                   a.old_value, a.new_value, a.created_at,
+                   -- One transaction's rows share created_at (now() is the transaction start).
+                   min(a.id) OVER (PARTITION BY a.created_at) AS batch_id
+            FROM audit_log a
+            LEFT JOIN work_item w ON a.entity_type = 'work_item' AND w.id::text = a.entity_id
+            WHERE (a.entity_type = 'issue' AND a.entity_id = $1::uuid::text)
+               OR (a.entity_type = 'issue_target'
+                   AND a.entity_id IN (SELECT id::text FROM issue_target WHERE issue_id = $1))
+               OR (a.entity_type = 'work_item'
+                   AND a.entity_id IN (SELECT id::text FROM work_item WHERE issue_id = $1))
+               OR (a.entity_type = 'issue_comment'
+                   AND a.entity_id IN (SELECT id::text FROM issue_comment
+                                       WHERE issue_id = $1 AND ($4 OR NOT is_internal_only)))
+        )
+        SELECT id AS "id!", entity_type AS "entity_type!", entity_id AS "entity_id!", branch_id, assignee_id,
+               actor_id, action AS "action!", old_value, new_value, batch_id AS "batch_id!",
+               created_at AS "created_at!"
+        FROM rows
+        WHERE $2::bigint IS NULL OR id > $2
+        ORDER BY id
         LIMIT $3
         "#,
         issue_id,

@@ -12,7 +12,7 @@ import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority } from 
 import { PRIORITIES } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import type { NewItemOptions } from "@/app/newItemContext";
-import { AttachButton, PendingFiles, uploadAll, useFilePicker } from "@/components/files";
+import { AttachButton, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { RecipientPicker, type Recipient } from "@/components/pickers";
 import { Button, DrawerClose, Field, Segmented, cx, inputClass } from "@/components/ui";
 import { canSendType, canSetPrivateIn, creatableTypes, isSuper } from "./rules";
@@ -164,17 +164,19 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         body.event = { starts_at: startIso, ends_at: endIso, all_day: d.allDay, location: d.location || null, reminders: d.reminders };
       }
       const issue = await api.post<IssueDetail>("/issues", body);
-      if (files.files.length) await uploadAll(issue.id, files.files);
-      return issue;
+      const failed = files.files.length ? await uploadAll(issue.id, files.files) : [];
+      return { issue, failed };
     },
-    onSuccess: (issue) => {
+    onSuccess: ({ issue, failed }) => {
       clearDraft();
       qc.invalidateQueries({ queryKey: ["issues", "list"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
-      toast.success(d.recipients.length ? `Sent. ${issue.key} is on its way.` : `${issue.key} created.`, {
-        action: { label: "Open", onClick: () => navigate({ to: "/items/$number", params: { number: String(issue.number) } }) },
-      });
+      const openIt = { label: "Open", onClick: () => navigate({ to: "/items/$number", params: { number: String(issue.number) } }) };
+      if (failed.length) {
+        reportFailedUploads(failed, `${issue.key} was created, but`);
+        navigate({ to: "/items/$number", params: { number: String(issue.number) } });
+      } else toast.success(d.recipients.length ? `Sent. ${issue.key} is on its way.` : `${issue.key} created.`, { action: openIt });
       onClose();
     },
     onError: (e) => {
