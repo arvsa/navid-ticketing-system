@@ -1,0 +1,49 @@
+# Runs from images loaded with `docker load`, with no internet access.
+# See instructions/offline-bundle.md.
+name: navid-demo
+
+services:
+  postgres:
+    image: postgres:16
+    pull_policy: never
+    environment:
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD: ticketing
+      POSTGRES_DB: ticketing
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketing -d ticketing"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    image: navid-backend:0.1.1
+    pull_policy: never
+    environment:
+      DATABASE_URL: postgres://ticketing:ticketing@postgres:5432/ticketing
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      RUST_LOG: ${RUST_LOG:-backend=info,tower_http=info,sqlx=warn}
+    volumes:
+      - attachments:/data/attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: navid-frontend:0.1.1
+    pull_policy: never
+    ports:
+      - "${APP_PORT:-8000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  attachments:
