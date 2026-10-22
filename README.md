@@ -16,14 +16,14 @@ an inbox, dashboards and Excel exports.
 
 You only need [Docker](https://www.docker.com) and git.
 
-1. **Clone repo** 
-    
-```sh
-git clone https://github.com/arvsa/navid-ticketing-system/
-```
+1. **Clone the repository:**
 
+   ```sh
+   git clone https://github.com/arvsa/navid-ticketing-system
+   cd navid-ticketing-system
+   ```
 
-2. **Build and start** the database, backend and frontend in the project directory:
+2. **Build and start** the database, backend and frontend:
 
    ```sh
    docker compose up -d --build
@@ -31,13 +31,13 @@ git clone https://github.com/arvsa/navid-ticketing-system/
 
    The first build compiles the backend and takes a few minutes.
 
-2. **Add demo data** (optional):
+3. **Add demo data** (optional):
 
    ```sh
    docker compose exec backend admin seed-demo
    ```
 
-3. **Open http://localhost:8000** and sign in with a demo account or create an account. Every one
+4. **Open http://localhost:8000** and sign in with a demo account or create an account. Every one
    has the password `demo-password`:
 
    | Account | Role |
@@ -51,17 +51,18 @@ Stop it with `docker compose down`. Add `-v` to also delete the data.
 
 ### Without internet access (real issue for iranians in 2026 :/)
 
-First download the navid-offline-*.tar.zip from realeses. Then from inside
-the `navid-offline/` folder:
+Download the offline bundle from the
+[releases](https://github.com/arvsa/navid-ticketing-system/releases), from
+inside `navid-ticketing-system/`, and start it:
 
 ```sh
-./get-offline-bundle.sh # or download manually from release page
-
-cd navid/navid-offline
-
-docker load -i navid-images-<x.x.x>-<architecture>.tar.gz 
+./get-offline-bundle.sh    # or download navid-offline-<version>-<arch>.zip by hand and unzip it
+cd navid-offline
+docker load -i navid-images-<version>-<arch>.tar.gz
 docker compose up -d
 ```
+
+Then continue from step 3 above.
 
 See [instructions/offline-bundle.md](instructions/offline-bundle.md) for more details.
 
