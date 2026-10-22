@@ -49,14 +49,13 @@ You only need [Docker](https://www.docker.com) and git.
 
 Stop it with `docker compose down`. Add `-v` to also delete the data.
 
-### Without internet access (real issue for iranians in 2026 :/)
+### In case of MANY, MANY, MANY internet issues (Iranians internet in 2026 :/)
 
-Download the offline bundle from the
-[releases](https://github.com/arvsa/navid-ticketing-system/releases), from
-inside `navid-ticketing-system/`, and start it:
+Download the offline bundle via script or manually from the
+[releases](https://github.com/arvsa/navid-ticketing-system/releases) and start it:
 
 ```sh
-./get-offline-bundle.sh    # or download navid-offline-<version>-<arch>.zip by hand and unzip it
+./get-offline-bundle.sh    # or manually
 cd navid-offline
 docker load -i navid-images-<version>-<arch>.tar.gz
 docker compose up -d
