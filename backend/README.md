@@ -1,8 +1,7 @@
 # School ticketing backend
 
-The API for the school ticketing app: branches, people and groups, issues
-(tickets, actions, reports and events), work and approvals, comments,
-attachments, notifications, a dashboard and Excel exports.
+The API for the school ticketing featuring branches, people and groups, issue creation, work and approvals, comments,
+attachments, notifications, a dashboard and Excel exports with Farsi language support.
 
 Built with Rust, axum and PostgreSQL 16. For configuration, error codes and
 deployment, see [docs/REFERENCE.md](docs/REFERENCE.md).
@@ -17,8 +16,6 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    ```sh
    docker compose up -d postgres
    ```
-
-   To run the whole app in Docker instead, see the [root README](../README.md).
 
 2. **Create your settings file.** The defaults work for local development:
 
@@ -100,7 +97,7 @@ The main endpoints:
 | Overview | `GET /dashboard`, `GET /exports?branch_ids=...` (Excel) |
 | People | `GET /branches`, `GET /branches/{id}/members`, `GET /branches/{id}/groups` |
 
-## Making requests with curl
+## Making requests
 
 The session cookie is kept in `cookies.txt`: the `login` tool writes it, and
 curl sends it with `-b cookies.txt`.
@@ -112,8 +109,7 @@ cargo run --bin login -- --email member1@north.demo.school
 cargo run --bin whoami
 ```
 
-`whoami` shows your profile and your branches. Note a branch `id` for the
-next steps.
+`whoami` shows your profile and your branches.
 
 **2. Read something**: GET requests only need the cookie.
 
