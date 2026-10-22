@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: navid-backend:0.1.1
+    image: navid-backend:0.0.1
     pull_policy: never
     environment:
       DATABASE_URL: postgres://ticketing:ticketing@postgres:5432/ticketing
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: navid-frontend:0.1.1
+    image: navid-frontend:0.0.1
     pull_policy: never
     ports:
       - "${APP_PORT:-8000}:80"

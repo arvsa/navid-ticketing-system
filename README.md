@@ -14,9 +14,16 @@ an inbox, dashboards and Excel exports.
 
 ## Run everything with Docker
 
-You only need [Docker](https://www.docker.com).
+You only need [Docker](https://www.docker.com) and git.
 
-1. **Build and start** the database, backend and frontend:
+1. **Clone repo** 
+    
+```sh
+git clone https://github.com/arvsa/navid-ticketing-system/
+```
+
+
+2. **Build and start** the database, backend and frontend in the project directory:
 
    ```sh
    docker compose up -d --build
@@ -24,13 +31,13 @@ You only need [Docker](https://www.docker.com).
 
    The first build compiles the backend and takes a few minutes.
 
-2. **Add demo data**, so there's someone to sign in as:
+2. **Add demo data** (optional):
 
    ```sh
    docker compose exec backend admin seed-demo
    ```
 
-3. **Open http://localhost:8000** and sign in with a demo account. Every one
+3. **Open http://localhost:8000** and sign in with a demo account or create an account. Every one
    has the password `demo-password`:
 
    | Account | Role |
@@ -39,52 +46,23 @@ You only need [Docker](https://www.docker.com).
    | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
    | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
 
-The frontend and `/api` are served from the same address, so the session
-cookie and the backend's `Origin` check work without CORS. The backend applies
-database migrations when it starts.
+
+Stop it with `docker compose down`. Add `-v` to also delete the data.
 
 ### Without internet access (real issue for iranians in 2026 :/)
 
-If packages can't be downloaded, run the offline bundle instead. First download the navid-offline-*.zip from realeses.Then from inside
+First download the navid-offline-*.tar.zip from realeses. Then from inside
 the `navid-offline/` folder:
 
 ```sh
-docker load -i navid-images.tar.gz
+./get-offline-bundle.sh # or download manually from release page
+
+cd navid/navid-offline
+
+docker load -i navid-images-<x.x.x>-<architecture>.tar.gz 
 docker compose up -d
 ```
 
-Then continue from step 2 above. See
-[instructions/offline-bundle.md](instructions/offline-bundle.md) for details.
+See [instructions/offline-bundle.md](instructions/offline-bundle.md) for more details.
 
-### Settings
-
-The defaults work as they are. To change them, copy the example file and edit
-it:
-
-```sh
-cp .env.example .env
-```
-
-| Setting | Default | Meaning |
-|---|---|---|
-| `APP_PORT` | `8000` | Port on your machine where the app is served |
-| `APP_ORIGIN` | `http://localhost:8000` | The address you open in the browser. Change it together with `APP_PORT` |
-| `COOKIE_SECURE` | `false` | Set to `true` when serving over HTTPS |
-| `RUST_LOG` | `backend=info,...` | Backend log levels |
-
-### Everyday commands
-
-| Command | Does |
-|---|---|
-| `docker compose logs -f backend` | Follow the backend's logs |
-| `docker compose up -d --build` | Rebuild and restart after changing code |
-| `docker compose down` | Stop everything (data is kept) |
-| `docker compose down -v` | Stop and **delete** the database and uploaded files |
-
-Data lives in two Docker volumes: `pgdata` (the database) and `attachments`
-(uploaded files). Back them up together.
-
-Then follow [backend/README.md](backend/README.md) (`cargo run`, on
-`http://127.0.0.1:8080`) and [frontend/README.md](frontend/README.md)
-(`pnpm dev`, on http://localhost:5173). The dev frontend proxies `/api` to the
-backend for you.
+Follow [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for more details on respective services.

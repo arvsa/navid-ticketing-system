@@ -7,7 +7,7 @@ The bundle is a folder, `navid-offline/`, containing:
 
 | File | What |
 |---|---|
-| `navid-images.tar.gz` | The postgres, backend and frontend images (linux/amd64) |
+| `navid-images-<version>-<arch>.tar.gz` | The postgres, backend and frontend images, e.g. `navid-images-0.0.1-amd64.tar.gz` |
 | `docker-compose.yml` | Starts the three images |
 | `offline-bundle.md` | This file |
 
@@ -16,7 +16,7 @@ The bundle is a folder, `navid-offline/`, containing:
 1. **Load the images** (once, takes a minute):
 
    ```sh
-   docker load -i navid-images.tar.gz
+   docker load -i navid-images-0.0.1-amd64.tar.gz
    ```
 
 2. **Start everything** from inside `navid-offline/`:
@@ -54,20 +54,15 @@ APP_PORT=9000 APP_ORIGIN=http://localhost:9000 docker compose up -d
 
 ## Build the bundle
 
-On a machine with internet access, from the repository root. The backend
-binaries come from the GitHub release matching the code (here `v0.1.1`):
-extract `backend-linux-amd64.tar.gz` into `backend/dist/`.
+The images are built from the checked-out code:
 
 ```sh
-docker build --platform linux/amd64 -f backend/Dockerfile.prebuilt -t navid-backend:0.1.1 backend
-docker build --platform linux/amd64 -t navid-frontend:0.1.1 frontend
-docker pull --platform linux/amd64 postgres:16
+./build-offline-bundle.sh                # amd64, 0.0.1
+./build-offline-bundle.sh -v 0.0.2 arm64
 
-mkdir -p navid-offline
-docker save postgres:16 navid-backend:0.1.1 navid-frontend:0.1.1 | gzip > navid-offline/navid-images.tar.gz
-cp docker-compose.offline.yml navid-offline/docker-compose.yml
-cp instructions/offline-bundle.md navid-offline/
+# After shipping for a different architecture
+# docker pull postgres:16
 ```
 
-When the version changes, update the image tags here and in
-`docker-compose.offline.yml`.
+The version tags the images and names the files. Building amd64 on an ARM
+machine (or the reverse) runs under emulation and is slow the first time.

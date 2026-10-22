@@ -1,7 +1,7 @@
-# Builds static Linux binaries of the backend and attaches them to a GitHub
-# release, so the app can run without compiling Rust (see README, "Without
-# building the backend"). Push a tag like `v0.1.0`, or run it by hand.
-name: Backend binaries
+# Builds a GitHub release: static Linux binaries of the backend and the offline
+# bundles (instructions/offline-bundle.md) for amd64 and arm64. Push a tag like
+# `v0.0.1`, or run it by hand.
+name: Release
 
 on:
   push:
@@ -70,3 +70,30 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "Backend binaries for Linux (amd64, arm64)."
           gh release upload "$TAG" backend-linux-*.tar.gz* --clobber
+
+  # Runs the same script as a local build, on a runner of each architecture so
+  # nothing is emulated. Needs the release created by the job above.
+  offline-bundle:
+    needs: release
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: ./build-offline-bundle.sh -v "${TAG#v}" ${{ matrix.arch }}
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release upload "$TAG" "navid-offline/navid-offline-${TAG#v}-${{ matrix.arch }}.zip" --clobber

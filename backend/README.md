@@ -51,8 +51,8 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    automatically. Check that it's up:
 
    ```sh
-   curl http://127.0.0.1:8080/api/healthz
-   # {"status":"ok"}
+   cargo run --bin health
+   # OK: the server and its database are up (http://127.0.0.1:8080)
    ```
 
 To run the tests: `cargo test` (with the database from step 1 running).
@@ -102,56 +102,49 @@ The main endpoints:
 
 ## Making requests with curl
 
-Let curl keep the session cookie in a file: `-c cookies.txt` saves it,
-`-b cookies.txt` sends it.
+The session cookie is kept in `cookies.txt`: the `login` tool writes it, and
+curl sends it with `-b cookies.txt`.
 
-**1. Sign in**
+**1. Sign in** (the password defaults to `demo-password`)
 
 ```sh
-curl -c cookies.txt -X POST http://127.0.0.1:8080/api/auth/login \
-  -H 'Origin: http://localhost:5173' \
-  -H 'Content-Type: application/json' \
-  -d '{"email": "member1@north.demo.school", "password": "demo-password"}'
+cargo run --bin login -- --email member1@north.demo.school
+cargo run --bin whoami
 ```
 
-The response is your profile and your branches. Note a `branch.id` for the
+`whoami` shows your profile and your branches. Note a branch `id` for the
 next steps.
 
 **2. Read something**: GET requests only need the cookie.
 
 ```sh
-curl -b cookies.txt http://127.0.0.1:8080/api/me
 curl -b cookies.txt 'http://127.0.0.1:8080/api/issues?limit=5'
 curl -b cookies.txt http://127.0.0.1:8080/api/dashboard
 ```
 
-**3. Change something**: add the `Origin` and `Content-Type` headers.
+**3. Sign out**
 
 ```sh
-# Create a ticket (replace BRANCH_ID with the id from step 1)
-curl -b cookies.txt -X POST http://127.0.0.1:8080/api/issues \
-  -H 'Origin: http://localhost:5173' \
-  -H 'Content-Type: application/json' \
-  -d '{"branch_id": "BRANCH_ID", "type": "ticket", "title": "The projector is broken"}'
-
-# Comment on it (replace ISSUE_ID with the "id" from the response above)
-curl -b cookies.txt -X POST http://127.0.0.1:8080/api/issues/ISSUE_ID/comments \
-  -H 'Origin: http://localhost:5173' \
-  -H 'Content-Type: application/json' \
-  -d '{"body": "It flickers and then turns off."}'
+cargo run --bin logout
 ```
 
-**4. Sign out**
-
-```sh
-curl -b cookies.txt -X POST http://127.0.0.1:8080/api/auth/logout -H 'Origin: http://localhost:5173'
-```
-
-Tips:
-
-- Add `-i` to see the status code and headers, or pipe through `jq` to
-  pretty-print: `curl -s -b cookies.txt http://127.0.0.1:8080/api/me | jq`.
 - Edits send the `version` you last saw, for example
   `PATCH /issues/{id}` with `{"version": 1, "title": "New title"}`. If someone
   changed it in between, you get `409 version_conflict`; fetch it again and retry.
-- A `401 unauthenticated` means the cookie is missing or expired: sign in again.
+- A `401 unauthenticated` means the cookie is missing or expired: sign in again
+  with `cargo run --bin login`.
+
+## Publishing a release
+
+Tag the commit and push the tag:
+
+```sh
+git tag v0.0.2
+git push origin v0.0.2
+```
+
+The [release workflow](../.github/workflows/backend-binaries.yml) then creates
+the GitHub release and attaches the Linux binaries and the offline bundles
+(`navid-offline-0.0.2-amd64.zip`, `-arm64.zip`). Others download a bundle with
+`./get-offline-bundle.sh` (see
+[instructions/offline-bundle.md](../instructions/offline-bundle.md)).
