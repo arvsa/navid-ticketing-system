@@ -147,7 +147,7 @@ export function ExportPage() {
             </div>
           )}
         </fieldset>
-        <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Private items and staff-only comments are included only if you can see them. This export is recorded in the history.")}</p>
+        <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Private items are included only if you can see them. This export is recorded in the history.")}</p>
         <Button
           variant="primary"
           size="lg"

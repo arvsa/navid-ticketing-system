@@ -3,6 +3,11 @@
 //! Internal-only comments are invisible, everywhere, to anyone who is not an
 //! admin, a super admin or a `comment.internal` holder: lists, mentions,
 //! notifications, history, attachments and unread activity.
+//!
+//! NOTE: internal-only ("staff only") comments are deprecated and will be
+//! removed in the future. The web app no longer offers them (it always sends
+//! `is_internal_only: false`); this code stays so existing rows keep their
+//! visibility rules until a migration drops the column.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -141,6 +146,7 @@ pub async fn list(
 pub struct NewComment {
     pub body: String,
     pub work_item_id: Option<Uuid>,
+    /// Deprecated: staff-only comments will be removed in the future.
     #[serde(default)]
     pub is_internal_only: bool,
     /// Parsed client-side from `@` mentions; non-readers are dropped silently.

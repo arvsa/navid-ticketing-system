@@ -11,7 +11,7 @@ import type { Comment, IssueDetail } from "@/api/types";
 import { Avatar } from "@/components/badges";
 import { AttachButton, FileList, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { Button, EmptyState, LoadingRows, Menu, MenuItem, cx, inputClass } from "@/components/ui";
-import { canComment, canModerate, canStaffOnly } from "@/lib/can";
+import { canComment, canModerate } from "@/lib/can";
 import { formatDateTime, timeAgo } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
@@ -87,7 +87,7 @@ export function CommentThread({
         </ol>
       )}
       {mayComment ? (
-        <Composer issue={issue} workItemId={workItemId} compact={compact} allowStaffOnly={canStaffOnly(viewer, issue)} />
+        <Composer issue={issue} workItemId={workItemId} compact={compact} />
       ) : (
         issue.state !== "open" && <p className="text-text-3">{t("This item is closed, so the conversation is read-only.")}</p>
       )}
@@ -175,13 +175,12 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
   );
 }
 
-function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: IssueDetail; workItemId?: string; compact?: boolean; allowStaffOnly: boolean }) {
+function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItemId?: string; compact?: boolean }) {
   const qc = useQueryClient();
   const people = usePeople();
   const key = draftKey(issue.id, workItemId);
   const [body, setBody] = useState(() => readDraft(key));
   const [mentions, setMentions] = useState<Person[]>([]);
-  const [staffOnly, setStaffOnly] = useState(false);
   const files = useFilePicker();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState<string | null>(null);
@@ -202,7 +201,8 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
       const text = body.trim() || (files.files.length === 1 ? t("Attached {name}", { name: files.files[0].name }) : t("Attached {n} files", { n: files.files.length }));
       const c = await api.post<Comment>(`/issues/${issue.id}/comments`, {
         body: text,
-        is_internal_only: staffOnly,
+        // Staff-only comments aren't offered yet; older ones still show their marker.
+        is_internal_only: false,
         mention_user_ids: [...new Set(ids)].slice(0, 50),
         work_item_id: workItemId ?? null,
       });
@@ -245,7 +245,7 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
 
   return (
     <form
-      className={cx("space-y-2 rounded-[12px]", staffOnly && "bg-staff-bg p-3")}
+      className="space-y-2 rounded-[12px]"
       onSubmit={(e) => {
         e.preventDefault();
         if (body.trim() || files.files.length) send.mutate();
@@ -298,12 +298,6 @@ function Composer({ issue, workItemId, compact, allowStaffOnly }: { issue: Issue
       <PendingFiles files={files.files} onRemove={files.remove} />
       <div className="flex flex-wrap items-center gap-3">
         <AttachButton onPick={files.add} label={t("Attach")} dashed={false} />
-        {allowStaffOnly && (
-          <label className="inline-flex items-center gap-2 text-[14px]">
-            <input type="checkbox" checked={staffOnly} onChange={(e) => setStaffOnly(e.target.checked)} className="size-4" />
-            <EyeOff className="size-4 text-warning" aria-hidden />{" "}{t("Staff only")}
-          </label>
-        )}
         {!compact && (
           <Button type="submit" variant="primary" className="ms-auto" loading={send.isPending} disabled={!body.trim() && !files.files.length}>
             {t("Comment")}

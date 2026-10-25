@@ -110,6 +110,8 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
   const lost = changed.filter((k) => !state[k].on).map((k) => permissionInfo[k as Permission]?.title.toLowerCase() ?? k);
   const term = q.trim().toLowerCase();
   const matching = catalog.data.filter((c) => {
+    // Staff-only comments are switched off in the app for now.
+    if (c.key === "comment.internal") return false;
     if (!term) return true;
     const info = permissionInfo[c.key];
     return `${info?.title ?? ""} ${info?.help ?? ""} ${c.description} ${c.key}`.toLowerCase().includes(term);

@@ -8,7 +8,7 @@ export const fa: Record<string, string> = {
   "; ": "؛ ",
   ".": ".",
   "School Ticketing": "سامانهٔ تیکت مدرسه",
-  ST: "ت‌م",
+  "Navid Schools": "مجموعه مدارس نوید",
 
   // ---- Dates ----------------------------------------------------------------
   "Today {time}": "امروز {time}",
@@ -220,8 +220,8 @@ export const fa: Record<string, string> = {
   Custom: "دلخواه",
   From: "از",
   To: "تا",
-  "Private items and staff-only comments are included only if you can see them. This export is recorded in the history.":
-    "موارد خصوصی و نظرهای ویژهٔ کارکنان فقط اگر آن‌ها را ببینید در خروجی می‌آیند. این خروجی در سابقه ثبت می‌شود.",
+  "Private items are included only if you can see them. This export is recorded in the history.":
+    "موارد خصوصی فقط اگر آن‌ها را ببینید در خروجی می‌آیند. این خروجی در سابقه ثبت می‌شود.",
   "Preparing your file…": "در حال آماده‌سازی فایل…",
   "Download Excel file": "دانلود فایل اکسل",
 
@@ -389,6 +389,11 @@ export const fa: Record<string, string> = {
   "Hide password": "پنهان کردن رمز",
   "Show password": "نمایش رمز",
   "Sign in": "ورود",
+  "Welcome back": "خوش آمدید",
+  "Sign in with the email and password your school gave you.": "با ایمیل و رمزی که مدرسه به شما داده وارد شوید.",
+  "We are all one family.": "ما همه یک خانواده‌ایم.",
+  "Requests, tasks and events for every Navid branch, all in one place.": "درخواست‌ها، کارها و رویدادهای همهٔ شعبه‌های نوید، یک‌جا.",
+  "You are as beautiful as a butterfly in the making.": "تو به اندازهٔ پروانه شدن زیبایی.",
   Password: "رمز عبور",
   "Signing in…": "در حال ورود…",
   "Forgot your password?": "رمزتان را فراموش کرده‌اید؟",

@@ -102,6 +102,7 @@ export function canComment(v: Viewer, issue: IssueDetail) {
   return isAdminOf(v, branchId) || isSuper(v) || grantApplies(v, issue, "comment.create", branchId) || issue.created_by === v.me.user.id;
 }
 
+// Not used while staff-only comments are switched off in the UI.
 export function canStaffOnly(v: Viewer, issue: IssueDetail) {
   const branchId = issueBranch(v, issue);
   return isAdminOf(v, branchId) || grantApplies(v, issue, "comment.internal", branchId);

@@ -1,11 +1,13 @@
 /* Design tokens (UX_SPEC §8), with item-kind colours and the dark sidebar
-   taken from the "School Ticketing UI" screen designs. */
+   taken from the "School Ticketing UI" screen designs. The primary colour is
+   the green of the Navid Schools logo; --brand-* are its companions. */
 :root {
-  --bg: #f4f4f6; --surface: #ffffff; --surface-2: #f9f9fa; --sunken: #ececf0;
+  --bg: #f3f5f4; --surface: #ffffff; --surface-2: #f8faf9; --sunken: #eaeeec;
   --border: #e4e4e9; --border-strong: #cfd0d8; --input-border: #c3c5cf;
   --text: #15171d; --text-2: #4a4e5a; --text-3: #676b78;
-  --primary: #2443ac; --primary-hover: #1d3893; --on-primary: #ffffff;
-  --primary-soft: #e8edfc; --primary-on-soft: #2240a8; --focus: #2f55d4;
+  --primary: #006858; --primary-hover: #005448; --on-primary: #ffffff;
+  --primary-soft: #e0f1ec; --primary-on-soft: #005a4c; --focus: #0a8a76;
+  --brand: #006858; --brand-deep: #00473c; --brand-teal: #47a6a1; --brand-cream: #fcf2ad; --brand-ink: #111513;
   --success: #1b7a43; --success-soft: #e3f5ea; --success-solid: #1d7a46;
   --warning: #8a5300; --warning-soft: #fff3d6; --warning-edge: #e3a33a;
   --danger: #b42318; --danger-soft: #fdecea; --danger-solid: #c4320a;
@@ -35,8 +37,9 @@
   --bg: #0f1218; --surface: #171b23; --surface-2: #1c212b; --sunken: #0b0e13;
   --border: #2a303b; --border-strong: #3a4150; --input-border: #4f5768;
   --text: #e8eaee; --text-2: #b4bac6; --text-3: #959caa;
-  --primary: #8fa8ff; --primary-hover: #a9bcff; --on-primary: #0f1218;
-  --primary-soft: #1e2847; --primary-on-soft: #b5c6ff; --focus: #8fa8ff;
+  --primary: #5ccbb5; --primary-hover: #7ad8c5; --on-primary: #0b1513;
+  --primary-soft: #12302b; --primary-on-soft: #93e2d1; --focus: #5ccbb5;
+  --brand: #006858; --brand-deep: #00352d; --brand-teal: #47a6a1; --brand-cream: #fcf2ad; --brand-ink: #111513;
   --success: #7fd3a6; --success-soft: #14321f; --success-solid: #1f8a4c;
   --warning: #ffcb6b; --warning-soft: #3a2c0c; --warning-edge: #b8862a;
   --danger: #ff9c92; --danger-soft: #3d1a17; --danger-solid: #c4320a;

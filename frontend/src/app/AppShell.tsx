@@ -27,9 +27,10 @@ import {
 import { useDashboard, useIssueList, useNotifications, useUnreadCount, useMarkRead } from "@/api/hooks";
 import { useLogout, useSession } from "@/auth/session";
 import { Avatar, TypeBadge } from "@/components/badges";
+import { BrandMark } from "@/components/brand";
 import { Drawer, Menu, MenuItem, MenuLabel, MenuSeparator, cx } from "@/components/ui";
 import { hasGrant, hasGrantAnywhere, isAdminOf, isSuper } from "@/lib/can";
-import { APP_NAME } from "@/lib/labels";
+import { APP_NAME, BRAND_NAME } from "@/lib/labels";
 import { describeNotification } from "@/lib/notifications";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
@@ -176,8 +177,13 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
   return (
     <Menu
       trigger={
-        <button className="rounded-full ring-offset-2 hover:ring-2 hover:ring-border-strong" aria-label={t("Your account")}>
-          <Avatar first={me.user.first_name} last={me.user.last_name} id={me.user.id} size={40} />
+        <button
+          className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-surface-2 ps-1 pe-2 hover:border-border-strong hover:bg-sunken"
+          aria-label={t("Your account")}
+        >
+          <Avatar first={me.user.first_name} last={me.user.last_name} id={me.user.id} size={30} />
+          <span className="hidden max-w-[120px] truncate text-[14px] font-semibold xl:inline">{me.user.first_name}</span>
+          <ChevronDown className="size-4 text-text-3" aria-hidden />
         </button>
       }
     >
@@ -412,8 +418,12 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
   return (
     <header className="sticky top-0 z-30 px-3 pt-3 md:px-6">
       <div className="mx-auto flex h-16 max-w-[1320px] items-center gap-2 rounded-[22px] border border-border bg-surface/90 px-3 shadow-2 backdrop-blur-md">
-        <Link to="/" className="flex shrink-0 items-center gap-2 pe-1" aria-label={APP_NAME}>
-          <span className="flex size-10 items-center justify-center rounded-full bg-[#2f55d4] text-[14px] font-bold text-white">{t("ST")}</span>
+        <Link to="/" className="flex shrink-0 items-center gap-2.5 rounded-[14px] pe-2" aria-label={`${BRAND_NAME} · ${APP_NAME}`}>
+          <BrandMark size={42} />
+          <span className="hidden flex-col leading-tight 2xl:flex">
+            <span className="text-[14px] font-bold text-brand dark:text-primary">{BRAND_NAME}</span>
+            <span className="text-[12px] text-text-3">{APP_NAME}</span>
+          </span>
         </Link>
         <BranchChip />
         <nav aria-label={t("Main")} className="mx-2 hidden min-w-0 items-center gap-1 overflow-x-auto scrollbar-none lg:flex">

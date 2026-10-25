@@ -69,6 +69,7 @@ pub enum Permission {
     WorkItemAssign,
     WorkItemApprove,
     CommentCreate,
+    /// Deprecated: staff-only comments will be removed in the future.
     CommentInternal,
     CommentModerate,
     MemberView,

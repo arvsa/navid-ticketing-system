@@ -42,7 +42,7 @@ export function StatusTiles({ issue, filter, onFilter }: { issue: IssueDetail; f
     { b: "approved", label: t("approved"), tone: "success" },
   ];
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+    <div className="-m-1 flex gap-2 overflow-x-auto p-1 scrollbar-none">
       {pills.map((pill) => (
         <StatPill
           key={pill.b}

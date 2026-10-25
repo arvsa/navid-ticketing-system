@@ -145,7 +145,8 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 comments::create(db, &admin, issue.id, comment("Thanks, we're looking into it.", false)).await?;
             }
             if n % 5 == 0 {
-                comments::create(db, &admin, issue.id, comment("Staff: needs a part ordered.", true)).await?;
+                // Staff-only comments are deprecated (see domain/comments.rs), so the demo doesn't use them.
+                comments::create(db, &admin, issue.id, comment("Staff: needs a part ordered.", false)).await?;
             }
             if n % 3 == 0 {
                 issues::close(db, who, issue.id, issue.version, crate::domain::types::IssueState::Closed).await?;

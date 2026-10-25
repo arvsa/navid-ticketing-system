@@ -2,7 +2,7 @@
 // Prefer these over boxes with buttons inside: the whole thing is the target.
 import type { ReactNode } from "react";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { cx } from "./ui";
 import { num } from "@/i18n";
 
@@ -32,13 +32,16 @@ export function StatPill({
   active?: boolean;
 }) {
   const t = toneStyle[tone];
+  // The active ring is drawn inside the pill: these rows scroll sideways, and
+  // anything outside the pill (a ring, a lift on hover) gets clipped there.
   const cls = cx(
-    "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-[15px] whitespace-nowrap transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-2",
+    "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-[15px] whitespace-nowrap transition-[box-shadow,border-color] hover:border-border-strong",
     tone === "neutral" ? "border-border" : "border-transparent",
-    active && "ring-2 ring-text",
+    active && "border-transparent ring-2 ring-current ring-inset",
   );
   const body = (
     <>
+      {active && <Check className="-ms-1 size-4" aria-hidden />}
       <b className="text-[17px] tabular">{typeof value === "number" ? num(value) : value}</b>
       <span className={tone === "neutral" ? "text-text-2" : ""}>{label}</span>
     </>

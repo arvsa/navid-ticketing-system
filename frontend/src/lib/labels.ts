@@ -12,6 +12,7 @@ import type {
 import { t } from "@/i18n";
 
 export const APP_NAME = t("School Ticketing");
+export const BRAND_NAME = t("Navid Schools");
 
 export const typeLabel: Record<IssueType, string> = {
   ticket: t("Ticket"),
