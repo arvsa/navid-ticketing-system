@@ -40,6 +40,8 @@ import { useBranch } from "./BranchContext";
 import { NewItemProvider } from "./NewItem";
 import { useNewItem } from "./newItemContext";
 import { setTheme, getTheme, type Theme } from "./theme";
+import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
+import { guard } from "@/lib/unsaved";
 import { lang, num, quote, setLang, t } from "@/i18n";
 
 type NavEntry = { to: string; label: string; icon: ReactNode; count?: number | null; exact?: boolean };
@@ -151,14 +153,14 @@ function BranchChip() {
       }
     >
       {ctx.canChooseAll && (
-        <MenuItem onSelect={() => ctx.setBranch("all")}>
+        <MenuItem onSelect={() => guard(() => ctx.setBranch("all"))}>
           <span className="flex-1">{superAdmin ? t("Whole school ({n} branches)", { n: ctx.options.length }) : t("All my branches")}</span>
           {ctx.isAll && <Check className="size-4" />}
         </MenuItem>
       )}
       <MenuSeparator />
       {ctx.options.map((o) => (
-        <MenuItem key={o.id} onSelect={() => ctx.setBranch(o.id)}>
+        <MenuItem key={o.id} onSelect={() => guard(() => ctx.setBranch(o.id))}>
           <span className="flex-1">{o.name}</span>
           {o.membership?.is_admin && <span className="text-[12px] text-text-3">{t("Admin")}</span>}
           {ctx.branchId === o.id && <Check className="size-4" />}
@@ -226,7 +228,7 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
           ["fa", "فارسی"],
         ] as const
       ).map(([l, label]) => (
-        <MenuItem key={l} onSelect={() => setLang(l)}>
+        <MenuItem key={l} onSelect={() => guard(() => setLang(l))}>
           <Languages className="size-4" />
           <span className="flex-1" lang={l}>
             {label}
@@ -235,7 +237,7 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
         </MenuItem>
       ))}
       <MenuSeparator />
-      <MenuItem onSelect={() => logout.mutate()}>
+      <MenuItem onSelect={() => guard(() => logout.mutate())}>
         <LogOut className="size-4" />{" "}{t("Sign out")}
       </MenuItem>
     </Menu>
@@ -494,6 +496,7 @@ function Shell() {
       </main>
       <PhoneBottomNav />
       <QuickSearch open={search} onOpenChange={setSearch} />
+      <UnsavedChangesDialog />
     </div>
   );
 }

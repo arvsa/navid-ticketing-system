@@ -12,7 +12,7 @@ describe("labels", () => {
     for (const v of PRIORITIES) expect(priorityLabel[v]).toBeTruthy();
     for (const v of RSVP_RESPONSES) expect(rsvpLabel[v]).toBeTruthy();
     for (const v of SCOPES) expect(scopeLabel[v]).toBeTruthy();
-    expect(Object.keys(permissionInfo)).toHaveLength(17);
+    expect(Object.keys(permissionInfo)).toHaveLength(18);
   });
 });
 

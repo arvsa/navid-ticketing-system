@@ -265,6 +265,92 @@ async fn cross_branch_issues_are_for_super_admins_and_whole_branches(pool: PgPoo
     }
 }
 
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn cross_branch_items_to_people_need_target_other_branches(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let to_b = |title: &str| {
+        json!({ "branch_id": null, "type": "action", "title": title,
+                "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] })
+    };
+
+    // Not without the grant, admins included.
+    let admin = as_user(&app, "admin_a@example.com").await;
+    assert_status(&post_issue(&app, &admin, to_b("No")).await, StatusCode::FORBIDDEN, None);
+    let plain = as_user(&app, "plain_a@example.com").await;
+    assert_status(&app.get("/api/recipients").await, StatusCode::UNAUTHORIZED, None);
+    assert_status(&call(&app, &plain, Method::GET, "/api/recipients", None).await, StatusCode::FORBIDDEN, None);
+
+    create_group(
+        &app.db,
+        org.branch_a,
+        "Coordinators",
+        &[("issue.target_other_branches", Some("action"), "branch"), ("issue.create", Some("action"), "branch")],
+        &[org.plain_a],
+    )
+    .await;
+    let plain = as_user(&app, "plain_a@example.com").await;
+    let people = call(&app, &plain, Method::GET, "/api/recipients", None).await;
+    assert_status(&people, StatusCode::OK, None);
+    assert!(people
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["user_id"] == org.admin_b.to_string() && p["branch_id"] == org.branch_b.to_string()));
+
+    // A person in another branch: one assigned item there, approved by that branch.
+    let res = post_issue(&app, &plain, to_b("Fill in the survey")).await;
+    assert_status(&res, StatusCode::CREATED, None);
+    assert!(res.body["branch_id"].is_null());
+    assert_eq!(res.body["requires_super_admin_approval"], false);
+    let work = items(&res);
+    assert_eq!(work.len(), 1);
+    assert_eq!(work[0]["branch_id"], org.branch_b.to_string());
+    assert_eq!(work[0]["assignee_id"], org.admin_b.to_string());
+
+    // Whole branches stay super admin only; a person needs their real branch.
+    let whole =
+        json!({ "branch_id": null, "type": "action", "title": "W", "targets": [{ "branch_id": org.branch_b }] });
+    assert_status(&post_issue(&app, &plain, whole).await, StatusCode::FORBIDDEN, None);
+    let wrong_branch = json!({ "branch_id": null, "type": "action", "title": "W",
+                               "targets": [{ "user_id": org.plain_a, "branch_id": org.branch_b }] });
+    assert_status(
+        &post_issue(&app, &plain, wrong_branch).await,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Some("invalid_target"),
+    );
+    // Only the kinds the grant names (they may create reports, but not send them across).
+    let report = json!({ "branch_id": null, "type": "report", "title": "R",
+                         "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
+    assert_status(&post_issue(&app, &plain, report).await, StatusCode::FORBIDDEN, None);
+
+    // The receiver sees it; the sender edits it, the receiving admin can't.
+    let id = id_of(&res);
+    let admin_b = as_user(&app, "admin_b@example.com").await;
+    let seen = call(&app, &admin_b, Method::GET, &format!("/api/issues/{id}"), None).await;
+    assert_status(&seen, StatusCode::OK, None);
+    let version = seen.body["version"].clone();
+    let rename = |title: &str| Some(json!({ "version": version, "title": title }));
+    assert_status(
+        &call(&app, &admin_b, Method::PATCH, &format!("/api/issues/{id}"), rename("Mine now")).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
+    assert_status(
+        &call(&app, &plain, Method::PATCH, &format!("/api/issues/{id}"), rename("Fill in the survey by Friday")).await,
+        StatusCode::OK,
+        None,
+    );
+    // The sender's branch colleagues don't: it lives in the receivers' branches.
+    let boss = as_user(&app, "boss_like_a@example.com").await;
+    assert_status(
+        &call(&app, &boss, Method::GET, &format!("/api/issues/{id}"), None).await,
+        StatusCode::NOT_FOUND,
+        None,
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------

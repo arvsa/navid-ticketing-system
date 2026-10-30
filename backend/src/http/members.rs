@@ -12,7 +12,7 @@ use crate::{
     authz::Actor,
     domain::{
         groups::{self, EffectivePermissions},
-        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch},
+        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient},
     },
     error::AppResult,
     pagination::{Page, PageParams},
@@ -26,6 +26,13 @@ pub fn routes() -> Router<AppState> {
         .route("/branches/{id}/members/{user_id}/effective-permissions", get(effective_permissions))
         .route("/users/{id}/reset-password", post(reset_password))
         .route("/users/{id}/active", patch(set_active))
+        .route("/recipients", get(recipients))
+}
+
+/// People in every branch, to send a school-wide item to.
+#[utoipa::path(get, path = "/api/recipients", operation_id = "listRecipients", tag = "members", responses((status = 200, body = Vec<Recipient>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn recipients(State(s): State<AppState>, actor: Actor) -> AppResult<Json<Vec<Recipient>>> {
+    Ok(Json(members::recipients(&s.db, &actor).await?))
 }
 
 /// Flat on purpose: `serde(flatten)` breaks typed query-string fields.

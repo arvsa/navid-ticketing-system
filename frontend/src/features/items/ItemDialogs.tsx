@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { setIssue, useGroups } from "@/api/hooks";
+import { setIssue, useGroups, useRecipients } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { IssueDetail, IssuePatch, Priority } from "@/api/types";
 import { PRIORITIES } from "@/api/types";
@@ -138,12 +138,21 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
   const { options } = useBranch();
   const branchId = issue.branch_id;
   const groups = useGroups(branchId ?? undefined);
+  // School-wide items take people of any branch (who already have it are left out).
+  const crossPeople = useRecipients(open && !branchId);
   const [value, setValue] = useState<Recipient[]>([]);
   const send = useMutation({
     mutationFn: async () => {
       let last: IssueDetail | undefined;
       for (const r of value) {
-        const body = r.kind === "user" ? { user_id: r.id } : r.kind === "group" ? { group_id: r.id } : { branch_id: r.id };
+        const body =
+          r.kind === "user"
+            ? branchId
+              ? { user_id: r.id }
+              : { user_id: r.id, branch_id: r.branchId }
+            : r.kind === "group"
+              ? { group_id: r.id }
+              : { branch_id: r.id };
         last = await api.post<IssueDetail>(`/issues/${issue.id}/targets`, body);
       }
       return last;
@@ -180,6 +189,11 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
         people={branchId ? people.inBranch(branchId) : []}
         groups={groups.data ?? []}
         branches={!branchId && isSuper(viewer) ? options.filter((o) => !issue.targets.some((t) => t.kind === "branch" && t.branch_id === o.id)) : undefined}
+        crossPeople={
+          branchId
+            ? undefined
+            : (crossPeople.data ?? []).filter((p) => !issue.targets.some((t) => t.kind === "user" && t.user_id === p.user_id && t.branch_id === p.branch_id))
+        }
         branchId={branchId ?? null}
       />
       {(issue.type === "action" || issue.type === "report") && (

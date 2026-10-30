@@ -315,7 +315,11 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get__api_groups_id_permissions"];
-        put?: never;
+        /**
+         * Save several grant changes at once (one notification, all or nothing).
+         *     Returns the group's grants afterwards.
+         */
+        put: operations["put__api_groups_id_permissions"];
         post: operations["post__api_groups_id_permissions"];
         delete?: never;
         options?: never;
@@ -670,6 +674,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** People in every branch, to send a school-wide item to. */
+        get: operations["get__api_recipients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/{id}": {
         parameters: {
             query?: never;
@@ -696,6 +717,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["post__api_reports_id_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/school-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** School-wide groups: their grants apply in every branch a member belongs to. */
+        get: operations["get__api_school_groups"];
+        put?: never;
+        post: operations["post__api_school_groups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/school-groups/{id}/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A school-wide group's copies, one per branch, with their member counts. */
+        get: operations["get__api_school_groups_id_copies"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1025,20 +1080,42 @@ export interface components {
             permission: components["schemas"]["Permission"];
             scope: components["schemas"]["Scope"];
         };
+        /**
+         * @description Several grant changes saved together: all or nothing, one audit row per
+         *     grant, and a single notification and event (instead of one per change).
+         */
+        GrantChanges: {
+            grant?: components["schemas"]["NewGrant"][];
+            /** @description Grant ids of this group to remove. */
+            revoke?: string[];
+        };
         Group: {
             /** Format: date-time */
             archived_at?: string | null;
-            /** Format: uuid */
-            branch_id: string;
+            /**
+             * Format: uuid
+             * @description `null`: a school-wide group (super admins only). It has no members of
+             *     its own: every branch has a copy of it, with the same grants.
+             */
+            branch_id?: string | null;
             /** Format: date-time */
             created_at: string;
             description?: string | null;
             /** Format: uuid */
             id: string;
             is_default: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description For a school-wide group: the members of all its branch copies.
+             */
             member_count: number;
             name: string;
+            /**
+             * Format: uuid
+             * @description On a branch group: the school-wide group it's a copy of. Its name,
+             *     grants and archiving follow that group; branch admins choose members.
+             */
+            template_id?: string | null;
         };
         GroupGrant: {
             /** Format: date-time */
@@ -1062,10 +1139,44 @@ export interface components {
             id: string;
             name: string;
         };
+        /**
+         * @description One audit row about the issue.
+         *
+         *     | `entity_type`   | `action`                                                        |
+         *     |-----------------|-----------------------------------------------------------------|
+         *     | `issue`         | `create`, `update`, `close`, `cancel`, `auto_close`             |
+         *     | `issue_target`  | `add`, `remove`                                                 |
+         *     | `work_item`     | `create`, `start`, `block`, `unblock`, `submit`, `approve`, `reject`, `claim`, `assign`, `cancel`, `unassign` |
+         *     | `issue_comment` | `delete`                                                        |
+         *
+         *     `old_value` / `new_value` hold only the changed fields; times in them are
+         *     RFC 3339.
+         */
         HistoryEntry: {
             action: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description `null` = the system (jobs, auto-close).
+             */
             actor_id?: string | null;
+            /**
+             * Format: uuid
+             * @description `work_item` entries: the item's current assignee (`null` = unassigned).
+             */
+            assignee_id?: string | null;
+            /**
+             * Format: int64
+             * @description Rows written by one request share a `batch_id` (the `id` of the first
+             *     of them), e.g. an issue with its targets and work items, or an approval
+             *     and the auto-close it caused.
+             */
+            batch_id: number;
+            /**
+             * Format: uuid
+             * @description The branch the row is about: the work item's or target's branch, or the
+             *     issue's (`null` for a school-wide issue).
+             */
+            branch_id?: string | null;
             /** Format: date-time */
             created_at: string;
             entity_id: string;
@@ -1100,6 +1211,12 @@ export interface components {
             /** Format: int64 */
             number: number;
             priority: components["schemas"]["Priority"];
+            /**
+             * @description A super admin created the issue (always true for school-wide issues),
+             *     so only super admins may edit, close, cancel, retarget, change privacy,
+             *     or approve and cancel its work. Applies to every type: on tickets and
+             *     events it still controls the editing rules. Fixed at creation.
+             */
             requires_super_admin_approval: boolean;
             state: components["schemas"]["IssueState"];
             targets: components["schemas"]["Target"][];
@@ -1210,6 +1327,7 @@ export interface components {
         };
         NewComment: {
             body: string;
+            /** @description Deprecated: staff-only comments will be removed in the future. */
             is_internal_only?: boolean;
             /** @description Parsed client-side from `@` mentions; non-readers are dropped silently. */
             mention_user_ids?: string[];
@@ -1228,7 +1346,8 @@ export interface components {
         NewIssue: {
             /**
              * Format: uuid
-             * @description `null` = cross-branch (super admins, whole-branch targets only).
+             * @description `null` = cross-branch: whole branches (super admins) or people in any
+             *     branch (super admins and holders of `issue.target_other_branches`).
              */
             branch_id?: string | null;
             completion_mode?: components["schemas"]["CompletionMode"];
@@ -1361,17 +1480,30 @@ export interface components {
             items: {
                 /** Format: date-time */
                 archived_at?: string | null;
-                /** Format: uuid */
-                branch_id: string;
+                /**
+                 * Format: uuid
+                 * @description `null`: a school-wide group (super admins only). It has no members of
+                 *     its own: every branch has a copy of it, with the same grants.
+                 */
+                branch_id?: string | null;
                 /** Format: date-time */
                 created_at: string;
                 description?: string | null;
                 /** Format: uuid */
                 id: string;
                 is_default: boolean;
-                /** Format: int64 */
+                /**
+                 * Format: int64
+                 * @description For a school-wide group: the members of all its branch copies.
+                 */
                 member_count: number;
                 name: string;
+                /**
+                 * Format: uuid
+                 * @description On a branch group: the school-wide group it's a copy of. Its name,
+                 *     grants and archiving follow that group; branch admins choose members.
+                 */
+                template_id?: string | null;
             }[];
             next_cursor?: string | null;
         };
@@ -1392,8 +1524,29 @@ export interface components {
         Page_HistoryEntry: {
             items: {
                 action: string;
-                /** Format: uuid */
+                /**
+                 * Format: uuid
+                 * @description `null` = the system (jobs, auto-close).
+                 */
                 actor_id?: string | null;
+                /**
+                 * Format: uuid
+                 * @description `work_item` entries: the item's current assignee (`null` = unassigned).
+                 */
+                assignee_id?: string | null;
+                /**
+                 * Format: int64
+                 * @description Rows written by one request share a `batch_id` (the `id` of the first
+                 *     of them), e.g. an issue with its targets and work items, or an approval
+                 *     and the auto-close it caused.
+                 */
+                batch_id: number;
+                /**
+                 * Format: uuid
+                 * @description The branch the row is about: the work item's or target's branch, or the
+                 *     issue's (`null` for a school-wide issue).
+                 */
+                branch_id?: string | null;
                 /** Format: date-time */
                 created_at: string;
                 entity_id: string;
@@ -1557,13 +1710,26 @@ export interface components {
             temporary_password: string;
         };
         /** @enum {string} */
-        Permission: "issue.read" | "issue.read_private" | "issue.create" | "issue.edit" | "issue.close" | "issue.set_private" | "issue.target" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
+        Permission: "issue.read" | "issue.read_private" | "issue.create" | "issue.edit" | "issue.close" | "issue.set_private" | "issue.target" | "issue.target_other_branches" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         ProfilePatch: {
             email?: string | null;
             first_name?: string | null;
             last_name?: string | null;
+        };
+        /**
+         * @description A person who can be sent a school-wide item, in one of their branches.
+         *     Names only: this list reaches people outside the branch.
+         */
+        Recipient: {
+            /** Format: uuid */
+            branch_id: string;
+            branch_name: string;
+            first_name: string;
+            last_name: string;
+            /** Format: uuid */
+            user_id: string;
         };
         Report: {
             attachments: components["schemas"]["AttachmentMeta"][];
@@ -1662,7 +1828,13 @@ export interface components {
             /** Format: uuid */
             user_id?: string | null;
         };
-        /** @description `{user_id}`, `{group_id}` or `{branch_id}` (super admins only). */
+        /**
+         * @description A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
+         *     branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
+         *     issue a person also names their branch: `{"user_id": "...", "branch_id":
+         *     "..."}`. Anything else is `422 invalid_target`. Send one target per
+         *     recipient.
+         */
         TargetInput: {
             /** Format: uuid */
             branch_id?: string | null;
@@ -1673,6 +1845,8 @@ export interface components {
         };
         /** @enum {string} */
         TargetKind: "branch" | "group" | "user";
+        /** @enum {string} */
+        Transition: "start" | "block" | "unblock" | "submit" | "approve" | "reject" | "claim" | "assign" | "cancel";
         TransitionInput: {
             /**
              * Format: uuid
@@ -1752,8 +1926,6 @@ export interface components {
         };
         /** @enum {string} */
         WorkStatus: "open" | "in_progress" | "blocked" | "pending_approval" | "approved" | "cancelled";
-        /** @enum {string} */
-        Transition: "start" | "block" | "unblock" | "submit" | "approve" | "reject" | "claim" | "assign" | "cancel";
     };
     responses: never;
     parameters: never;
@@ -2716,6 +2888,41 @@ export interface operations {
             };
         };
     };
+    put__api_groups_id_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantChanges"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupGrant"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post__api_groups_id_permissions: {
         parameters: {
             query?: never;
@@ -3582,6 +3789,34 @@ export interface operations {
             };
         };
     };
+    get__api_recipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipient"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     patch__api_reports_id_: {
         parameters: {
             query?: never;
@@ -3639,6 +3874,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Report"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_school_groups: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_school_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewGroup"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_school_groups_id_copies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"][];
                 };
             };
             /** @description Error; see the codes in the README */

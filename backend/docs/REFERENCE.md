@@ -104,6 +104,8 @@ an `x-request-id` header to quote when reporting problems.
 | 409 | `default_group` | "All members" can't be renamed, archived, deleted or joined by hand. |
 | 409 | `not_a_member` | The user isn't a current member of the branch. |
 | 409 | `group_archived` | Restore the group first. |
+| 409 | `managed_by_template` | A branch's copy of a school-wide group: change it in the school-wide group (only its members are chosen in the branch). |
+| 409 | `school_group_has_no_members` | A school-wide group has no members of its own; add people to its copy in each branch. |
 | 409 | `issue_not_open` | The issue is closed or cancelled. |
 | 409 | `event_not_open` | The event is cancelled or over. |
 | 409 | `invalid_transition` | Not a valid work item transition from its current status. |

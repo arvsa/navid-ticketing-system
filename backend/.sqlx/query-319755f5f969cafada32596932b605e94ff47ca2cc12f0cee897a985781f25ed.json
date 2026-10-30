@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT branch_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
+  "query": "SELECT branch_id, template_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -16,6 +16,17 @@
       },
       {
         "ordinal": 1,
+        "name": "template_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "template_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
         "name": "name",
         "type_info": "Text",
         "origin": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "description",
         "type_info": "Text",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "is_default",
         "type_info": "Bool",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "archived_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -65,12 +76,13 @@
       ]
     },
     "nullable": [
-      false,
+      true,
+      true,
       false,
       true,
       false,
       true
     ]
   },
-  "hash": "d39fcf0042f4848f3728b2cbc36b5bcf61fb2e4f574dd6e04aeffbff63e75485"
+  "hash": "319755f5f969cafada32596932b605e94ff47ca2cc12f0cee897a985781f25ed"
 }

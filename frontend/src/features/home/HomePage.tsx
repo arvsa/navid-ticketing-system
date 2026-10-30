@@ -2,7 +2,7 @@
 // Numbers are pills that open the matching list; everything else is a row you
 // can click as a whole.
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Undo2 } from "lucide-react";
 import { useDashboard, useIssueList, useIssuesById, useNotifications, useWorkItems } from "@/api/hooks";
 import type { IssueDetail, WorkItem } from "@/api/types";
@@ -18,6 +18,7 @@ import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { WorkButton } from "@/features/work/WorkButton";
 import { RsvpButtons } from "@/features/events/RsvpButtons";
+import { ReviewInPlace, type ReviewTarget } from "@/features/items/WorkPanel";
 import { WholeSchool } from "./WholeSchool";
 import { num, t, tn } from "@/i18n";
 
@@ -43,10 +44,16 @@ function Greeting({ subtitle }: { subtitle?: string }) {
 
 type Need = { kind: "approve" | "overdue" | "owner"; w: WorkItem };
 
+// Each kind of need has its own colour: the row's edge and its chip match.
+const needTone: Record<Need["kind"], { fg: string; bg: string }> = {
+  approve: { fg: "var(--warning)", bg: "var(--warning-soft)" },
+  owner: { fg: "var(--primary-on-soft)", bg: "var(--primary-soft)" },
+  overdue: { fg: "var(--danger)", bg: "var(--danger-soft)" },
+};
+
 function AdminHome() {
   const viewer = useViewer();
   const people = usePeople();
-  const navigate = useNavigate();
   const { branchId, branch, zoneOf } = useBranch();
   const zone = zoneOf(branchId);
   const dash = useDashboard(branchId);
@@ -59,6 +66,7 @@ function AdminHome() {
   const active = useWorkItems({ branch_id: branchId });
   const myWork = useWorkItems({ assignee: "me", branch_id: branchId });
   const [filter, setFilter] = useState<Need["kind"] | "all">("all");
+  const [review, setReview] = useState<ReviewTarget | null>(null);
 
   const live = (active.data ?? []).filter((w) => !isDone(w));
   const overdue = live.filter((w) => w.is_overdue).sort((a, b) => (a.sla_due_at ?? "").localeCompare(b.sla_due_at ?? ""));
@@ -85,11 +93,8 @@ function AdminHome() {
   const decisions = toApprove.length + unowned.length;
   const loading = (mayApprove && waiting.isLoading) || active.isLoading || issues.isLoading;
 
-  const open = (n: Need) => {
-    const issue = issues.map.get(n.w.issue_id);
-    if (!issue) return;
-    navigate({ to: "/items/$number", params: { number: numberOf(issue.key) }, search: n.kind === "overdue" ? {} : { review: n.w.id } });
-  };
+  // Opens in place; the drawer has a Details button for the full item.
+  const open = (n: Need) => setReview({ issueId: n.w.issue_id, workId: n.w.id });
 
   return (
     <div className="space-y-8">
@@ -129,6 +134,7 @@ function AdminHome() {
                     aria-pressed={filter === k}
                     className={cx("h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap", filter === k ? "bg-text text-surface" : "text-text-2 hover:bg-sunken")}
                   >
+                    {k !== "all" && <span className="me-1.5 inline-block size-2 rounded-full align-middle" style={{ background: needTone[k].fg }} aria-hidden />}
                     {label} <span className="tabular opacity-70">{num(n)}</span>
                   </button>
                 ))}
@@ -148,9 +154,12 @@ function AdminHome() {
                 {shown.map((n) => {
                   const issue = issues.map.get(n.w.issue_id);
                   const p = people.get(n.w.assignee_id);
+                  const tone = needTone[n.kind];
                   return (
-                    <li key={`${n.kind}-${n.w.id}`}>
+                    <li key={`${n.kind}-${n.w.id}`} className="relative">
+                      <span className="absolute inset-y-2 start-0 w-1 rounded-full" style={{ background: tone.fg }} aria-hidden />
                       <RowLink
+                        className="ps-4"
                         onClick={() => open(n)}
                         leading={
                           n.w.assignee_id ? (
@@ -159,7 +168,12 @@ function AdminHome() {
                             <span className="size-9 shrink-0 rounded-full border-2 border-dashed border-border-strong" aria-hidden />
                           )
                         }
-                        title={issue?.title ?? "…"}
+                        title={
+                          <span className="flex min-w-0 items-center gap-2">
+                            {issue && <TypeBadge type={issue.type} className="h-5 px-1.5 text-[12px]" />}
+                            <span className="truncate">{issue?.title ?? "…"}</span>
+                          </span>
+                        }
                         meta={
                           n.kind === "approve"
                             ? t("{name} handed it in · {ago} ago", { name: people.short(n.w.assignee_id), ago: n.w.submitted_at ? shortAgo(n.w.submitted_at) : "" })
@@ -168,13 +182,9 @@ function AdminHome() {
                               : `${people.short(n.w.assignee_id)} · ${n.w.status === "blocked" ? t("blocked") : n.w.status === "open" ? t("not started") : t("in progress")}`
                         }
                         trailing={
-                          n.kind === "approve" ? (
-                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">{t("Review")}</span>
-                          ) : n.kind === "owner" ? (
-                            <span className="rounded-full bg-sunken px-2.5 py-0.5 text-[13px] font-semibold">{t("Assign")}</span>
-                          ) : (
-                            <span className="text-[14px] font-semibold text-danger">{n.w.sla_due_at && lateBy(n.w.sla_due_at)}</span>
-                          )
+                          <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-semibold" style={{ color: tone.fg, background: tone.bg }}>
+                            {n.kind === "approve" ? t("Review") : n.kind === "owner" ? t("Assign") : n.w.sla_due_at ? lateBy(n.w.sla_due_at) : t("Overdue")}
+                          </span>
                         }
                       />
                     </li>
@@ -189,6 +199,7 @@ function AdminHome() {
             )}
           </Panel>
 
+          <ReviewInPlace target={review} onChange={setReview} />
           <SentOut branchId={branchId} zone={zone} />
         </div>
 

@@ -1,9 +1,10 @@
 // Assignments of an Action or Report: status tiles, the people list and the
 // review drawer (Report detail + review panel design; UX_SPEC §4.5.2, §4.5.6).
 import { useState } from "react";
-import { Check, ChevronDown, ChevronRight, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Check, ChevronDown, ChevronRight, ExternalLink, X } from "lucide-react";
 import { toast } from "sonner";
-import { useReports, useTransition } from "@/api/hooks";
+import { useIssue, useReports, useTransition } from "@/api/hooks";
 import type { IssueDetail, Report, WorkItem, WorkStatus } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar, StatusBadge } from "@/components/badges";
@@ -12,7 +13,7 @@ import { PersonSelect } from "@/components/pickers";
 import { Button, Drawer, DrawerClose, Field, cx, inputClass } from "@/components/ui";
 import { canApprove, canAssign, canCancelWork, isAdminOf, isSuper, membership } from "@/lib/can";
 import { formatDay, lateBy, timeAgo } from "@/lib/dates";
-import { isSentBack, sortWork, useItemLabels } from "@/lib/items";
+import { isSentBack, numberOf, sortWork, useItemLabels } from "@/lib/items";
 import { errorMessage, workStatusLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -153,15 +154,59 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
   );
 }
 
-export function ReviewDrawer({ issue, workId, onClose, onSelect }: { issue: IssueDetail; workId?: string; onClose: () => void; onSelect: (id: string) => void }) {
+export function ReviewDrawer({
+  issue,
+  workId,
+  onClose,
+  onSelect,
+  showDetails,
+}: {
+  issue: IssueDetail;
+  workId?: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  /** Off the item's own page: offer a way through to it. */
+  showDetails?: boolean;
+}) {
   return (
     <Drawer open={!!workId} onOpenChange={(o) => !o && onClose()} label={t("Review")}>
-      {workId && <ReviewBody key={workId} issue={issue} workId={workId} onClose={onClose} onSelect={onSelect} />}
+      {workId && <ReviewBody key={workId} issue={issue} workId={workId} onClose={onClose} onSelect={onSelect} showDetails={showDetails} />}
     </Drawer>
   );
 }
 
-function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; workId: string; onClose: () => void; onSelect: (id: string) => void }) {
+export type ReviewTarget = { issueId: string; workId: string };
+
+/** The review drawer opened from a list (Home), so the list stays put. The
+ * issue is loaded by id, so the drawer survives the row leaving the list
+ * (after an approval, say). */
+export function ReviewInPlace({ target, onChange }: { target: ReviewTarget | null; onChange: (t: ReviewTarget | null) => void }) {
+  const issue = useIssue(target?.issueId);
+  if (!target || !issue.data) return null;
+  return (
+    <ReviewDrawer
+      issue={issue.data}
+      workId={target.workId}
+      onClose={() => onChange(null)}
+      onSelect={(workId) => onChange({ issueId: target.issueId, workId })}
+      showDetails
+    />
+  );
+}
+
+function ReviewBody({
+  issue,
+  workId,
+  onClose,
+  onSelect,
+  showDetails,
+}: {
+  issue: IssueDetail;
+  workId: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  showDetails?: boolean;
+}) {
   const viewer = useViewer();
   const people = usePeople();
   const transition = useTransition();
@@ -212,9 +257,21 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
               : `${labels.branchName(w.branch_id) ?? t("This part")} · ${t("not assigned yet")}`}
           </h2>
         </div>
-        <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
-          <X className="size-5" />
-        </DrawerClose>
+        <div className="flex shrink-0 items-center gap-2">
+          {showDetails && (
+            <Link
+              to="/items/$number"
+              params={{ number: numberOf(issue.key) }}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-border px-3 text-[14px] font-semibold hover:bg-sunken"
+            >
+              <ExternalLink className="size-4" aria-hidden />
+              {t("Details")}
+            </Link>
+          )}
+          <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
+            <X className="size-5" />
+          </DrawerClose>
+        </div>
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
         <p className="text-text-2">

@@ -303,7 +303,8 @@ fn like_pattern(term: &str) -> String {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct NewIssue {
-    /// `null` = cross-branch (super admins, whole-branch targets only).
+    /// `null` = cross-branch: whole branches (super admins) or people in any
+    /// branch (super admins and holders of `issue.target_other_branches`).
     pub branch_id: Option<Uuid>,
     #[serde(rename = "type")]
     pub issue_type: String,
@@ -363,7 +364,7 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         }
     }
     if input.branch_id.is_none() && resolved.is_empty() {
-        return Err(AppError::validation("invalid_target", "a cross-branch issue needs at least one branch target"));
+        return Err(AppError::validation("invalid_target", "a cross-branch issue needs at least one target"));
     }
     let whole_branch = resolved.iter().any(|t| t.kind == TargetKind::Branch);
     let reminders = match &input.event {

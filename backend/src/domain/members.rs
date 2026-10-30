@@ -466,3 +466,33 @@ fn required_name(name: Option<&str>, field: &str) -> AppResult<String> {
     }
     Ok(name.to_owned())
 }
+
+/// A person who can be sent a school-wide item, in one of their branches.
+/// Names only: this list reaches people outside the branch.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct Recipient {
+    pub user_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub branch_id: Uuid,
+    pub branch_name: String,
+}
+
+/// Everyone in every active branch, for super admins and holders of
+/// `issue.target_other_branches`. Someone in two branches appears twice.
+pub async fn recipients(db: &PgPool, actor: &Actor) -> AppResult<Vec<Recipient>> {
+    authorize(actor, Action::FindPeopleInOtherBranches)?;
+    Ok(sqlx::query_as!(
+        Recipient,
+        r#"
+        SELECT u.id AS user_id, u.first_name, u.last_name, b.id AS branch_id, b.name AS branch_name
+        FROM branch_membership m
+        JOIN app_user u ON u.id = m.user_id
+        JOIN branch b ON b.id = m.branch_id
+        WHERE m.left_at IS NULL AND u.is_active AND b.is_active
+        ORDER BY b.name, u.first_name, u.last_name
+        "#
+    )
+    .fetch_all(db)
+    .await?)
+}

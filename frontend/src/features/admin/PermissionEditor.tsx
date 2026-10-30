@@ -1,16 +1,17 @@
 // "What they can do" for a group (Groups & permissions design; UX_SPEC §4.12).
-// The API has no update: a change of reach or kinds is delete + create, run in
-// sequence by the save bar (gap G-13).
+// A change of reach or kinds is delete + create; the save bar sends them all
+// in one request, so it's all or nothing and admins are told once.
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Info, Lock, Search } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, api } from "@/api/client";
+import { api } from "@/api/client";
 import { useCatalog, useGroupGrants } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { CatalogEntry, Group, GroupGrant, IssueType, Permission, Scope } from "@/api/types";
 import { Button, Dialog, LoadingRows, Segmented, Switch, cx, inputClass } from "@/components/ui";
-import { permissionInfo, permissionSections, reachLabel, typeLabel } from "@/lib/labels";
+import { errorMessage, permissionInfo, permissionSections, reachLabel, typeLabel } from "@/lib/labels";
+import { useUnsaved } from "@/lib/unsaved";
 import { quote, t, tn, tx } from "@/i18n";
 
 type Kinds = "all" | IssueType[];
@@ -67,13 +68,18 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
   const [saving, setSaving] = useState(false);
   useEffect(() => setState(base), [base]);
 
+  const changed =
+    state && base
+      ? Object.keys(state).filter((k) => {
+          const a = state[k];
+          const b = base[k];
+          return a.on !== b.on || (a.on && (a.scope !== b.scope || kindsValue(a.kinds) !== kindsValue(b.kinds)));
+        })
+      : [];
+  useUnsaved(`permissions:${group.id}`, changed.length > 0);
+
   if (!catalog.data || !grants.data || !state || !base) return <LoadingRows rows={6} />;
 
-  const changed = Object.keys(state).filter((k) => {
-    const a = state[k];
-    const b = base[k];
-    return a.on !== b.on || (a.on && (a.scope !== b.scope || kindsValue(a.kinds) !== kindsValue(b.kinds)));
-  });
   const set = (key: string, patch: Partial<Row>) => setState({ ...state, [key]: { ...state[key], ...patch, custom: false } });
 
   const save = async () => {
@@ -83,27 +89,19 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
     const toDelete = grants.data!.filter((g) => touched.has(g.permission) && !want.has(sig(g)));
     const have = new Set(grants.data!.map(sig));
     const toAdd = toGrants(state).filter((g) => touched.has(g.permission) && !have.has(sig(g)));
-    const failed: string[] = [];
-    for (const g of toDelete) {
-      try {
-        await api.del(`/group-permissions/${g.id}`);
-      } catch {
-        failed.push(permissionInfo[g.permission]?.title ?? g.permission);
-      }
-    }
-    for (const g of toAdd) {
-      try {
-        await api.post(`/groups/${group.id}/permissions`, g);
-      } catch (e) {
-        if (!(e instanceof ApiError && e.code === "grant_exists")) failed.push(permissionInfo[g.permission]?.title ?? g.permission);
-      }
+    try {
+      await api.put(`/groups/${group.id}/permissions`, { revoke: toDelete.map((g) => g.id), grant: toAdd });
+      toast.success(tn(group.member_count, "Saved. {n} person affected.", "Saved. {n} people affected."));
+    } catch (e) {
+      // Nothing was saved; the changes stay on screen to try again.
+      toast.error(t("Nothing was saved: {reason}", { reason: errorMessage(e) }));
+      setSaving(false);
+      return;
     }
     setSaving(false);
     setConfirm(false);
     await qc.invalidateQueries({ queryKey: keys.groupGrants(group.id) });
     qc.invalidateQueries({ queryKey: ["effective-permissions"] });
-    if (failed.length) toast.error(t("Some changes didn't save: {list}. Try again.", { list: [...new Set(failed)].join(t(", ")) }));
-    else toast.success(tn(group.member_count, "Saved. {n} person affected.", "Saved. {n} people affected."));
   };
 
   const gained = changed.filter((k) => state[k].on).map((k) => describe(k as Permission, state[k]));
@@ -124,6 +122,8 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
         <p>
           {group.is_default ? (
             t("These are the everyday permissions everyone in {branch} gets. Changes affect all {n} people.", { branch: branchName, n: group.member_count })
+          ) : !group.branch_id ? (
+            tx("Every branch has its own copy of this group. Saving gives all copies these permissions, on top of each branch's {all}, and tells each branch's admins.", { all: <b className="text-text">{t("All members")}</b> })
           ) : (
             tx("These add to what {all} can already do. Changes apply on members' next click, are kept in the history, and other admins are told.", { all: <b className="text-text">{t("All members")}</b> })
           )}
@@ -276,6 +276,7 @@ export function summarizeGrants(grants: GroupGrant[] | undefined) {
     "export.run": t("export"),
     "work_item.assign": t("assign work"),
     "issue.target": t("give tasks"),
+    "issue.target_other_branches": t("send to other branches"),
     "dashboard.branch": t("see branch numbers"),
   };
   const parts = [...new Set(grants.map((g) => words[g.permission]).filter(Boolean))];

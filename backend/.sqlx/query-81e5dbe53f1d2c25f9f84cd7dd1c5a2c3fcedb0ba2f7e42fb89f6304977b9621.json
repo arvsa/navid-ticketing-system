@@ -1,10 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT gp.group_id, gp.permission_key, t.code AS \"issue_type?\", gp.scope AS \"scope: Scope\"\n           FROM group_permission gp LEFT JOIN issue_type t ON t.id = gp.issue_type_id WHERE gp.id = $1",
+  "query": "SELECT gp.id, gp.group_id, gp.permission_key AS permission, t.code AS \"issue_type?\",\n                  gp.scope AS \"scope: Scope\", gp.created_at\n           FROM group_permission gp LEFT JOIN issue_type t ON t.id = gp.issue_type_id\n           WHERE gp.group_id = $1 ORDER BY gp.permission_key, gp.id",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "group_id",
         "type_info": "Uuid",
         "origin": {
@@ -15,8 +26,8 @@
         }
       },
       {
-        "ordinal": 1,
-        "name": "permission_key",
+        "ordinal": 2,
+        "name": "permission",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -26,7 +37,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "issue_type?",
         "type_info": "Text",
         "origin": {
@@ -37,7 +48,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "scope: Scope",
         "type_info": {
           "Custom": {
@@ -57,6 +68,17 @@
             "name": "scope"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "created_at"
+          }
+        }
       }
     ],
     "parameters": {
@@ -67,9 +89,11 @@
     "nullable": [
       false,
       false,
-      true,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "bf99b67cecc82125d538c7ca84d62391bec3a8af67f835d4e938af049af8db05"
+  "hash": "81e5dbe53f1d2c25f9f84cd7dd1c5a2c3fcedb0ba2f7e42fb89f6304977b9621"
 }

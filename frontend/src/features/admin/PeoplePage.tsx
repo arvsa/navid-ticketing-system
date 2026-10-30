@@ -2,15 +2,18 @@
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Copy, Lock, Plus, Shield, X } from "lucide-react";
+import { ChevronRight, Copy, Globe, Lock, Plus, Shield, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useEffectivePermissions, useGroupGrants, useGroups, useMembers } from "@/api/hooks";
+import { useEffectivePermissions, useGroupGrants, useGroups, useMembers, useSchoolGroupCopies, useSchoolGroups } from "@/api/hooks";
+import { keys } from "@/api/keys";
 import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
+import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, LoadingRows, PageHeader, Segmented, Tabs, cx, inputClass } from "@/components/ui";
-import { hasGrant, isAdminOf } from "@/lib/can";
+import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
+import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
 import { errorMessage, permissionInfo, reachLabel, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
@@ -26,36 +29,88 @@ export function PeoplePage() {
   const viewer = useViewer();
   const search = useSearch({ from: "/authed/shell/people" });
   const navigate = useNavigate({ from: "/people" });
-  const { branchId, branch, picker } = useManagedBranch(viewer, "member.manage", search.branch);
+  const { branchId, branch, picker, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch);
   const openPerson = (id: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, person: id }) });
+  const ctx = useBranch();
+  // From a school-wide group to its copy in one branch, and back.
+  const openCopy = (copyBranch: string, groupId: string) =>
+    guard(() => {
+      if (ctx.branchId && ctx.branchId !== copyBranch) ctx.setBranch(copyBranch);
+      else pick(copyBranch);
+      navigate({ search: (s: PeopleSearch) => ({ ...s, tab: undefined, group: groupId }) });
+    });
+  const openTemplate = (templateId: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: templateId }) });
   const members = useMembers(branchId);
   const groups = useGroups(branchId, true);
-  const tab = search.tab ?? "groups";
+  const superAdmin = isSuper(viewer);
+  const schoolGroups = useSchoolGroups(superAdmin);
+  const tab = search.tab === "school" && !superAdmin ? "groups" : (search.tab ?? "groups");
   if (!branchId) return <EmptyState title={t("You don't manage a branch.")} />;
+  // Super admins pick "All branches" here for school-wide groups: one group
+  // (say Teachers) whose permissions apply in every branch of its members.
+  const scopePicker = superAdmin ? (
+    <select
+      value={tab === "school" ? "school" : branchId}
+      onChange={(e) => {
+        const v = e.target.value;
+        guard(() => {
+          if (v === "school") navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: undefined }) });
+          else {
+            pick(v);
+            if (tab === "school") navigate({ search: (s: PeopleSearch) => ({ ...s, tab: undefined, group: undefined }) });
+          }
+        });
+      }}
+      className={cx(inputClass, "h-11 w-auto")}
+      aria-label={t("Branch")}
+    >
+      <option value="school">
+        {t("All branches (school-wide groups)")} {schoolGroups.data ? `· ${num(schoolGroups.data.filter((g) => !g.archived_at).length)}` : ""}
+      </option>
+      {choices.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.name}
+        </option>
+      ))}
+    </select>
+  ) : (
+    picker
+  );
   return (
     <div>
       <PageHeader
         title={t("People & groups")}
-        subtitle={branch?.name}
+        subtitle={tab === "school" ? t("School-wide groups · for every branch") : branch?.name}
         actions={
           <>
-            {picker}
-            <Segmented
-              label={t("Show")}
-              value={tab}
-              onChange={(v) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "members" ? "members" : undefined, group: undefined }) })}
-              options={[
-                { value: "members", label: `${t("Members")} ${num(members.data?.length ?? "")}` },
-                { value: "groups", label: `${t("Groups")} ${num(groups.data?.filter((g) => !g.archived_at).length ?? "")}` },
-              ]}
-            />
+            {scopePicker}
+            {tab !== "school" && (
+              <Segmented
+                label={t("Show")}
+                value={tab}
+                onChange={(v) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "groups" ? undefined : v, group: undefined }) })}
+                options={[
+                  { value: "members", label: `${t("Members")} ${num(members.data?.length ?? "")}` },
+                  { value: "groups", label: `${t("Groups")} ${num(groups.data?.filter((g) => !g.archived_at).length ?? "")}` },
+                ]}
+              />
+            )}
           </>
         }
       />
       {tab === "members" ? (
         <MembersTab branchId={branchId} branchName={branch?.name ?? ""} onOpen={openPerson} />
+      ) : tab === "school" ? (
+        <SchoolGroupsTab selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} onOpenCopy={openCopy} />
       ) : (
-        <GroupsTab branchId={branchId} branchName={branch?.name ?? ""} selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} onOpen={openPerson} />
+        <GroupsTab
+          branchId={branchId}
+          branchName={branch?.name ?? ""}
+          selected={search.group}
+          onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })}
+          onOpen={openPerson}
+          onOpenTemplate={superAdmin ? openTemplate : undefined}
+        />
       )}
       <PersonPanel userId={search.person} branchId={branchId} onClose={() => navigate({ search: (s: PeopleSearch) => ({ ...s, person: undefined }) })} />
     </div>
@@ -64,7 +119,21 @@ export function PeoplePage() {
 
 // ---------- groups ----------
 
-function GroupsTab({ branchId, branchName, selected, onSelect, onOpen }: { branchId: string; branchName: string; selected?: string; onSelect: (id: string) => void; onOpen: (id: string) => void }) {
+function GroupsTab({
+  branchId,
+  branchName,
+  selected,
+  onSelect,
+  onOpen,
+  onOpenTemplate,
+}: {
+  branchId: string;
+  branchName: string;
+  selected?: string;
+  onSelect: (id: string) => void;
+  onOpen: (id: string) => void;
+  onOpenTemplate?: (id: string) => void;
+}) {
   const viewer = useViewer();
   const groups = useGroups(branchId, true);
   const [creating, setCreating] = useState(false);
@@ -114,8 +183,60 @@ function GroupsTab({ branchId, branchName, selected, onSelect, onOpen }: { branc
         </Card>
         <CheckSomeone branchId={branchId} onOpen={onOpen} />
       </div>
-      {current && <GroupDetail key={current.id} group={current} branchId={branchId} branchName={branchName} editable={admin} onOpen={onOpen} />}
+      {current && <GroupDetail key={current.id} group={current} branchId={branchId} branchName={branchName} editable={admin} onOpen={onOpen} onOpenTemplate={onOpenTemplate} />}
       <NewGroupDialog open={creating} onOpenChange={setCreating} branchId={branchId} onCreated={onSelect} />
+    </div>
+  );
+}
+
+/** Groups with no branch (super admins): their permissions apply in every
+ * branch their members belong to. Members can come from any branch. */
+function SchoolGroupsTab({ selected, onSelect, onOpenCopy }: { selected?: string; onSelect: (id: string) => void; onOpenCopy: (branchId: string, groupId: string) => void }) {
+  const groups = useSchoolGroups(true);
+  const [creating, setCreating] = useState(false);
+  const [gq, setGq] = useState("");
+  const list = groups.data ?? [];
+  const term = gq.trim().toLowerCase();
+  const active = list.filter((g) => !g.archived_at && (!term || g.name.toLowerCase().includes(term))).sort((a, b) => a.name.localeCompare(b.name, localeTag));
+  const archived = list.filter((g) => g.archived_at);
+  const current = list.find((g) => g.id === selected) ?? active[0];
+  if (groups.isLoading) return <LoadingRows />;
+  if (groups.error) return <ErrorPanel error={groups.error} />;
+  return (
+    <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="space-y-6">
+        <Card className="p-2">
+          <p className="flex gap-2 px-4 py-3 text-[14px] text-text-2">
+            <Globe className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {t("For groups every branch needs, like Teachers. Make it once: each branch gets its own copy with these permissions, and new branches get one too. Branch admins choose who's in it.")}
+          </p>
+          {list.length > 5 && (
+            <input type="search" value={gq} onChange={(e) => setGq(e.target.value)} placeholder={t("Find a group")} aria-label={t("Find a group")} className={cx(inputClass, "mb-1 h-10 rounded-full py-0")} />
+          )}
+          {term && active.length === 0 && <p className="px-4 py-3 text-text-2">{t("No group matches {q}.", { q: quote(gq) })}</p>}
+          {!list.length && <p className="px-4 py-3 text-text-2">{t("No school-wide groups yet.")}</p>}
+          <ul>
+            {active.map((g) => (
+              <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
+            ))}
+          </ul>
+          <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-3 font-semibold text-primary hover:underline">
+            <Plus className="size-5" />{" "}{t("New school-wide group")}
+          </button>
+          {archived.length > 0 && (
+            <details className="border-t border-border px-4 py-3">
+              <summary className="cursor-pointer text-text-2">{t("Archived ({n})", { n: archived.length })}</summary>
+              <ul className="mt-2">
+                {archived.map((g) => (
+                  <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </Card>
+      </div>
+      {current && <GroupDetail key={current.id} group={current} branchId={null} branchName={t("every branch")} editable onOpenCopy={onOpenCopy} />}
+      <NewGroupDialog open={creating} onOpenChange={setCreating} branchId={null} onCreated={onSelect} />
     </div>
   );
 }
@@ -126,7 +247,10 @@ function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onCl
     <li>
       <button onClick={onClick} aria-current={active} className={cx("w-full rounded-[10px] px-4 py-3 text-start", active ? "bg-primary-soft" : "hover:bg-surface-2")}>
         <span className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold">{g.is_default ? t("All members") : g.name}</span>
+          <span className="flex items-center gap-1.5 font-semibold">
+            {g.template_id && <Globe className="size-3.5 shrink-0 text-text-3" aria-label={t("School-wide")} />}
+            {g.is_default ? t("All members") : g.name}
+          </span>
           <span className="text-text-2 tabular">{num(g.member_count)}</span>
         </span>
         <span className="block text-[14px] text-text-2">{g.is_default ? t("Everyone's everyday permissions") : g.archived_at ? t("Archived") : summarizeGrants(grants.data)}</span>
@@ -135,44 +259,111 @@ function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onCl
   );
 }
 
-function GroupDetail({ group, branchId, branchName, editable, onOpen }: { group: Group; branchId: string; branchName: string; editable: boolean; onOpen: (id: string) => void }) {
-  const [tab, setTab] = useState<"can" | "members" | "settings">("can");
+/** `branchId` null: a school-wide group (a template with a copy in every
+ * branch). A branch group with `template_id` is such a copy: only its members
+ * are chosen here. */
+function GroupDetail({
+  group,
+  branchId,
+  branchName,
+  editable,
+  onOpen,
+  onOpenCopy,
+  onOpenTemplate,
+}: {
+  group: Group;
+  branchId: string | null;
+  branchName: string;
+  editable: boolean;
+  onOpen?: (id: string) => void;
+  onOpenCopy?: (branchId: string, groupId: string) => void;
+  onOpenTemplate?: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<"can" | "members" | "branches" | "settings">("can");
   const [renaming, setRenaming] = useState(false);
   const title = group.is_default ? t("All members") : group.name;
+  const isCopy = !!group.template_id;
+  // A copy's name, permissions and archiving come from the school-wide group.
+  const shapeEditable = editable && !group.is_default && !isCopy;
   return (
     <Card className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
         <div>
           <h2 className="flex items-center gap-2 text-[28px] font-bold">
             {group.is_default && <Lock className="size-5 text-text-3" />}
+            {(!group.branch_id || isCopy) && <Globe className="size-5 text-text-3" aria-label={t("School-wide")} />}
             {title}
           </h2>
           <p className="text-text-2">
-            {group.is_default ? t("Everyone in {name}", { name: branchName }) : group.description || t("No description")} · {tn(group.member_count, "{n} member", "{n} members")}
+            {group.is_default ? t("Everyone in {name}", { name: branchName }) : group.description || t("No description")} ·{" "}
+            {!branchId ? tn(group.member_count, "{n} member across branches", "{n} members across branches") : tn(group.member_count, "{n} member", "{n} members")}
             {group.archived_at && ` · ${t("Archived")}`}
           </p>
         </div>
-        {editable && !group.is_default && (
+        {shapeEditable && (
           <Button size="lg" onClick={() => setRenaming(true)}>
             {t("Rename")}
           </Button>
         )}
       </div>
+      {isCopy && (
+        <div className="mx-6 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[12px] bg-sunken px-4 py-3 text-text-2">
+          <Globe className="size-4 shrink-0" aria-hidden />
+          <span className="flex-1">{t("Every branch has this group. The school office sets its name and permissions; you choose who's in it here.")}</span>
+          {onOpenTemplate && (
+            <button className="font-semibold text-primary hover:underline" onClick={() => onOpenTemplate(group.template_id!)}>
+              {t("Edit for every branch")}
+            </button>
+          )}
+        </div>
+      )}
       <Tabs
         className="mx-6 mt-4"
         value={tab}
-        onChange={setTab}
+        onChange={(v) => guard(() => setTab(v))}
         tabs={[
           { value: "can", label: t("What they can do") },
-          { value: "members", label: t("Members"), count: group.member_count },
-          ...(editable && !group.is_default ? [{ value: "settings" as const, label: t("Settings") }] : []),
+          branchId
+            ? { value: "members" as const, label: t("Members"), count: group.member_count }
+            : { value: "branches" as const, label: t("Branches") },
+          ...(shapeEditable ? [{ value: "settings" as const, label: t("Settings") }] : []),
         ]}
       />
-      {tab === "can" && (editable ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
-      {tab === "members" && <GroupMembers group={group} branchId={branchId} editable={editable && !group.is_default && !group.archived_at} onOpen={onOpen} />}
+      {tab === "can" && (shapeEditable || (editable && group.is_default) ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
+      {tab === "members" && branchId && (
+        <GroupMembers group={group} branchId={branchId} editable={editable && !group.is_default && !group.archived_at} onOpen={onOpen} />
+      )}
+      {tab === "branches" && <GroupCopies group={group} onOpenCopy={onOpenCopy} />}
       {tab === "settings" && <GroupSettings group={group} />}
       <RenameDialog group={group} open={renaming} onOpenChange={setRenaming} />
     </Card>
+  );
+}
+
+/** A school-wide group's copy in each branch, to open and fill with people. */
+function GroupCopies({ group, onOpenCopy }: { group: Group; onOpenCopy?: (branchId: string, groupId: string) => void }) {
+  const copies = useSchoolGroupCopies(group.id);
+  const { branchById } = useBranch();
+  if (copies.isLoading) return <LoadingRows />;
+  if (copies.error) return <ErrorPanel error={copies.error} />;
+  return (
+    <div className="px-6 py-5">
+      <p className="mb-3 text-text-2">{t("Each branch has its own copy. Its admins choose who's in it; new branches get one automatically.")}</p>
+      <ul className="divide-y divide-border">
+        {(copies.data ?? []).map((c) => (
+          <li key={c.id}>
+            <button
+              onClick={() => c.branch_id && onOpenCopy?.(c.branch_id, c.id)}
+              className="flex w-full items-center gap-3 rounded-[10px] px-2 py-3 text-start hover:bg-surface-2"
+            >
+              <span className="min-w-0 flex-1 font-semibold">{(c.branch_id && branchById.get(c.branch_id)?.name) ?? t("Branch")}</span>
+              <span className="text-text-2">{tn(c.member_count, "{n} member", "{n} members")}</span>
+              <ChevronRight className="size-4 text-text-3 rtl:-scale-x-100" aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -196,7 +387,7 @@ function ReadOnlyGrants({ groupId }: { groupId: string }) {
   );
 }
 
-function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; branchId: string; editable: boolean; onOpen: (id: string) => void }) {
+function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; branchId: string; editable: boolean; onOpen?: (id: string) => void }) {
   const qc = useQueryClient();
   const people = usePeople();
   const members = useMembers(branchId, { groupId: group.id });
@@ -205,6 +396,7 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
   const [pick, setPick] = useState<string | null>(null);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["branches", branchId] });
+    qc.invalidateQueries({ queryKey: ["school-groups"] });
     qc.invalidateQueries({ queryKey: ["my-groups"] });
   };
   const add = useMutation({
@@ -261,7 +453,11 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
         <ul className="divide-y divide-border">
           {shown.map((m) => (
             <li key={m.user_id} className="flex items-center gap-3 py-3">
-              <button onClick={() => onOpen(m.user_id)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-start hover:bg-surface-2">
+              <button
+                onClick={() => onOpen?.(m.user_id)}
+                disabled={!onOpen}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-start enabled:hover:bg-surface-2 disabled:cursor-default"
+              >
                 <Avatar first={m.first_name} last={m.last_name} id={m.user_id} size={36} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">
@@ -286,7 +482,7 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
 function GroupSettings({ group }: { group: Group }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
-  const refresh = () => qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] });
+  const refresh = () => (qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }), qc.invalidateQueries({ queryKey: keys.schoolGroups }));
   const archive = useMutation({
     mutationFn: () => api.patch(`/groups/${group.id}`, { archived: !group.archived_at }),
     onSuccess: () => (toast.success(group.archived_at ? t("Restored") : t("Archived")), refresh()),
@@ -307,12 +503,18 @@ function GroupSettings({ group }: { group: Group }) {
           {t("Delete group")}
         </Button>
       </div>
-      <p className="text-text-2">{t("Archived groups can't be sent new work. Their history stays.")}</p>
+      <p className="text-text-2">
+        {group.branch_id ? t("Archived groups can't be sent new work. Their history stays.") : t("Archiving also archives the copy in every branch.")}
+      </p>
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
         title={t("Delete {name}?", { name: group.name })}
-        body={t("If this group was ever sent work it will be archived instead, so its history stays.")}
+        body={
+          group.branch_id
+            ? t("If this group was ever sent work it will be archived instead, so its history stays.")
+            : t("Each branch keeps its copy, with its people and permissions, as an ordinary group of that branch.")
+        }
         confirm={t("Delete group")}
         danger
         loading={del.isPending}
@@ -328,7 +530,13 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
   const [description, setDescription] = useState(group.description ?? "");
   const save = useMutation({
     mutationFn: () => api.patch(`/groups/${group.id}`, { name: name.trim(), description: description.trim() || null }),
-    onSuccess: () => (toast.success(t("Saved")), onOpenChange(false), qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }), qc.invalidateQueries({ queryKey: ["groups"] })),
+    onSuccess: () => (
+      toast.success(t("Saved")),
+      onOpenChange(false),
+      qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }),
+      qc.invalidateQueries({ queryKey: ["groups"] }),
+      qc.invalidateQueries({ queryKey: keys.schoolGroups })
+    ),
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
@@ -355,15 +563,18 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
   );
 }
 
-function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; branchId: string; onCreated: (id: string) => void }) {
+/** `branchId` null creates a school-wide group. */
+function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; branchId: string | null; onCreated: (id: string) => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const create = useMutation({
-    mutationFn: () => api.post<Group>(`/branches/${branchId}/groups`, { name: name.trim(), description: description.trim() || null }),
+    mutationFn: () =>
+      api.post<Group>(branchId ? `/branches/${branchId}/groups` : "/school-groups", { name: name.trim(), description: description.trim() || null }),
     onSuccess: (g) => {
       toast.success(t("{name} created", { name: g.name }));
-      qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] });
+      if (branchId) qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] });
+      else qc.invalidateQueries({ queryKey: keys.schoolGroups });
       qc.invalidateQueries({ queryKey: ["groups"] });
       setName("");
       setDescription("");
@@ -376,8 +587,12 @@ function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boo
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("New group")}
-      description={t("Departments, year teams, committees. Choose what it can do after creating it.")}
+      title={branchId ? t("New group") : t("New school-wide group")}
+      description={
+        branchId
+          ? t("Departments, year teams, committees. Choose what it can do after creating it.")
+          : t("Every branch gets its own copy (a branch's group with the same name is used as its copy). Choose what it can do after creating it.")
+      }
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>

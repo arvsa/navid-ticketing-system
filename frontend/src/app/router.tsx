@@ -126,12 +126,13 @@ const inbox = createRoute({
   component: lazyRouteComponent(() => import("@/features/inbox/InboxPage"), "InboxPage"),
 });
 
-export type PeopleSearch = { tab?: "members"; group?: string; person?: string; branch?: string };
+/** `tab`: members, or school-wide groups (super admins); groups of the branch by default. */
+export type PeopleSearch = { tab?: "members" | "school"; group?: string; person?: string; branch?: string };
 const people = createRoute({
   getParentRoute: () => shell,
   path: "/people",
   validateSearch: (s: Record<string, unknown>): PeopleSearch => ({
-    tab: s.tab === "members" ? ("members" as const) : undefined,
+    tab: s.tab === "members" || s.tab === "school" ? s.tab : undefined,
     group: typeof s.group === "string" ? s.group : undefined,
     person: typeof s.person === "string" ? s.person : undefined,
     branch: typeof s.branch === "string" ? s.branch : undefined,

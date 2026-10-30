@@ -106,8 +106,9 @@ export function useItemLabels(issue: IssueDetail) {
     if (p) return short ? people.short(id) : people.name(id);
     if (!id) return t("Nobody");
     // The backend sets requires_super_admin_approval exactly when a super admin
-    // created the item, and only super admins create school-wide items.
-    if (id === issue.created_by && (issue.branch_id === null || issue.requires_super_admin_approval)) return SCHOOL_OFFICE;
+    // created the item. (School-wide items can also come from other branches'
+    // staff holding issue.target_other_branches.)
+    if (id === issue.created_by && issue.requires_super_admin_approval) return SCHOOL_OFFICE;
     if (issue.requires_super_admin_approval && issue.work_items.some((w) => w.decided_by === id)) return SCHOOL_OFFICE;
     return UNKNOWN_PERSON;
   };

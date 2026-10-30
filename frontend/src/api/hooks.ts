@@ -11,6 +11,7 @@ import { api, getAll } from "./client";
 import { keys } from "./keys";
 import type {
   Branch,
+  BranchPerson,
   CalendarEntry,
   CatalogEntry,
   Comment,
@@ -69,6 +70,24 @@ export function useGroups(branchId: string | undefined, includeArchived = false)
   });
 }
 
+/** School-wide groups (super admins). */
+export function useSchoolGroups(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.schoolGroups,
+    queryFn: () => api.get<Group[]>("/school-groups", { include_archived: true }),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** A school-wide group's copy in each branch. */
+export function useSchoolGroupCopies(groupId: string) {
+  return useQuery({
+    queryKey: keys.schoolGroupCopies(groupId),
+    queryFn: () => api.get<Group[]>(`/school-groups/${groupId}/copies`),
+  });
+}
+
 export function useEffectivePermissions(branchId?: string, userId?: string) {
   return useQuery({
     queryKey: keys.effective(branchId ?? "", userId ?? ""),
@@ -111,6 +130,16 @@ export function useIssueList(filters: IssueFilters, limit = 25) {
       api.get<Page<IssueSummary>>("/issues", { ...filters, limit, after: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
+  });
+}
+
+/** People in every branch (names only), for school-wide items. */
+export function useRecipients(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.recipients,
+    queryFn: () => api.get<BranchPerson[]>("/recipients"),
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 

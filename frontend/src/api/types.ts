@@ -34,6 +34,8 @@ export type MembershipView = S["MembershipView"];
 export type MeResponse = S["MeResponse"];
 export type Branch = S["Branch"];
 export type Member = S["Member"];
+/** Someone in some branch, to send a school-wide item to. */
+export type BranchPerson = S["Recipient"];
 export type AddedMember = S["AddedMember"];
 export type Group = S["Group"];
 export type GroupGrant = Omit<S["GroupGrant"], "permission" | "issue_type"> & {

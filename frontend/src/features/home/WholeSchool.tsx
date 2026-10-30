@@ -1,6 +1,7 @@
 // Super admin overview of every branch ("Whole school" design).
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, Download, Plus } from "lucide-react";
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { ChevronRight, Download, ExternalLink, Plus } from "lucide-react";
 import { useDashboard, useIssueList, useIssuesById } from "@/api/hooks";
 import type { IssueDetail, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
@@ -11,6 +12,7 @@ import { formatDay, timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople, type Directory } from "@/people/usePeople";
+import { ReviewInPlace, type ReviewTarget } from "@/features/items/WorkPanel";
 import { num, t, tn } from "@/i18n";
 
 export function WholeSchool() {
@@ -87,9 +89,6 @@ export function WholeSchool() {
                                 </Link>
                               </span>
                             ))}
-                        {admins.length === 1 && (
-                          <span className="ms-2 rounded-full bg-warning-soft px-2 py-0.5 text-[13px] font-semibold text-warning">{t("Only one admin")}</span>
-                        )}
                       </td>
                       <td className="px-4 py-4 text-end">{open != null ? num(open) : "—"}</td>
                       <td className={cx("px-4 py-4 text-end", b.overdue_work_items ? "font-semibold text-danger" : "text-text-3")}>
@@ -113,15 +112,15 @@ export function WholeSchool() {
       </section>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <LinkCard to="/branches" title={t("Appoint a branch admin")} text={t("Only super admins can do this")} />
-        <LinkCard to="/branches" title={t("Open a new branch")} text={t("Created together with its first admin")} />
+        <LinkCard to="/branches" title={t("Branches & admins")} text={t("Open a new branch or appoint its admins")} />
+        <LinkCard to="/people" title={t("People & groups")} text={t("Staff, groups and what they can do")} />
         <LinkCard to="/export" title={t("Export to Excel")} text={t("Any branch, or the whole school")} />
       </div>
     </div>
   );
 }
 
-function LinkCard({ to, title, text }: { to: "/branches" | "/export"; title: string; text: string }) {
+function LinkCard({ to, title, text }: { to: "/branches" | "/people" | "/export"; title: string; text: string }) {
   return (
     <Link to={to} className="rounded-[22px] bg-surface px-6 py-5 shadow-1 ring-1 ring-border transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-2">
       <span className="block text-[18px] font-semibold">{title}</span>
@@ -132,8 +131,8 @@ function LinkCard({ to, title, text }: { to: "/branches" | "/export"; title: str
 
 function SchoolWideCard({ issue, people }: { issue?: IssueDetail; people: Directory }) {
   const viewer = useViewer();
-  const navigate = useNavigate();
   const { branchById } = useBranch();
+  const [review, setReview] = useState<ReviewTarget | null>(null);
   if (!issue) return <Skeleton className="h-40" />;
   const work = issue.work_items.filter((w) => w.status !== "cancelled");
   const approved = work.filter((w) => w.status === "approved").length;
@@ -154,16 +153,25 @@ function SchoolWideCard({ issue, people }: { issue?: IssueDetail; people: Direct
         <span className="ms-auto font-semibold">
           {t("{done} of {total} approved", { done: approved, total: work.length })}
         </span>
+        <Link
+          to="/items/$number"
+          params={{ number: n }}
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-[14px] font-semibold hover:bg-sunken"
+        >
+          <ExternalLink className="size-4" aria-hidden />
+          {t("Details")}
+        </Link>
       </div>
       {work.length === 0 ? (
         <EmptyState title={t("No branch has this yet.")} />
       ) : (
         <ul className="divide-y divide-border">
           {work.map((w) => (
-            <BranchRow key={w.id} w={w} people={people} branchName={branchById.get(w.branch_id)?.name ?? t("Branch")} onReview={() => navigate({ to: "/items/$number", params: { number: n }, search: { review: w.id } })} />
+            <BranchRow key={w.id} w={w} people={people} branchName={branchById.get(w.branch_id)?.name ?? t("Branch")} onReview={() => setReview({ issueId: issue.id, workId: w.id })} />
           ))}
         </ul>
       )}
+      <ReviewInPlace target={review} onChange={setReview} />
     </Card>
   );
 }

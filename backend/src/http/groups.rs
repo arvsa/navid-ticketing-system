@@ -10,7 +10,9 @@ use uuid::Uuid;
 use super::json::{ApiJson, ApiPath, ApiQuery};
 use crate::{
     authz::Actor,
-    domain::groups::{self, DeleteOutcome, Group, GroupGrant, GroupPatch, GroupQuery, NewGrant, NewGroup},
+    domain::groups::{
+        self, DeleteOutcome, GrantChanges, Group, GroupGrant, GroupPatch, GroupQuery, NewGrant, NewGroup,
+    },
     error::AppResult,
     pagination::{Page, PageParams},
     AppState,
@@ -19,9 +21,11 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/branches/{id}/groups", get(list).post(create))
+        .route("/school-groups", get(list_school).post(create_school))
         .route("/groups/{id}", patch(update).delete(remove))
+        .route("/school-groups/{id}/copies", get(copies))
         .route("/groups/{id}/members/{user_id}", put(add_member).delete(remove_member))
-        .route("/groups/{id}/permissions", get(list_grants).post(grant))
+        .route("/groups/{id}/permissions", get(list_grants).post(grant).put(apply_grants))
         .route("/group-permissions/{id}", delete(revoke))
 }
 
@@ -61,7 +65,39 @@ async fn create(
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(input): ApiJson<NewGroup>,
 ) -> AppResult<(StatusCode, Json<Group>)> {
-    Ok((StatusCode::CREATED, Json(groups::create(&s.db, &actor, id, input).await?)))
+    Ok((StatusCode::CREATED, Json(groups::create(&s.db, &actor, Some(id), input).await?)))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+struct SchoolListQuery {
+    #[serde(default)]
+    include_archived: bool,
+}
+
+/// School-wide groups: their grants apply in every branch a member belongs to.
+#[utoipa::path(get, path = "/api/school-groups", operation_id = "listSchoolGroups", tag = "groups", params(SchoolListQuery), responses((status = 200, body = Vec<Group>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn list_school(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiQuery(q): ApiQuery<SchoolListQuery>,
+) -> AppResult<Json<Vec<Group>>> {
+    Ok(Json(groups::list_school(&s.db, &actor, &GroupQuery { include_archived: q.include_archived }).await?))
+}
+
+#[utoipa::path(post, path = "/api/school-groups", operation_id = "createSchoolGroup", tag = "groups", request_body = NewGroup, responses((status = 201, body = Group), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn create_school(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiJson(input): ApiJson<NewGroup>,
+) -> AppResult<(StatusCode, Json<Group>)> {
+    Ok((StatusCode::CREATED, Json(groups::create(&s.db, &actor, None, input).await?)))
+}
+
+/// A school-wide group's copies, one per branch, with their member counts.
+#[utoipa::path(get, path = "/api/school-groups/{id}/copies", operation_id = "listSchoolGroupCopies", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 200, body = Vec<Group>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn copies(State(s): State<AppState>, actor: Actor, ApiPath(id): ApiPath<Uuid>) -> AppResult<Json<Vec<Group>>> {
+    Ok(Json(groups::copies(&s.db, &actor, id).await?))
 }
 
 #[utoipa::path(patch, path = "/api/groups/{id}", operation_id = "updateGroup", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id")), request_body = GroupPatch, responses((status = 200, body = Group), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
@@ -117,6 +153,18 @@ async fn grant(
     ApiJson(input): ApiJson<NewGrant>,
 ) -> AppResult<(StatusCode, Json<GroupGrant>)> {
     Ok((StatusCode::CREATED, Json(groups::grant(&s.db, &actor, id, input).await?)))
+}
+
+/// Save several grant changes at once (one notification, all or nothing).
+/// Returns the group's grants afterwards.
+#[utoipa::path(put, path = "/api/groups/{id}/permissions", operation_id = "applyGroupGrants", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id")), request_body = GrantChanges, responses((status = 200, body = Vec<GroupGrant>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn apply_grants(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(changes): ApiJson<GrantChanges>,
+) -> AppResult<Json<Vec<GroupGrant>>> {
+    Ok(Json(groups::apply_grants(&s.db, &actor, id, changes).await?))
 }
 
 #[utoipa::path(delete, path = "/api/group-permissions/{id}", operation_id = "revokeGroupPermission", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]

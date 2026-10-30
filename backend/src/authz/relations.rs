@@ -62,7 +62,8 @@ pub async fn load_user(db: &PgPool, user_id: Uuid) -> AppResult<Option<UserFacts
 #[derive(Debug, Clone)]
 pub struct IssueFacts {
     pub id: Uuid,
-    /// `None` = cross-branch (super admin) issue.
+    /// `None` = cross-branch issue (sent by a super admin, or to people by a
+    /// holder of `issue.target_other_branches`).
     pub branch_id: Option<Uuid>,
     pub issue_type: IssueType,
     pub is_private: bool,

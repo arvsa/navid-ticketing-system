@@ -67,24 +67,38 @@ function adminCanManage(v: Viewer, issue: IssueDetail, branchId = issue.branch_i
 
 const isOpen = (issue: IssueDetail) => issue.state === "open";
 
+/** A school-wide item sent below super admin (to people in other branches). */
+const sentAcross = (issue: IssueDetail) => !issue.branch_id && !issue.requires_super_admin_approval;
+
+/** Edit, close or hide the item itself. A school-wide item sent below super
+ * admin belongs to its sender, under the rules of the sender's own branches;
+ * the receiving branches' admins don't manage it. */
+function itemRule(v: Viewer, issue: IssueDetail, perm: Permission) {
+  if (!sentAcross(issue)) return adminCanManage(v, issue) || grantApplies(v, issue, perm);
+  if (isSuper(v)) return true;
+  if (issue.created_by !== v.me.user.id) return false;
+  return v.me.memberships.some((m) => m.is_admin || grantApplies(v, issue, perm, m.branch.id));
+}
+
 export function canEdit(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return adminCanManage(v, issue) || grantApplies(v, issue, "issue.edit");
+  return itemRule(v, issue, "issue.edit");
 }
 
 export function canClose(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
   const ownerClose = issue.created_by === v.me.user.id && issue.type !== "action";
-  return ownerClose || adminCanManage(v, issue) || grantApplies(v, issue, "issue.close");
+  return ownerClose || itemRule(v, issue, "issue.close");
 }
 
 export function canSetPrivate(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return adminCanManage(v, issue) || grantApplies(v, issue, "issue.set_private");
+  return itemRule(v, issue, "issue.set_private");
 }
 
 export function canTarget(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
+  if (sentAcross(issue)) return isSuper(v) || (issue.created_by === v.me.user.id && canSendAcross(v, issue.type));
   return adminCanManage(v, issue) || grantApplies(v, issue, "issue.target");
 }
 
@@ -150,12 +164,24 @@ export function isMine(v: Viewer, w: WorkItem) {
 /** Kinds the viewer may create in a branch ("" = school-wide, super admins only). */
 export function creatableTypes(v: Viewer, branchId: string | null): IssueType[] {
   const all: IssueType[] = ["ticket", "action", "report", "event"];
-  if (isSuper(v) || branchId === null) return isSuper(v) ? all : [];
+  if (isSuper(v)) return all;
+  if (branchId === null) return all.filter((t) => canSendAcross(v, t));
   return all.filter((t) => hasGrant(v, branchId, "issue.create", t));
 }
 
 /** May send this kind to other people (staff can send their own tickets and events). */
 export function canSendType(v: Viewer, branchId: string | null, type: IssueType) {
+  if (branchId === null) return canSendAcross(v, type);
   if (isSuper(v) || isAdminOf(v, branchId)) return true;
   return hasGrant(v, branchId, "issue.target", type);
+}
+
+/** May send a school-wide item of this kind to people in any branch. Mirrors
+ * the server: `issue.target_other_branches` plus the right to create the kind,
+ * both in one branch. Unlike other grants, being an admin doesn't imply it. */
+export function canSendAcross(v: Viewer, type: IssueType) {
+  if (isSuper(v)) return true;
+  const holds = (grants: MeResponse["memberships"][number]["grants"], perm: Permission) =>
+    grants.some((g) => g.permission === perm && g.scope === "branch" && (!g.issue_type || g.issue_type === type));
+  return v.me.memberships.some((m) => holds(m.grants, "issue.target_other_branches") && (m.is_admin || holds(m.grants, "issue.create")));
 }

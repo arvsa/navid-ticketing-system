@@ -119,6 +119,11 @@ export const permissionInfo: Record<
     help: t("Choose who an item goes to, and add people later"),
     section: "creating",
   },
+  "issue.target_other_branches": {
+    title: t("Send to people in other branches"),
+    help: t("School-wide items addressed to chosen people in any branch. Admins need it too."),
+    section: "creating",
+  },
   "issue.close": {
     title: t("Close or cancel items"),
     help: t("Everyone can already close what they created"),

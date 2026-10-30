@@ -2,10 +2,12 @@
 // (gap G-2: responses carry user ids only).
 import { useQuery } from "@tanstack/react-query";
 import { getAll } from "@/api/client";
+import { useRecipients } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { Member } from "@/api/types";
 import { useSession } from "@/auth/session";
 import { useBranch } from "@/app/BranchContext";
+import { canSendAcross } from "@/lib/can";
 import { isolate, t } from "@/i18n";
 
 export type Person = {
@@ -74,6 +76,18 @@ export function usePeople(): Directory {
   });
 
   const map = data ?? new Map<string, Person>();
+  // Senders of school-wide items see names in other branches too, so their
+  // recipients aren't "someone outside your branch". Only for naming: they
+  // don't join the directory lists.
+  const sendsAcross = !me.user.is_super_admin && (["ticket", "action", "report", "event"] as const).some((ty) => canSendAcross({ me }, ty));
+  const others = useRecipients(sendsAcross);
+  const outside = new Map<string, Person>();
+  for (const r of others.data ?? []) {
+    if (map.has(r.user_id)) continue;
+    const p = outside.get(r.user_id) ?? { id: r.user_id, first_name: r.first_name, last_name: r.last_name, email: "", is_active: true, branchIds: [], adminOf: [] };
+    p.branchIds.push(r.branch_id);
+    outside.set(r.user_id, p);
+  }
   const self: Person = {
     id: me.user.id,
     first_name: me.user.first_name,
@@ -83,7 +97,7 @@ export function usePeople(): Directory {
     branchIds: me.memberships.map((m) => m.branch.id),
     adminOf: me.memberships.filter((m) => m.is_admin).map((m) => m.branch.id),
   };
-  const get = (id?: string | null) => (id === me.user.id ? map.get(id) ?? self : id ? map.get(id) : undefined);
+  const get = (id?: string | null) => (id === me.user.id ? map.get(id) ?? self : id ? map.get(id) ?? outside.get(id) : undefined);
   return {
     get,
     name: (id) => {

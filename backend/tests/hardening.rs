@@ -22,7 +22,7 @@ async fn the_openapi_document_describes_the_api(pool: PgPool) {
     let paths = doc["paths"].as_object().unwrap();
     let operations: usize = paths.values().map(|p| p.as_object().unwrap().len()).sum();
     // Every route in the router (only /api/openapi.json itself is left out).
-    assert_eq!(operations, 66, "documented operations");
+    assert_eq!(operations, 71, "documented operations");
     for (path, method) in [
         ("/api/auth/login", "post"),
         ("/api/issues", "get"),
@@ -32,6 +32,7 @@ async fn the_openapi_document_describes_the_api(pool: PgPool) {
         ("/api/stream", "get"),
         ("/api/exports", "get"),
         ("/api/branches/{id}/members/{user_id}/effective-permissions", "get"),
+        ("/api/recipients", "get"),
     ] {
         assert!(paths.get(path).and_then(|p| p.get(method)).is_some(), "{method} {path} is missing");
     }

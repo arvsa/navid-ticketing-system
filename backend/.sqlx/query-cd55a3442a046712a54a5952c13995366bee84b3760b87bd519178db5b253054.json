@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT u.id AS user_id, u.first_name, u.last_name, b.id AS branch_id, b.name AS branch_name\n        FROM branch_membership m\n        JOIN app_user u ON u.id = m.user_id\n        JOIN branch b ON b.id = m.branch_id\n        WHERE m.left_at IS NULL AND u.is_active AND b.is_active\n        ORDER BY b.name, u.first_name, u.last_name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "branch_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cd55a3442a046712a54a5952c13995366bee84b3760b87bd519178db5b253054"
+}
