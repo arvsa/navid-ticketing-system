@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use backend::{authz::permission, db, http, jobs, realtime, telemetry, AppState, Config};
+use backend::{auth::bootstrap, authz::permission, db, http, jobs, realtime, telemetry, AppState, Config};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,6 +12,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db::migrate(&pool).await?;
     tracing::info!("migrations applied");
     permission::verify_catalog(&pool).await?;
+    if let Some(email) = &config.first_super_admin_email {
+        if let Some(created) = bootstrap::first_super_admin(&pool, email).await? {
+            tracing::info!(%email, "first super admin created");
+            // Plain text so it reads well in `docker compose logs`; shown once.
+            println!("First super admin: {email}");
+            println!("Temporary password: {}", created.temporary_password.expose());
+        }
+    }
 
     let bind_addr = config.bind_addr;
     let jobs_enabled = config.jobs_enabled;

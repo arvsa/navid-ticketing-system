@@ -1,6 +1,6 @@
 # Runs from images loaded with `docker load`, with no internet access.
 # See instructions/offline-bundle.md.
-name: navid-demo
+name: navid-offline
 
 services:
   postgres:
@@ -26,6 +26,9 @@ services:
       DATABASE_URL: postgres://ticketing:ticketing@postgres:5432/ticketing
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # On first start (no users yet) this super admin is created; its
+      # temporary password is in `docker compose logs backend`.
+      FIRST_SUPER_ADMIN_EMAIL: ${FIRST_SUPER_ADMIN_EMAIL:-superadmin@school.local}
       RUST_LOG: ${RUST_LOG:-backend=info,tower_http=info,sqlx=warn}
     volumes:
       - attachments:/data/attachments

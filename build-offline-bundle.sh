@@ -2,7 +2,7 @@
 # Builds navid-offline/: the images and compose file for running without
 # internet access. See instructions/offline-bundle.md.
 #   ./build-offline-bundle.sh [-v version] [amd64|arm64]
-#   -v, --version   image tag and file version (default 1.0.0)
+#   -v, --version   image tag and file version (default 1.0.1)
 #   architecture    target platform (default amd64)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 usage() { echo "usage: $0 [-v version] [amd64|arm64]" >&2; exit 1; }
 
 arch=amd64
-version=1.0.0
+version=1.0.1
 while [ $# -gt 0 ]; do
   case "$1" in
     -v|--version) [ $# -ge 2 ] || usage; version="$2"; shift 2 ;;

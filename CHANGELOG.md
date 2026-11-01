@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.1
+
+### Changed
+
+- **The offline bundle starts empty, with one super admin.** On first start
+  the backend creates `superadmin@school.local` (or `FIRST_SUPER_ADMIN_EMAIL`)
+  when the database has no users, and prints its temporary password in
+  `docker compose logs backend`. No demo data.
+- The offline bundle's compose project is now `navid-offline`, so it no
+  longer reuses the data of an earlier demo install (`navid-demo`).
+
+### Upgrading
+
+- To remove an earlier demo install and its data:
+  `docker compose -p navid-demo down -v`.
+
 ## v1.0.0
 
 The first release. The super admin now runs the app rather than the daily

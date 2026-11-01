@@ -21,6 +21,9 @@ pub struct Config {
     pub storage_dir: String,
     /// Run the background jobs (SLA, reminders, cleanup) in this process.
     pub jobs_enabled: bool,
+    /// Created as a super admin on first start, when the database has no
+    /// users; the temporary password is printed once.
+    pub first_super_admin_email: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -44,6 +47,7 @@ impl Config {
             log_format,
             storage_dir: optional("STORAGE_DIR").unwrap_or_else(|| "./data/attachments".into()),
             jobs_enabled: parse_or("JOBS_ENABLED", true)?,
+            first_super_admin_email: optional("FIRST_SUPER_ADMIN_EMAIL"),
         })
     }
 }

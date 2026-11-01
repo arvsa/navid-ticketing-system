@@ -33,6 +33,7 @@ pub fn test_config() -> Config {
         log_format: LogFormat::Pretty,
         storage_dir: String::new(), // set per TestApp
         jobs_enabled: false,
+        first_super_admin_email: None,
     }
 }
 

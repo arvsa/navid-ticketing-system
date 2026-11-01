@@ -7,7 +7,7 @@ The bundle is a folder, `navid-offline/`, containing:
 
 | File | What |
 |---|---|
-| `navid-images-<version>-<arch>.tar.gz` | The postgres, backend and frontend images, e.g. `navid-images-0.0.1-amd64.tar.gz` |
+| `navid-images-<version>-<arch>.tar.gz` | The postgres, backend and frontend images, e.g. `navid-images-1.0.1-amd64.tar.gz` |
 | `docker-compose.yml` | Starts the three images |
 | `offline-bundle.md` | This file |
 
@@ -16,7 +16,7 @@ The bundle is a folder, `navid-offline/`, containing:
 1. **Load the images** (once, takes a minute):
 
    ```sh
-   docker load -i navid-images-0.0.1-amd64.tar.gz
+   docker load -i navid-images-1.0.1-amd64.tar.gz
    ```
 
 2. **Start everything** from inside `navid-offline/`:
@@ -25,22 +25,28 @@ The bundle is a folder, `navid-offline/`, containing:
    docker compose up -d
    ```
 
-3. **Add demo data:**
+   The database starts empty. On the first start the backend creates one
+   super admin, `superadmin@school.local`. To use your own email instead,
+   start it the first time with
+   `FIRST_SUPER_ADMIN_EMAIL=you@your.school docker compose up -d`.
+
+3. **Get the temporary password:**
 
    ```sh
-   docker compose exec backend admin seed-demo
+   docker compose logs backend | grep -A1 "First super admin"
    ```
 
-4. **Open http://localhost:8000** and sign in. Every demo account has the
-   password `demo-password`:
+   It is shown only on that first start.
 
-   | Account | Role |
-   |---|---|
-   | `superadmin@demo.school` | Super admin (all branches) |
-   | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
-   | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
+4. **Open http://localhost:8000** and sign in with that email and the
+   temporary password; you choose your own password straight away. From
+   there, open the branches, import their people and appoint the admins.
 
-Stop it with `docker compose down`. Add `-v` to also delete the data.
+Stop it with `docker compose down`. Add `-v` to also delete the data; the
+next start is then a new, empty school with a new super admin.
+
+Lost the temporary password before signing in? Make a new one:
+`docker compose exec backend admin reset-password --email superadmin@school.local`.
 
 ### Another port
 
@@ -57,8 +63,8 @@ APP_PORT=9000 APP_ORIGIN=http://localhost:9000 docker compose up -d
 The images are built from the checked-out code:
 
 ```sh
-./build-offline-bundle.sh                # amd64, 0.0.1
-./build-offline-bundle.sh -v 0.0.2 arm64
+./build-offline-bundle.sh                # amd64, 1.0.1
+./build-offline-bundle.sh -v 1.0.2 arm64
 
 # After shipping for a different architecture
 # docker pull postgres:16

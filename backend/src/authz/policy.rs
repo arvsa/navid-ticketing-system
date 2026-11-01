@@ -215,7 +215,6 @@ impl Action<'_> {
             | ManageSchoolGroups
             | EditSettings
             | ViewAnalytics
-            | ExportPeople
             | ExportPeople => true,
             Export { branch_ids } => branch_ids.len() != 1,
             // A super admin's account is only ever touched by super admins.
@@ -251,7 +250,6 @@ impl Action<'_> {
             | FindPeopleInOtherBranches
             | EditSettings
             | ViewAnalytics
-            | ExportPeople
             | ExportPeople => vec![],
             EditBranch { branch_id }
             | SetBranchAdmin { branch_id }
