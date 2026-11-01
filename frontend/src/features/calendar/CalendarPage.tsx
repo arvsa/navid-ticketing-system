@@ -3,14 +3,14 @@
 // weeks start Monday, Persian weeks Saturday).
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { addDays, endOfWeek, format, isSameDay, startOfWeek } from "date-fns";
 import { useCalendar, useIssuesById, useWorkItems } from "@/api/hooks";
 import type { CalendarEntry } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { useNewItem } from "@/app/newItemContext";
 import { DateBlock, RsvpBadge } from "@/components/badges";
-import { Button, Card, Chip, EmptyState, ErrorPanel, LoadingRows, PageHeader, Segmented, cx } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, ErrorPanel, IconButton, LoadingRows, PageHeader, Segmented, cx } from "@/components/ui";
 import {
   addMonthsTo,
   dateIn,
@@ -85,9 +85,7 @@ export function CalendarPage() {
       <PageHeader
         title={t("Calendar")}
         actions={
-          <Button variant="primary" size="lg" icon={<Plus className="size-5" />} onClick={() => openNew({ type: "event", onlyType: true })}>
-            {t("New event")}
-          </Button>
+          <IconButton variant="primary" label={t("New event")} hintAlign="end" icon={<CalendarPlus className="size-5" />} onClick={() => openNew({ type: "event", onlyType: true })} />
         }
       />
       <div className="mb-5 flex flex-wrap items-center gap-3">

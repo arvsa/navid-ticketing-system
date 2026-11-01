@@ -118,7 +118,7 @@ export function Avatar({
         height: size,
         fontSize: size * 0.38,
         color: dark ? "var(--nav-text)" : `var(${fg})`,
-        background: dark ? "#3b4257" : `var(${bg})`,
+        background: dark ? "var(--nav-active)" : `var(${bg})`,
       }}
     >
       {initials(first, last)}

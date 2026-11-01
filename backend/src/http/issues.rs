@@ -11,7 +11,9 @@ use super::json::{ApiJson, ApiPath, ApiQuery};
 use crate::{
     authz::Actor,
     domain::{
-        issues::{self, HistoryEntry, IssueDetail, IssuePatch, IssueQuery, IssueSummary, NewIssue, NewTarget},
+        issues::{
+            self, HistoryEntry, IssueDetail, IssuePatch, IssueQuery, IssueSummary, NewIssue, NewTarget, PassTicket,
+        },
         types::IssueState,
     },
     error::AppResult,
@@ -30,6 +32,8 @@ pub fn routes() -> Router<AppState> {
         .route("/issues/{id}/targets/{target_id}", delete(remove_target))
         .route("/issues/{id}/read", post(mark_read))
         .route("/issues/{id}/watch", put(watch).delete(unwatch))
+        .route("/issues/{id}/mute", put(mute).delete(unmute))
+        .route("/issues/{id}/pass", post(pass))
         .route("/issues/{id}/history", get(history))
 }
 
@@ -136,6 +140,31 @@ async fn remove_target(
 async fn mark_read(State(s): State<AppState>, actor: Actor, ApiPath(id): ApiPath<Uuid>) -> AppResult<StatusCode> {
     issues::mark_read(&s.db, &actor, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// PUT /api/issues/{id}/mute: no more updates (comments, changes) on this
+/// item; what needs you still reaches you.
+#[utoipa::path(put, path = "/api/issues/{id}/mute", operation_id = "muteIssue", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn mute(State(s): State<AppState>, actor: Actor, ApiPath(id): ApiPath<Uuid>) -> AppResult<StatusCode> {
+    issues::set_muted(&s.db, &actor, id, true).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(delete, path = "/api/issues/{id}/mute", operation_id = "unmuteIssue", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn unmute(State(s): State<AppState>, actor: Actor, ApiPath(id): ApiPath<Uuid>) -> AppResult<StatusCode> {
+    issues::set_muted(&s.db, &actor, id, false).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// POST /api/issues/{id}/pass: pass a question you were asked to someone else in your branch.
+#[utoipa::path(post, path = "/api/issues/{id}/pass", operation_id = "passTicket", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), request_body = PassTicket, responses((status = 200, body = IssueDetail), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn pass(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(input): ApiJson<PassTicket>,
+) -> AppResult<Json<IssueDetail>> {
+    Ok(Json(issues::pass_ticket(&s.db, &actor, id, input).await?))
 }
 
 #[utoipa::path(put, path = "/api/issues/{id}/watch", operation_id = "watchIssue", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]

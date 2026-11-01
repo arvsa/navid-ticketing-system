@@ -25,8 +25,10 @@ use crate::{
 };
 
 /// A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
-/// branch; super admins only), e.g. `{"group_id": "..."}`. Zero or several
-/// fields set is `422 invalid_target`. Send one target per recipient.
+/// branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
+/// issue a person also names their branch: `{"user_id": "...", "branch_id":
+/// "..."}`. Anything else is `422 invalid_target`. Send one target per
+/// recipient.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TargetInput {
     pub user_id: Option<Uuid>,
@@ -68,17 +70,24 @@ impl IssueCtx {
     }
 }
 
-/// Shape check. Cross-branch issues take only whole-branch targets; branch
-/// issues take users and groups of their branch, or the branch itself.
+/// Shape check. Cross-branch issues take whole branches and people (with
+/// their branch); branch issues take users and groups of their branch, or the
+/// branch itself.
 pub fn resolve(input: &TargetInput, issue_branch: Option<Uuid>) -> AppResult<ResolvedTarget> {
     let invalid = |msg: &'static str| AppError::validation("invalid_target", msg);
     let target = match (input.user_id, input.group_id, input.branch_id) {
-        (Some(user), None, None) => {
-            let branch = issue_branch.ok_or_else(|| invalid("cross-branch issues can only target whole branches"))?;
+        (Some(user), None, branch) => {
+            let branch = match (issue_branch, branch) {
+                (Some(issue_branch), None) => issue_branch,
+                (Some(issue_branch), Some(b)) if b == issue_branch => b,
+                (Some(_), Some(_)) => return Err(invalid("targets must be in the issue's branch")),
+                (None, Some(b)) => b,
+                (None, None) => return Err(invalid("on a cross-branch issue a person needs their branch_id")),
+            };
             ResolvedTarget { kind: TargetKind::User, branch_id: branch, user_id: Some(user), group_id: None }
         }
         (None, Some(group), None) => {
-            let branch = issue_branch.ok_or_else(|| invalid("cross-branch issues can only target whole branches"))?;
+            let branch = issue_branch.ok_or_else(|| invalid("cross-branch issues can't target groups"))?;
             ResolvedTarget { kind: TargetKind::Group, branch_id: branch, user_id: None, group_id: Some(group) }
         }
         (None, None, Some(branch)) => {

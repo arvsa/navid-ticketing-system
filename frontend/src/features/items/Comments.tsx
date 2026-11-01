@@ -2,7 +2,7 @@
 // comments, files (UX_SPEC §4.5.5).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { EyeOff, MoreHorizontal } from "lucide-react";
+import { EyeOff, MoreHorizontal, SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useComments } from "@/api/hooks";
@@ -10,12 +10,13 @@ import { keys } from "@/api/keys";
 import type { Comment, IssueDetail } from "@/api/types";
 import { Avatar } from "@/components/badges";
 import { AttachButton, FileList, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
-import { Button, EmptyState, LoadingRows, Menu, MenuItem, cx, inputClass } from "@/components/ui";
+import { Button, EmptyState, IconButton, LoadingRows, Menu, MenuItem, cx, inputClass } from "@/components/ui";
 import { canComment, canModerate } from "@/lib/can";
 import { formatDateTime, timeAgo } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { useItemLabels } from "@/lib/items";
+import { PersonPopover } from "@/people/PersonPopover";
 import { usePeople, type Person } from "@/people/usePeople";
 import { t } from "@/i18n";
 
@@ -120,10 +121,14 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
   const mentioned = c.mentions.map((id) => people.get(id)).filter(Boolean) as Person[];
   return (
     <li className={cx("flex gap-3", c.is_internal_only && "rounded-[10px] border-s-4 border-staff-edge bg-staff-bg p-3")}>
-      <Avatar first={author?.first_name} last={author?.last_name} id={c.author_id} size={compact ? 36 : 40} />
+      <PersonPopover id={c.author_id} className="h-fit shrink-0 rounded-full">
+        <Avatar first={author?.first_name} last={author?.last_name} id={c.author_id} size={compact ? 36 : 40} />
+      </PersonPopover>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <b>{mine ? t("You") : labels.person(c.author_id)}</b>
+          <PersonPopover id={c.author_id} className="font-bold">
+            {mine ? t("You") : labels.person(c.author_id)}
+          </PersonPopover>
           <time dateTime={c.created_at} title={formatDateTime(c.created_at)} className="text-[14px] text-text-3">
             {timeAgo(c.created_at)}
           </time>
@@ -255,7 +260,7 @@ function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItem
         {t("Write a comment — type @ to bring someone in")}
       </label>
       <div className="relative">
-        <div className={cx("flex gap-2", compact ? "items-stretch" : "flex-col")}>
+        <div className="flex flex-col gap-2">
           <textarea
             id={`composer-${key}`}
             ref={ref}
@@ -275,11 +280,6 @@ function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItem
             maxLength={20000}
             className={cx(inputClass, "resize-y")}
           />
-          {compact && (
-            <Button type="submit" variant="dark" size="lg" loading={send.isPending} disabled={!body.trim() && !files.files.length} className="h-auto">
-              {t("Send")}
-            </Button>
-          )}
         </div>
         {matches.length > 0 && (
           <ul className="absolute bottom-full start-0 z-20 mb-1 w-72 rounded-[10px] border border-border bg-surface p-1 shadow-2" role="listbox">
@@ -297,12 +297,18 @@ function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItem
       {hidden.length > 0 && <p className="text-[13px] text-text-3">{t("This item is private. People it isn't sent to won't see it or be told.")}</p>}
       <PendingFiles files={files.files} onRemove={files.remove} />
       <div className="flex flex-wrap items-center gap-3">
-        <AttachButton onPick={files.add} label={t("Attach")} dashed={false} />
-        {!compact && (
-          <Button type="submit" variant="primary" className="ms-auto" loading={send.isPending} disabled={!body.trim() && !files.files.length}>
-            {t("Comment")}
-          </Button>
-        )}
+        <AttachButton onPick={files.add} label={t("Attach files")} iconOnly />
+        <div className="ms-auto">
+          <IconButton
+            type="submit"
+            variant="primary"
+            label={t("Send (Ctrl+Enter)")}
+            hintAlign="end"
+            icon={<SendHorizontal className="size-4 rtl:-scale-x-100" />}
+            loading={send.isPending}
+            disabled={!body.trim() && !files.files.length}
+          />
+        </div>
       </div>
     </form>
   );

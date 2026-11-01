@@ -435,3 +435,101 @@ fn write_time(
     ws.write_datetime_with_format(row, col, dt, format)?;
     Ok(())
 }
+
+/// `GET /api/exports/people` (super admins): one row per person per branch,
+/// current members only. The first three columns are the import template's,
+/// so the file can be imported again.
+pub async fn people(db: &PgPool, actor: &Actor, branch_ids: Option<Vec<Uuid>>) -> AppResult<ExportFile> {
+    authorize(actor, Action::ExportPeople)?;
+    let all = sqlx::query!("SELECT id, code FROM branch ORDER BY code").fetch_all(db).await?;
+    if let Some(ids) = &branch_ids {
+        if ids.is_empty() {
+            return Err(AppError::validation("invalid_query", "no branches to export"));
+        }
+        if ids.iter().any(|id| !all.iter().any(|b| b.id == *id)) {
+            return Err(AppError::NotFound);
+        }
+    }
+    let rows = sqlx::query!(
+        r#"
+        SELECT u.email::text AS "email!", u.first_name, u.last_name, b.name AS branch, b.code, b.timezone,
+               m.is_admin, u.is_active, u.last_login_at, m.joined_at,
+               (SELECT string_agg(g.name, ', ' ORDER BY g.name) FROM group_member gm
+                JOIN user_group g ON g.id = gm.group_id
+                WHERE gm.user_id = u.id AND gm.branch_id = b.id AND NOT g.is_default AND g.archived_at IS NULL) AS groups
+        FROM branch_membership m
+        JOIN app_user u ON u.id = m.user_id
+        JOIN branch b ON b.id = m.branch_id
+        WHERE m.left_at IS NULL AND ($1::uuid[] IS NULL OR b.id = ANY($1))
+        ORDER BY b.code, u.last_name, u.first_name, u.email
+        "#,
+        branch_ids.as_deref()
+    )
+    .fetch_all(db)
+    .await?;
+
+    let x = AppError::internal;
+    let mut wb = Workbook::new();
+    let header = Format::new().set_bold();
+    let date = Format::new().set_num_format("yyyy-mm-dd hh:mm");
+    let ws = sheet(
+        &mut wb,
+        "People",
+        &header,
+        &[
+            ("email", 32.0),
+            ("first_name", 16.0),
+            ("last_name", 18.0),
+            ("Branch", 22.0),
+            ("Branch code", 11.0),
+            ("Branch admin", 13.0),
+            ("Groups", 30.0),
+            ("Account", 10.0),
+            ("Joined branch", 17.0),
+            ("Last sign-in", 17.0),
+        ],
+    )
+    .map_err(x)?;
+    for (i, p) in rows.iter().enumerate() {
+        let r = (i + 1) as u32;
+        ws.write_string(r, 0, &p.email).map_err(x)?;
+        ws.write_string(r, 1, &p.first_name).map_err(x)?;
+        ws.write_string(r, 2, &p.last_name).map_err(x)?;
+        ws.write_string(r, 3, &p.branch).map_err(x)?;
+        ws.write_string(r, 4, &p.code).map_err(x)?;
+        ws.write_string(r, 5, if p.is_admin { "yes" } else { "no" }).map_err(x)?;
+        ws.write_string(r, 6, p.groups.as_deref().unwrap_or("")).map_err(x)?;
+        ws.write_string(r, 7, if p.is_active { "active" } else { "inactive" }).map_err(x)?;
+        write_time(ws, r, 8, Some(p.joined_at), &p.timezone, &date).map_err(x)?;
+        write_time(ws, r, 9, p.last_login_at, &p.timezone, &date).map_err(x)?;
+    }
+    finish(ws, rows.len(), 9).map_err(x)?;
+    let bytes = wb.save_to_buffer().map_err(x)?;
+
+    let chosen: Vec<&Uuid> = match &branch_ids {
+        Some(ids) => ids.iter().collect(),
+        None => all.iter().map(|b| &b.id).collect(),
+    };
+    let mut tx = db.begin().await?;
+    audit::record(
+        &mut tx,
+        AuditEntry {
+            entity_type: "export",
+            entity_id: Uuid::new_v4().to_string(),
+            branch_id: None,
+            actor_id: Some(actor.user_id),
+            action: "export_people",
+            old_value: None,
+            new_value: Some(json!({ "branch_ids": chosen, "all_branches": branch_ids.is_none(), "rows": rows.len() })),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    let label = match &branch_ids {
+        None => "all".to_owned(),
+        Some(ids) => all.iter().filter(|b| ids.contains(&b.id)).map(|b| b.code.clone()).collect::<Vec<_>>().join("-"),
+    };
+    let today = OffsetDateTime::now_utc().date();
+    Ok(ExportFile { file_name: format!("people-{label}-{today}.xlsx"), bytes })
+}

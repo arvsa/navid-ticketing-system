@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE issue_report SET author_id = $3 WHERE work_item_id = $1 AND author_id = $2 AND submitted_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da106b8b5850db895e9e5b5fe99b4f65c66092d253cfa8869e73f215459de31d"
+}

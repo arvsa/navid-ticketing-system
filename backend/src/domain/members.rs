@@ -110,52 +110,108 @@ pub struct AddedMember {
 
 pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) -> AppResult<AddedMember> {
     let email = validate_email(&input.email)?;
-    let existing_id = sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email)
-        .fetch_optional(db)
-        .await?;
-    let existing = match existing_id {
-        Some(id) => relations::load_user(db, id).await?,
+    let existing = find_user(db, &email).await?;
+    let join = plan_join(actor, branch_id, existing.as_ref(), input.first_name.as_deref(), input.last_name.as_deref())?;
+    let temp = matches!(join, Join::Create { .. }).then(password::generate_temporary);
+    let hash = match &temp {
+        Some(p) => Some(password::hash_async(p.clone()).await?),
         None => None,
     };
-    authorize(actor, Action::AddMember { branch_id, existing: existing.as_ref() })?;
 
     let mut tx = db.begin().await?;
+    let user_id = apply_join(&mut tx, actor, branch_id, &email, &join, hash.as_deref()).await?;
+    // The schema trigger has put them in "All members".
+    emit_branch_event(&mut tx, "member_changed", branch_id, vec![user_id]).await?;
+    tx.commit().await?;
+    Ok(AddedMember {
+        user_id,
+        created: temp.is_some(),
+        reactivated: matches!(join, Join::Reactivate(_)),
+        temporary_password: temp.map(|p| p.expose().to_owned()),
+    })
+}
 
-    let result = match existing {
-        Some(user) if user.is_member_of(branch_id) => {
-            return Err(AppError::conflict("already_member", "this person is already a member of the branch"));
-        }
+/// The account with this email, if there is one.
+pub(super) async fn find_user(db: &PgPool, email: &str) -> AppResult<Option<relations::UserFacts>> {
+    match sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email).fetch_optional(db).await? {
+        Some(id) => relations::load_user(db, id).await,
+        None => Ok(None),
+    }
+}
+
+/// What adding someone to a branch does, decided before anything is written.
+#[derive(Debug)]
+pub(super) enum Join {
+    AlreadyMember,
+    Reactivate(Uuid),
+    /// An account from another branch.
+    Add(Uuid),
+    Create { first_name: String, last_name: String },
+}
+
+/// Checks the actor may add `existing` (or a new account) to the branch.
+pub(super) fn plan_join(
+    actor: &Actor,
+    branch_id: Uuid,
+    existing: Option<&relations::UserFacts>,
+    first_name: Option<&str>,
+    last_name: Option<&str>,
+) -> AppResult<Join> {
+    authorize(actor, Action::AddMember { branch_id, existing })?;
+    Ok(match existing {
+        Some(user) if user.is_member_of(branch_id) => Join::AlreadyMember,
         Some(user) if user.departed.contains(&branch_id) => {
             authorize(actor, Action::ReactivateMember { branch_id })?;
+            Join::Reactivate(user.user_id)
+        }
+        Some(user) => Join::Add(user.user_id),
+        None => Join::Create {
+            first_name: required_name(first_name, "first_name")?,
+            last_name: required_name(last_name, "last_name")?,
+        },
+    })
+}
+
+/// Writes a planned join. `password_hash` is needed for [`Join::Create`].
+pub(super) async fn apply_join(
+    tx: &mut crate::db::Tx,
+    actor: &Actor,
+    branch_id: Uuid,
+    email: &str,
+    join: &Join,
+    password_hash: Option<&str>,
+) -> AppResult<Uuid> {
+    match join {
+        Join::AlreadyMember => {
+            Err(AppError::conflict("already_member", "this person is already a member of the branch"))
+        }
+        Join::Reactivate(user_id) => {
             sqlx::query!(
                 "UPDATE branch_membership SET left_at = NULL, added_by = $3 WHERE user_id = $1 AND branch_id = $2",
-                user.user_id,
+                user_id,
                 branch_id,
                 actor.user_id
             )
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
             audit_membership(
-                &mut tx,
+                tx,
                 actor,
                 branch_id,
-                user.user_id,
+                *user_id,
                 "reactivate",
                 Some(json!({ "left": true })),
                 json!({ "left": false }),
             )
             .await?;
-            AddedMember { user_id: user.user_id, created: false, reactivated: true, temporary_password: None }
+            Ok(*user_id)
         }
-        Some(user) => {
-            insert_membership(&mut tx, actor, branch_id, user.user_id).await?;
-            AddedMember { user_id: user.user_id, created: false, reactivated: false, temporary_password: None }
+        Join::Add(user_id) => {
+            insert_membership(tx, actor, branch_id, *user_id).await?;
+            Ok(*user_id)
         }
-        None => {
-            let first_name = required_name(input.first_name.as_deref(), "first_name")?;
-            let last_name = required_name(input.last_name.as_deref(), "last_name")?;
-            let temp = password::generate_temporary();
-            let hash = password::hash_async(temp.clone()).await?;
+        Join::Create { first_name, last_name } => {
+            let hash = password_hash.ok_or_else(|| AppError::internal("new account without a password hash"))?;
             let user_id = sqlx::query_scalar!(
                 r#"
                 INSERT INTO app_user (email, first_name, last_name, password_hash, must_change_password)
@@ -167,10 +223,10 @@ pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) 
                 last_name,
                 hash,
             )
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
             audit::record(
-                &mut tx,
+                tx,
                 AuditEntry {
                     entity_type: "app_user",
                     entity_id: user_id.to_string(),
@@ -182,20 +238,10 @@ pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) 
                 },
             )
             .await?;
-            insert_membership(&mut tx, actor, branch_id, user_id).await?;
-            AddedMember {
-                user_id,
-                created: true,
-                reactivated: false,
-                temporary_password: Some(temp.expose().to_owned()),
-            }
+            insert_membership(tx, actor, branch_id, user_id).await?;
+            Ok(user_id)
         }
-    };
-
-    // The schema trigger has put them in "All members".
-    emit_branch_event(&mut tx, "member_changed", branch_id, vec![result.user_id]).await?;
-    tx.commit().await?;
-    Ok(result)
+    }
 }
 
 async fn insert_membership(tx: &mut crate::db::Tx, actor: &Actor, branch_id: Uuid, user_id: Uuid) -> AppResult<()> {
@@ -465,4 +511,34 @@ fn required_name(name: Option<&str>, field: &str) -> AppResult<String> {
         return Err(AppError::validation("invalid_name", format!("{field} must be between 1 and 100 characters")));
     }
     Ok(name.to_owned())
+}
+
+/// A person who can be sent a school-wide item, in one of their branches.
+/// Names only: this list reaches people outside the branch.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct Recipient {
+    pub user_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub branch_id: Uuid,
+    pub branch_name: String,
+}
+
+/// Everyone in every active branch, for super admins and holders of
+/// `issue.target_other_branches`. Someone in two branches appears twice.
+pub async fn recipients(db: &PgPool, actor: &Actor) -> AppResult<Vec<Recipient>> {
+    authorize(actor, Action::FindPeopleInOtherBranches)?;
+    Ok(sqlx::query_as!(
+        Recipient,
+        r#"
+        SELECT u.id AS user_id, u.first_name, u.last_name, b.id AS branch_id, b.name AS branch_name
+        FROM branch_membership m
+        JOIN app_user u ON u.id = m.user_id
+        JOIN branch b ON b.id = m.branch_id
+        WHERE m.left_at IS NULL AND u.is_active AND b.is_active
+        ORDER BY b.name, u.first_name, u.last_name
+        "#
+    )
+    .fetch_all(db)
+    .await?)
 }

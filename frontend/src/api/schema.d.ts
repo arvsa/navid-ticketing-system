@@ -1,4 +1,21 @@
 export interface paths {
+    "/api/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/analytics?weeks=12: the whole school, for super admins. */
+        get: operations["get__api_analytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/attachments/{id}": {
         parameters: {
             query?: never;
@@ -124,6 +141,26 @@ export interface paths {
         get: operations["get__api_branches_id_members"];
         put?: never;
         post: operations["post__api_branches_id_members"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/branches/{id}/members/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /api/branches/{id}/members/import, `multipart/form-data` with a `file`
+         *     part (xlsx, xls, ods or csv) and an optional `dry_run` field (`true`).
+         */
+        post: operations["post__api_branches_id_members_import"];
         delete?: never;
         options?: never;
         head?: never;
@@ -315,7 +352,11 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get__api_groups_id_permissions"];
-        put?: never;
+        /**
+         * Save several grant changes at once (one notification, all or nothing).
+         *     Returns the group's grants afterwards.
+         */
+        put: operations["put__api_groups_id_permissions"];
         post: operations["post__api_groups_id_permissions"];
         delete?: never;
         options?: never;
@@ -472,6 +513,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues/{id}/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /api/issues/{id}/mute: no more updates (comments, changes) on this
+         *     item; what needs you still reaches you.
+         */
+        put: operations["put__api_issues_id_mute"];
+        post?: never;
+        delete: operations["delete__api_issues_id_mute"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/{id}/pass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/issues/{id}/pass: pass a question you were asked to someone else in your branch. */
+        post: operations["post__api_issues_id_pass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/issues/{id}/read": {
         parameters: {
             query?: never;
@@ -586,6 +664,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/members/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/members/import-template: an empty workbook with the header row. */
+        get: operations["get__api_members_import_template"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications": {
         parameters: {
             query?: never;
@@ -670,6 +765,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** People in every branch, to send a school-wide item to. */
+        get: operations["get__api_recipients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/{id}": {
         parameters: {
             query?: never;
@@ -700,6 +812,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/school-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** School-wide groups: their grants apply in every branch a member belongs to. */
+        get: operations["get__api_school_groups"];
+        put?: never;
+        post: operations["post__api_school_groups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/school-groups/{id}/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A school-wide group's copies, one per branch, with their member counts. */
+        get: operations["get__api_school_groups_id_copies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/settings: no sign-in needed (the sign-in page shows the school's name). */
+        get: operations["get__api_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** PATCH /api/settings: super admins only. */
+        patch: operations["patch__api_settings"];
         trace?: never;
     };
     "/api/stream": {
@@ -832,6 +996,17 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
+        Analytics: {
+            branches: components["schemas"]["BranchAnalytics"][];
+            /**
+             * Format: date-time
+             * @description Monday of the first week shown.
+             */
+            since: string;
+            /** Format: int32 */
+            weeks: number;
+            workload: components["schemas"]["Workload"][];
+        };
         AttachmentMeta: {
             checksum_sha256: string;
             /** Format: uuid */
@@ -863,6 +1038,34 @@ export interface components {
             timezone: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        BranchAnalytics: {
+            /** @description One per week, oldest first. */
+            activity: components["schemas"]["WeekActivity"][];
+            /**
+             * Format: double
+             * @description Average hours from work given out to its approval; `null` with nothing finished.
+             */
+            avg_hours_to_finish?: number | null;
+            /** Format: uuid */
+            branch_id: string;
+            code: string;
+            /**
+             * Format: int64
+             * @description Work finished (approved) in the period.
+             */
+            finished: number;
+            /**
+             * Format: int64
+             * @description Finished work that had a due date.
+             */
+            finished_with_due_date: number;
+            name: string;
+            /**
+             * Format: double
+             * @description Of those, the share handed in on time (0 to 1); `null` with none.
+             */
+            on_time_rate?: number | null;
         };
         BranchNumbers: {
             /** Format: uuid */
@@ -1025,20 +1228,42 @@ export interface components {
             permission: components["schemas"]["Permission"];
             scope: components["schemas"]["Scope"];
         };
+        /**
+         * @description Several grant changes saved together: all or nothing, one audit row per
+         *     grant, and a single notification and event (instead of one per change).
+         */
+        GrantChanges: {
+            grant?: components["schemas"]["NewGrant"][];
+            /** @description Grant ids of this group to remove. */
+            revoke?: string[];
+        };
         Group: {
             /** Format: date-time */
             archived_at?: string | null;
-            /** Format: uuid */
-            branch_id: string;
+            /**
+             * Format: uuid
+             * @description `null`: a school-wide group (super admins only). It has no members of
+             *     its own: every branch has a copy of it, with the same grants.
+             */
+            branch_id?: string | null;
             /** Format: date-time */
             created_at: string;
             description?: string | null;
             /** Format: uuid */
             id: string;
             is_default: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description For a school-wide group: the members of all its branch copies.
+             */
             member_count: number;
             name: string;
+            /**
+             * Format: uuid
+             * @description On a branch group: the school-wide group it's a copy of. Its name,
+             *     grants and archiving follow that group; branch admins choose members.
+             */
+            template_id?: string | null;
         };
         GroupGrant: {
             /** Format: date-time */
@@ -1062,10 +1287,44 @@ export interface components {
             id: string;
             name: string;
         };
+        /**
+         * @description One audit row about the issue.
+         *
+         *     | `entity_type`   | `action`                                                        |
+         *     |-----------------|-----------------------------------------------------------------|
+         *     | `issue`         | `create`, `update`, `close`, `cancel`, `auto_close`             |
+         *     | `issue_target`  | `add`, `remove`                                                 |
+         *     | `work_item`     | `create`, `start`, `block`, `unblock`, `submit`, `approve`, `reject`, `claim`, `assign`, `cancel`, `unassign` |
+         *     | `issue_comment` | `delete`                                                        |
+         *
+         *     `old_value` / `new_value` hold only the changed fields; times in them are
+         *     RFC 3339.
+         */
         HistoryEntry: {
             action: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description `null` = the system (jobs, auto-close).
+             */
             actor_id?: string | null;
+            /**
+             * Format: uuid
+             * @description `work_item` entries: the item's current assignee (`null` = unassigned).
+             */
+            assignee_id?: string | null;
+            /**
+             * Format: int64
+             * @description Rows written by one request share a `batch_id` (the `id` of the first
+             *     of them), e.g. an issue with its targets and work items, or an approval
+             *     and the auto-close it caused.
+             */
+            batch_id: number;
+            /**
+             * Format: uuid
+             * @description The branch the row is about: the work item's or target's branch, or the
+             *     issue's (`null` for a school-wide issue).
+             */
+            branch_id?: string | null;
             /** Format: date-time */
             created_at: string;
             entity_id: string;
@@ -1074,6 +1333,32 @@ export interface components {
             id: number;
             new_value?: unknown;
             old_value?: unknown;
+        };
+        /** @enum {string} */
+        ImportOutcome: "create" | "add" | "reactivate" | "skip" | "error";
+        ImportReport: {
+            /** @description False for a dry run, or when any row has an error (nothing was written). */
+            imported: boolean;
+            rows: components["schemas"]["ImportRow"][];
+        };
+        ImportRow: {
+            email: string;
+            error?: components["schemas"]["RowError"] | null;
+            first_name: string;
+            last_name: string;
+            outcome: components["schemas"]["ImportOutcome"];
+            /**
+             * Format: int32
+             * @description The row number in the file, counting the header.
+             */
+            row: number;
+            /** @description Only for new accounts once imported, shown once. */
+            temporary_password?: string | null;
+            /**
+             * Format: uuid
+             * @description Set once imported.
+             */
+            user_id?: string | null;
         };
         IssueDetail: {
             /** @description Files on the issue itself; comment and report files come with those. */
@@ -1097,10 +1382,11 @@ export interface components {
             key: string;
             /** Format: date-time */
             last_read_at?: string | null;
+            /** @description The viewer muted its updates (comments, changes). What needs them still reaches them. */
+            muted: boolean;
             /** Format: int64 */
             number: number;
             priority: components["schemas"]["Priority"];
-            requires_super_admin_approval: boolean;
             state: components["schemas"]["IssueState"];
             targets: components["schemas"]["Target"][];
             title: string;
@@ -1210,6 +1496,7 @@ export interface components {
         };
         NewComment: {
             body: string;
+            /** @description Deprecated: staff-only comments will be removed in the future. */
             is_internal_only?: boolean;
             /** @description Parsed client-side from `@` mentions; non-readers are dropped silently. */
             mention_user_ids?: string[];
@@ -1228,7 +1515,8 @@ export interface components {
         NewIssue: {
             /**
              * Format: uuid
-             * @description `null` = cross-branch (super admins, whole-branch targets only).
+             * @description `null` = cross-branch: whole branches (super admins) or people in any
+             *     branch (super admins and holders of `issue.target_other_branches`).
              */
             branch_id?: string | null;
             completion_mode?: components["schemas"]["CompletionMode"];
@@ -1361,17 +1649,30 @@ export interface components {
             items: {
                 /** Format: date-time */
                 archived_at?: string | null;
-                /** Format: uuid */
-                branch_id: string;
+                /**
+                 * Format: uuid
+                 * @description `null`: a school-wide group (super admins only). It has no members of
+                 *     its own: every branch has a copy of it, with the same grants.
+                 */
+                branch_id?: string | null;
                 /** Format: date-time */
                 created_at: string;
                 description?: string | null;
                 /** Format: uuid */
                 id: string;
                 is_default: boolean;
-                /** Format: int64 */
+                /**
+                 * Format: int64
+                 * @description For a school-wide group: the members of all its branch copies.
+                 */
                 member_count: number;
                 name: string;
+                /**
+                 * Format: uuid
+                 * @description On a branch group: the school-wide group it's a copy of. Its name,
+                 *     grants and archiving follow that group; branch admins choose members.
+                 */
+                template_id?: string | null;
             }[];
             next_cursor?: string | null;
         };
@@ -1392,8 +1693,29 @@ export interface components {
         Page_HistoryEntry: {
             items: {
                 action: string;
-                /** Format: uuid */
+                /**
+                 * Format: uuid
+                 * @description `null` = the system (jobs, auto-close).
+                 */
                 actor_id?: string | null;
+                /**
+                 * Format: uuid
+                 * @description `work_item` entries: the item's current assignee (`null` = unassigned).
+                 */
+                assignee_id?: string | null;
+                /**
+                 * Format: int64
+                 * @description Rows written by one request share a `batch_id` (the `id` of the first
+                 *     of them), e.g. an issue with its targets and work items, or an approval
+                 *     and the auto-close it caused.
+                 */
+                batch_id: number;
+                /**
+                 * Format: uuid
+                 * @description The branch the row is about: the work item's or target's branch, or the
+                 *     issue's (`null` for a school-wide issue).
+                 */
+                branch_id?: string | null;
                 /** Format: date-time */
                 created_at: string;
                 entity_id: string;
@@ -1521,7 +1843,10 @@ export interface components {
         };
         Page_WorkItem: {
             items: {
-                /** Format: uuid */
+                /**
+                 * Format: uuid
+                 * @description Who holds the work now: does it, or (once it's handed in) waits for review.
+                 */
                 assignee_id?: string | null;
                 /** Format: uuid */
                 branch_id: string;
@@ -1532,11 +1857,22 @@ export interface components {
                 /** Format: uuid */
                 decided_by?: string | null;
                 decision_note?: string | null;
+                /**
+                 * @description Everyone it was passed through, from the person first given it to
+                 *     the holder. Empty if it was never passed on.
+                 */
+                handoff_chain: string[];
                 /** Format: uuid */
                 id: string;
                 is_overdue: boolean;
                 /** Format: uuid */
                 issue_id: string;
+                /**
+                 * Format: uuid
+                 * @description Who reviews the holder's hand-in: one level up the chain. `null`: the
+                 *     item's sender and the branch's approvers.
+                 */
+                reviewer_id?: string | null;
                 /** Format: date-time */
                 sla_due_at?: string | null;
                 status: components["schemas"]["WorkStatus"];
@@ -1551,19 +1887,39 @@ export interface components {
             }[];
             next_cursor?: string | null;
         };
+        PassTicket: {
+            /**
+             * Format: uuid
+             * @description Someone in the same branch who should answer instead.
+             */
+            user_id: string;
+        };
         /** Format: password */
         Password: string;
         PasswordReset: {
             temporary_password: string;
         };
         /** @enum {string} */
-        Permission: "issue.read" | "issue.read_private" | "issue.create" | "issue.edit" | "issue.close" | "issue.set_private" | "issue.target" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
+        Permission: "issue.read" | "issue.read_private" | "issue.create" | "issue.edit" | "issue.close" | "issue.set_private" | "issue.target" | "issue.target_other_branches" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         ProfilePatch: {
             email?: string | null;
             first_name?: string | null;
             last_name?: string | null;
+        };
+        /**
+         * @description A person who can be sent a school-wide item, in one of their branches.
+         *     Names only: this list reaches people outside the branch.
+         */
+        Recipient: {
+            /** Format: uuid */
+            branch_id: string;
+            branch_name: string;
+            first_name: string;
+            last_name: string;
+            /** Format: uuid */
+            user_id: string;
         };
         Report: {
             attachments: components["schemas"]["AttachmentMeta"][];
@@ -1594,6 +1950,10 @@ export interface components {
             title?: string | null;
             /** Format: int32 */
             version: number;
+        };
+        RowError: {
+            code: string;
+            message: string;
         };
         Rsvp: {
             first_name: string;
@@ -1629,6 +1989,14 @@ export interface components {
          * @enum {string}
          */
         Scope: "own" | "targeted" | "branch";
+        Settings: {
+            school_name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SettingsPatch: {
+            school_name?: string | null;
+        };
         SourcedGrant: {
             group: components["schemas"]["GroupRef"];
             issue_type?: string | null;
@@ -1662,7 +2030,13 @@ export interface components {
             /** Format: uuid */
             user_id?: string | null;
         };
-        /** @description `{user_id}`, `{group_id}` or `{branch_id}` (super admins only). */
+        /**
+         * @description A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
+         *     branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
+         *     issue a person also names their branch: `{"user_id": "...", "branch_id":
+         *     "..."}`. Anything else is `422 invalid_target`. Send one target per
+         *     recipient.
+         */
         TargetInput: {
             /** Format: uuid */
             branch_id?: string | null;
@@ -1673,10 +2047,12 @@ export interface components {
         };
         /** @enum {string} */
         TargetKind: "branch" | "group" | "user";
+        /** @enum {string} */
+        Transition: "start" | "block" | "unblock" | "submit" | "approve" | "reject" | "claim" | "assign" | "cancel" | "pass";
         TransitionInput: {
             /**
              * Format: uuid
-             * @description Assign only.
+             * @description Assign and pass only.
              */
             assignee_id?: string | null;
             /** @description Approve (optional) and reject (required). */
@@ -1721,8 +2097,25 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        WeekActivity: {
+            /**
+             * Format: int64
+             * @description Items created in the branch, or sent to it from elsewhere.
+             */
+            created: number;
+            /**
+             * Format: int64
+             * @description Work in the branch approved that week.
+             */
+            finished: number;
+            /** Format: date-time */
+            week_start: string;
+        };
         WorkItem: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Who holds the work now: does it, or (once it's handed in) waits for review.
+             */
             assignee_id?: string | null;
             /** Format: uuid */
             branch_id: string;
@@ -1733,11 +2126,22 @@ export interface components {
             /** Format: uuid */
             decided_by?: string | null;
             decision_note?: string | null;
+            /**
+             * @description Everyone it was passed through, from the person first given it to
+             *     the holder. Empty if it was never passed on.
+             */
+            handoff_chain: string[];
             /** Format: uuid */
             id: string;
             is_overdue: boolean;
             /** Format: uuid */
             issue_id: string;
+            /**
+             * Format: uuid
+             * @description Who reviews the holder's hand-in: one level up the chain. `null`: the
+             *     item's sender and the branch's approvers.
+             */
+            reviewer_id?: string | null;
             /** Format: date-time */
             sla_due_at?: string | null;
             status: components["schemas"]["WorkStatus"];
@@ -1752,8 +2156,29 @@ export interface components {
         };
         /** @enum {string} */
         WorkStatus: "open" | "in_progress" | "blocked" | "pending_approval" | "approved" | "cancelled";
-        /** @enum {string} */
-        Transition: "start" | "block" | "unblock" | "submit" | "approve" | "reject" | "claim" | "assign" | "cancel";
+        Workload: {
+            /** Format: uuid */
+            branch_id: string;
+            first_name: string;
+            /**
+             * Format: int64
+             * @description Handed in and waiting for review.
+             */
+            handed_in: number;
+            last_name: string;
+            /**
+             * Format: int64
+             * @description Not started, in progress or blocked.
+             */
+            open: number;
+            /**
+             * Format: int64
+             * @description Of `open`, past its due date.
+             */
+            overdue: number;
+            /** Format: uuid */
+            user_id: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1763,6 +2188,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get__api_analytics: {
+        parameters: {
+            query?: {
+                /** @description 1 to 52; default 12. */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Analytics"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get__api_attachments_id_: {
         parameters: {
             query?: never;
@@ -2176,6 +2632,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AddedMember"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_branches_id_members_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description A `file` part (max 2 MB, at most 500 people) and an optional `dry_run` field */
+        requestBody?: {
+            content: {
+                "multipart/form-data": unknown;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -2716,6 +3208,41 @@ export interface operations {
             };
         };
     };
+    put__api_groups_id_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantChanges"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupGrant"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post__api_groups_id_permissions: {
         parameters: {
             query?: never;
@@ -3155,6 +3682,99 @@ export interface operations {
             };
         };
     };
+    put__api_issues_id_mute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_issues_id_mute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_issues_id_pass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassTicket"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetail"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post__api_issues_id_read: {
         parameters: {
             query?: never;
@@ -3439,6 +4059,35 @@ export interface operations {
             };
         };
     };
+    get__api_members_import_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An Excel workbook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get__api_notifications: {
         parameters: {
             query?: {
@@ -3582,6 +4231,34 @@ export interface operations {
             };
         };
     };
+    get__api_recipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipient"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     patch__api_reports_id_: {
         parameters: {
             query?: never;
@@ -3639,6 +4316,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Report"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_school_groups: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_school_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewGroup"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_school_groups_id_copies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch__api_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsPatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
                 };
             };
             /** @description Error; see the codes in the README */

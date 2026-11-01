@@ -11,6 +11,7 @@ an inbox, dashboards and Excel exports.
 | `School Ticketing UI-png/` | Screen designs |
 | `presentation/` | Project presentation |
 | `DESIGN.md` | Overall design |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each version |
 
 ## Run everything with Docker
 
@@ -42,7 +43,7 @@ You only need [Docker](https://www.docker.com) and git.
 
    | Account | Role |
    |---|---|
-   | `superadmin@demo.school` | Super admin (all branches) |
+   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
    | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
    | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Undo2 } from "lucide-react";
+import { Check, Forward, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
 import { useIssue, useIssueByNumber, useReports, useTransition } from "@/api/hooks";
@@ -13,13 +13,15 @@ import { useBranch } from "@/app/BranchContext";
 import { TypeBadge } from "@/components/badges";
 import { AttachButton, FileList, PendingFiles, UploadNow, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, Skeleton, cx, inputClass } from "@/components/ui";
-import { canClaim, isMine } from "@/lib/can";
+import { canClaim, canPass, isMine } from "@/lib/can";
 import { dueIn, formatDateTime, formatTime, timeAgo } from "@/lib/dates";
 import { isDone, isSentBack, numberOf, targetName, useGroupDirectory } from "@/lib/items";
 import { errorMessage, modeLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { CommentThread } from "@/features/items/Comments";
+import { PersonName } from "@/people/PersonPopover";
+import { PassDialog } from "./PassDialog";
 import { quote, t, tn, tx } from "@/i18n";
 
 export function MyAssignmentPage() {
@@ -33,6 +35,23 @@ export function MyAssignmentPage() {
     issue.data.work_items.find((w) => isMine(viewer, w) && !isDone(w)) ??
     issue.data.work_items.find((w) => isMine(viewer, w)) ??
     issue.data.work_items.find((w) => canClaim(viewer, issue.data!, w));
+  // Work I passed on: it's with someone else now and comes back to me for review.
+  const passed = !mine && issue.data.work_items.find((w) => !isDone(w) && w.handoff_chain.includes(viewer.me.user.id));
+  if (passed)
+    return (
+      <EmptyState
+        title={t("You passed this on")}
+        action={
+          <Link to="/items/$number" params={{ number }} className="text-primary hover:underline">
+            {t("Open the item")}
+          </Link>
+        }
+      >
+        {passed.status === "pending_approval" && passed.reviewer_id === viewer.me.user.id
+          ? tx("{name} handed it in. It's waiting for your review.", { name: <PersonName id={passed.assignee_id} /> })
+          : tx("{name} has it now. When they hand it in, it comes back to you to review.", { name: <PersonName id={passed.assignee_id} /> })}
+      </EmptyState>
+    );
   if (!mine)
     return (
       <EmptyState title={t("You don't have a part of this item.")} action={<Link to="/items/$number" params={{ number }} className="text-primary hover:underline">{t("Open the item")}</Link>} />
@@ -50,6 +69,7 @@ function stepOf(w: WorkItem) {
 }
 
 function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
+  const viewer = useViewer();
   const people = usePeople();
   const groups = useGroupDirectory();
   const { zoneOf, branchById } = useBranch();
@@ -58,6 +78,9 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
   const sentBack = isSentBack(work);
   const n = numberOf(issue.key);
   const sentTo = issue.targets.find((target) => target.id === work.target_id);
+  // Who passed it to me, if it came down a chain.
+  const myPlace = work.handoff_chain.indexOf(viewer.me.user.id);
+  const passedBy = myPlace > 0 ? work.handoff_chain[myPlace - 1] : undefined;
   return (
     <div className="space-y-6">
       <nav aria-label={t("Breadcrumb")} className="text-[17px]">
@@ -73,7 +96,8 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
         <div className="flex flex-wrap items-center gap-2 text-[16px] text-text-2">
           <TypeBadge type={issue.type} />
           <span>
-            {t("From {name}", { name: people.short(issue.created_by) })}
+            {tx("From {name}", { name: <PersonName id={issue.created_by} /> })}
+            {passedBy && <> · {tx("passed to you by {name}", { name: <PersonName id={passedBy} /> })}</>}
             {work.sla_due_at && (
               <>
                 {" "}· {tx("due {date}", { date: <b className="text-text">{formatDateTime(work.sla_due_at, zone)}</b> })}
@@ -91,7 +115,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
           <Undo2 className="mt-0.5 size-6 shrink-0 text-sent-back" aria-hidden />
           <div>
             <p className="text-[17px] font-semibold text-sent-back">
-              {t("{name} sent this back to you {when}", { name: people.short(work.decided_by).split(" ")[0], when: timeAgo(work.decided_at!).toLowerCase() })}
+              {tx("{name} sent this back to you {when}", { name: <PersonName id={work.decided_by} label={people.short(work.decided_by).split(" ")[0]} />, when: timeAgo(work.decided_at!).toLowerCase() })}
             </p>
             <p className="mt-1 text-[17px]">{quote(work.decision_note ?? "")}</p>
           </div>
@@ -140,6 +164,7 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
   const tr = useTransition();
   const viewer = useViewer();
   const [blockOpen, setBlockOpen] = useState(false);
+  const [passing, setPassing] = useState(false);
   const [why, setWhy] = useState("");
   const qc = useQueryClient();
   if (work.status === "pending_approval")
@@ -154,6 +179,12 @@ function Footer({ issue, work, onSubmit, submitLabel, submitting, hint }: { issu
     tr.mutate({ item: work, transition }, { onSuccess: () => toast.success(done), onError: (e) => toast.error(errorMessage(e)) });
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-2 px-6 py-5">
+      {canPass(viewer, issue, work) && (
+        <Button icon={<Forward className="size-4 rtl:-scale-x-100" />} onClick={() => setPassing(true)}>
+          {t("Pass on")}
+        </Button>
+      )}
+      <PassDialog issue={issue} work={work} open={passing} onOpenChange={setPassing} />
       {!work.assignee_id && canClaim(viewer, issue, work) ? (
         <Button variant="primary" size="lg" className="ms-auto" loading={tr.isPending} onClick={() => act("claim", t("It's yours now"))}>
           {t("I'll take it")}
@@ -226,7 +257,7 @@ function ActionCard({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const files = useFilePicker();
-  const approverHint = issue.requires_super_admin_approval ? t("A super admin is told when you send it.") : t("Your approver is told when you send it.");
+  const approverHint = !issue.branch_id ? t("Whoever sent it is told when you send it.") : t("Your approver is told when you send it.");
   const submit = useMutation({
     // Approvers need something to look at: a note, a file, or both.
     mutationFn: async () => {
@@ -514,7 +545,7 @@ function ReportEditor({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
         submitting={handIn.isPending}
         onSubmit={() => (body.trim() ? setConfirm(true) : toast.error(t("Write your report first.")))}
         submitLabel={t("Hand in for approval")}
-        hint={issue.requires_super_admin_approval ? t("A super admin is told when you hand it in.") : t("Your approver is told when you hand it in.")}
+        hint={!issue.branch_id ? t("Whoever sent it is told when you hand it in.") : t("Your approver is told when you hand it in.")}
       />
       <Dialog
         open={confirm}

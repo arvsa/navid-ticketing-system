@@ -23,7 +23,8 @@ export type Transition =
   | "reject"
   | "claim"
   | "assign"
-  | "cancel";
+  | "cancel"
+  | "pass";
 
 export type Page<T> = { items: T[]; next_cursor?: string | null };
 
@@ -34,7 +35,12 @@ export type MembershipView = S["MembershipView"];
 export type MeResponse = S["MeResponse"];
 export type Branch = S["Branch"];
 export type Member = S["Member"];
+/** Someone in some branch, to send a school-wide item to. */
+export type BranchPerson = S["Recipient"];
 export type AddedMember = S["AddedMember"];
+export type ImportOutcome = S["ImportOutcome"];
+export type ImportRow = Omit<S["ImportRow"], "error"> & { error?: { code: string; message: string } | null };
+export type ImportReport = Omit<S["ImportReport"], "rows"> & { rows: ImportRow[] };
 export type Group = S["Group"];
 export type GroupGrant = Omit<S["GroupGrant"], "permission" | "issue_type"> & {
   permission: Permission;
@@ -82,6 +88,10 @@ export type Notification = S["Notification"] & { payload?: Record<string, unknow
 export type Dashboard = S["Dashboard"];
 export type BranchNumbers = S["BranchNumbers"];
 export type DeleteOutcome = S["DeleteOutcome"];
+export type Settings = S["Settings"];
+export type Analytics = S["Analytics"];
+export type BranchAnalytics = S["BranchAnalytics"];
+export type Workload = S["Workload"];
 
 export const ISSUE_TYPES: IssueType[] = ["ticket", "action", "report", "event"];
 export const ISSUE_STATES: IssueState[] = ["open", "closed", "cancelled"];

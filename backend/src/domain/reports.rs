@@ -230,7 +230,8 @@ async fn lock_editable(db: &PgPool, tx: &mut crate::db::Tx, actor: &Actor, id: U
     let row = sqlx::query!(
         r#"
         SELECT r.issue_id, r.author_id, r.submitted_at IS NOT NULL AS "submitted!", r.version,
-               w.status AS "item_status: Option<WorkStatus>", i.state AS "issue_state: IssueState"
+               w.status AS "item_status: Option<WorkStatus>", w.assignee_id AS "holder?",
+               i.state AS "issue_state: IssueState"
         FROM issue_report r
         JOIN issue i ON i.id = r.issue_id
         LEFT JOIN work_item w ON w.id = r.work_item_id
@@ -243,7 +244,10 @@ async fn lock_editable(db: &PgPool, tx: &mut crate::db::Tx, actor: &Actor, id: U
     .await?
     .ok_or(AppError::NotFound)?;
     issues::readable(db, actor, row.issue_id).await?;
-    if row.author_id != actor.user_id {
+    // The work's report is also its current holder's: after a pass or a
+    // send-back they carry on with what was handed in.
+    let holds = row.submitted && row.holder == Some(actor.user_id);
+    if row.author_id != actor.user_id && !holds {
         // Someone else's draft doesn't exist for this actor.
         return Err(if row.submitted {
             AppError::forbidden("forbidden", "only the author edits a report")
@@ -277,10 +281,13 @@ pub(crate) async fn is_visible(db: &PgPool, actor: &Actor, report_id: Uuid) -> A
 }
 
 /// The author of a report, if it is still editable (for attachment uploads).
-pub(crate) async fn editable_author(db: &PgPool, report_id: Uuid, issue_id: Uuid) -> AppResult<Option<Uuid>> {
+/// Who may change the report, if it can still change: its author, and for a
+/// handed-in work report also the work's current holder.
+pub(crate) async fn editable_by(db: &PgPool, report_id: Uuid, issue_id: Uuid, user: Uuid) -> AppResult<Option<bool>> {
     Ok(sqlx::query_scalar!(
         r#"
-        SELECT r.author_id FROM issue_report r
+        SELECT (r.author_id = $3 OR (r.submitted_at IS NOT NULL AND w.assignee_id = $3)) AS "ok!"
+        FROM issue_report r
         JOIN issue i ON i.id = r.issue_id
         LEFT JOIN work_item w ON w.id = r.work_item_id
         WHERE r.id = $1 AND r.issue_id = $2
@@ -288,7 +295,8 @@ pub(crate) async fn editable_author(db: &PgPool, report_id: Uuid, issue_id: Uuid
                    ELSE w.status NOT IN ('approved', 'cancelled') END
         "#,
         report_id,
-        issue_id
+        issue_id,
+        user
     )
     .fetch_optional(db)
     .await?)

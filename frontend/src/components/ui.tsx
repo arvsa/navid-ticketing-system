@@ -37,7 +37,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         variant === "ghost-danger" && "text-danger hover:bg-danger-soft",
         variant === "danger" && "bg-danger-solid text-white hover:opacity-90",
         variant === "success" && "bg-success-solid text-white hover:opacity-90",
-        variant === "dark" && "bg-text text-surface hover:opacity-90",
+        variant === "dark" && "bg-selected text-on-selected hover:opacity-90",
         variant === "link" && "h-auto px-0 text-primary hover:underline",
         className,
       )}
@@ -48,6 +48,39 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     </button>
   );
 });
+
+/** A short label under its child, shown after a moment of hover or on
+ * keyboard focus. `align="end"` keeps it on screen at the end of a row. */
+export function Hint({ label, align = "center", children }: { label: string; align?: "center" | "end"; children: ReactNode }) {
+  return (
+    <span className="group/hint relative inline-flex">
+      {children}
+      <span
+        role="tooltip"
+        className={cx(
+          "pointer-events-none absolute top-full z-50 mt-2 rounded-md bg-selected px-2.5 py-1 text-[13px] font-medium whitespace-nowrap text-on-selected opacity-0 shadow-2 transition-opacity duration-150",
+          "group-hover/hint:opacity-100 group-hover/hint:delay-500 group-has-[:focus-visible]/hint:opacity-100",
+          align === "center" ? "left-1/2 -translate-x-1/2" : "end-0",
+        )}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** An icon-only button; its label is the accessible name and the hint. */
+export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonProps, "icon" | "children"> & { label: string; icon: ReactNode; hintAlign?: "center" | "end" }>(
+  function IconButton({ label, icon, hintAlign, className, size = "md", ...rest }, ref) {
+    return (
+      <Hint label={label} align={hintAlign}>
+        <Button ref={ref} aria-label={label} size={size} className={cx("px-0", size === "sm" ? "w-8" : size === "md" ? "w-10" : "w-12", className)} {...rest}>
+          {icon}
+        </Button>
+      </Hint>
+    );
+  },
+);
 
 export function Card({ className, children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
   return (
@@ -442,7 +475,7 @@ export function Chip({
       aria-pressed={active}
       className={cx(
         "h-9 shrink-0 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors",
-        active ? "border-text bg-text text-surface" : "border-border bg-surface hover:bg-sunken",
+        active ? "border-selected bg-selected text-on-selected" : "border-border bg-surface hover:bg-sunken",
       )}
       style={!active && tone ? { color: tone } : undefined}
     >

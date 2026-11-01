@@ -1,8 +1,9 @@
 // Branches & admins, for super admins (UX_SPEC §4.13). There's no school-wide
 // person search (gap G-12), so pickers merge every branch's member list.
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Shield } from "lucide-react";
+import { FileSpreadsheet, Plus, Shield, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useBranches } from "@/api/hooks";
@@ -10,14 +11,16 @@ import type { Branch } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
-import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, LoadingRows, PageHeader, SectionLabel, cx, inputClass } from "@/components/ui";
+import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, PageHeader, SectionLabel, cx, inputClass } from "@/components/ui";
 import { isSuper } from "@/lib/can";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { ConfirmDialog } from "@/features/items/ItemDialogs";
+import { ImportMembersDialog } from "./ImportMembers";
+import { AddMemberDialog } from "./PeoplePage";
 import { PersonPanel } from "./PersonPanel";
-import { t } from "@/i18n";
+import { localeTag, t, tn } from "@/i18n";
 
 const ZONES = (() => {
   try {
@@ -26,6 +29,24 @@ const ZONES = (() => {
     return ["Europe/London", "UTC"];
   }
 })();
+
+/** The zone's everyday name ("Iran Time"), so people can find a zone by
+ * country or name, not only by its ID (Asia/Tehran). */
+function zoneName(zone: string, locale: string) {
+  try {
+    const parts = new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: "longGeneric" }).formatToParts(new Date());
+    return parts.find((x) => x.type === "timeZoneName")?.value ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Each zone with its name in the reader's language and in English. */
+const ZONE_LABELS = ZONES.map((z) => {
+  const local = zoneName(z, localeTag);
+  const english = zoneName(z, "en");
+  return { zone: z, label: [local, english !== local ? english : ""].filter(Boolean).join(" · ") };
+});
 
 export function BranchesPage() {
   const viewer = useViewer();
@@ -38,7 +59,7 @@ export function BranchesPage() {
         title={t("Branches & admins")}
         subtitle={t("A branch always keeps at least one admin.")}
         actions={
-          <Button variant="primary" size="lg" icon={<Plus className="size-5" />} onClick={() => setCreating(true)}>
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
             {t("Open a new branch")}
           </Button>
         }
@@ -70,7 +91,9 @@ function BranchCard({ branch }: { branch: Branch }) {
   const [closing, setClosing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [adding, setAdding] = useState<null | "one" | "import">(null);
   const admins = people.all.filter((p) => p.adminOf.includes(branch.id));
+  const members = people.inBranch(branch.id);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["people"] });
     qc.invalidateQueries({ queryKey: ["branches"] });
@@ -132,25 +155,53 @@ function BranchCard({ branch }: { branch: Branch }) {
               )}
             </li>
           ))}
-          {admins.length === 0 && <li className="text-text-2">{t("No admins found.")}</li>}
+          {admins.length === 0 && <li className="text-text-2">{t("No admin yet. Add the branch's people, then appoint one.")}</li>}
         </ul>
         {appointing ? (
           <div className="mt-4 space-y-3 rounded-[12px] border border-border p-4">
-            <PersonSelect people={people.all} value={pick} onChange={setPick} exclude={admins.map((a) => a.id)} />
+            <PersonSelect people={members} value={pick} onChange={setPick} exclude={admins.map((a) => a.id)} />
             <div className="flex gap-2">
               <Button variant="primary" disabled={!pick} loading={appoint.isPending} onClick={() => pick && appoint.mutate(pick)}>
                 {t("Appoint admin")}
               </Button>
               <Button onClick={() => setAppointing(false)}>{t("Cancel")}</Button>
             </div>
-            <p className="text-[13px] text-text-3">{t("People who aren't members yet are added to {name}.", { name: branch.name })}</p>
           </div>
         ) : (
-          <Button className="mt-4" icon={<Shield className="size-4" />} onClick={() => setAppointing(true)}>
+          <Button className="mt-4" icon={<Shield className="size-4" />} disabled={members.length === 0} onClick={() => setAppointing(true)}>
             {t("Appoint a branch admin")}
           </Button>
         )}
       </div>
+      <div className="mt-6 border-t border-border pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionLabel>{t("People")}</SectionLabel>
+          {branch.is_active && (
+            <div className="flex gap-2">
+              <IconButton label={t("Import from Excel")} icon={<FileSpreadsheet className="size-4" />} onClick={() => setAdding("import")} />
+              <IconButton variant="primary" label={t("Add member")} hintAlign="end" icon={<UserPlus className="size-4" />} onClick={() => setAdding("one")} />
+            </div>
+          )}
+        </div>
+        {members.length === 0 ? (
+          <p className="mt-2 text-text-2">{t("No one here yet. Add people one by one, or import them from an Excel file.")}</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="flex -space-x-2 rtl:space-x-reverse">
+              {members.slice(0, 8).map((m) => (
+                <button key={m.id} onClick={() => setOpen(m.id)} className="rounded-full ring-2 ring-surface" aria-label={`${m.first_name} ${m.last_name}`}>
+                  <Avatar first={m.first_name} last={m.last_name} id={m.id} size={32} />
+                </button>
+              ))}
+            </div>
+            <Link to="/people" search={{ tab: "members", branch: branch.id }} className="font-semibold text-primary hover:underline">
+              {tn(members.length, "See {n} person", "See all {n} people")}
+            </Link>
+          </div>
+        )}
+      </div>
+      <AddMemberDialog open={adding === "one"} onOpenChange={(o) => !o && setAdding(null)} branchId={branch.id} branchName={branch.name} />
+      <ImportMembersDialog open={adding === "import"} onOpenChange={(o) => !o && setAdding(null)} branchId={branch.id} branchName={branch.name} />
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
@@ -218,8 +269,8 @@ function BranchFields(p: { name: string; setName: (v: string) => void; code: str
           <>
             <input {...f} list="tz-list" value={p.timezone} onChange={(e) => p.setTimezone(e.target.value)} className={inputClass} />
             <datalist id="tz-list">
-              {ZONES.map((z) => (
-                <option key={z} value={z} />
+              {ZONE_LABELS.map((z) => (
+                <option key={z.zone} value={z.zone} label={z.label} />
               ))}
             </datalist>
           </>
@@ -234,14 +285,13 @@ function BranchFields(p: { name: string; setName: (v: string) => void; code: str
 
 function NewBranchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
-  const people = usePeople();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [timezone, setTimezone] = useState("Europe/London");
+  const [timezone, setTimezone] = useState("Asia/Tehran");
   const [email, setEmail] = useState("");
-  const [admin, setAdmin] = useState<string | null>(null);
+  // A new branch has no people yet: its admin is appointed once they're in.
   const create = useMutation({
-    mutationFn: () => api.post<Branch>("/branches", { name: name.trim(), code, timezone, email: email.trim() || null, first_admin_user_id: admin }),
+    mutationFn: () => api.post<Branch>("/branches", { name: name.trim(), code, timezone, email: email.trim() || null }),
     onSuccess: (b) => {
       toast.success(t("{name} is open", { name: b.name }));
       qc.invalidateQueries({ queryKey: ["branches"] });
@@ -249,7 +299,6 @@ function NewBranchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       onOpenChange(false);
       setName("");
       setCode("");
-      setAdmin(null);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -259,23 +308,17 @@ function NewBranchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       onOpenChange={onOpenChange}
       wide
       title={t("Open a new branch")}
-      description={t("Every branch needs an admin. You can add more later.")}
+      description={t("You can add its people and appoint its admin after opening it.")}
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
-          <Button variant="primary" disabled={!name.trim() || !/^[A-Z0-9]{2,10}$/.test(code) || !admin} loading={create.isPending} onClick={() => create.mutate()}>
+          <Button variant="primary" disabled={!name.trim() || !/^[A-Z0-9]{2,10}$/.test(code)} loading={create.isPending} onClick={() => create.mutate()}>
             {t("Open branch")}
           </Button>
         </>
       }
     >
-      <div className="space-y-5">
-        <BranchFields {...{ name, setName, code, setCode, timezone, setTimezone, email, setEmail }} />
-        <div>
-          <p className="mb-2 font-semibold">{t("First admin")}</p>
-          <PersonSelect people={people.all} value={admin} onChange={setAdmin} />
-        </div>
-      </div>
+      <BranchFields {...{ name, setName, code, setCode, timezone, setTimezone, email, setEmail }} />
     </Dialog>
   );
 }

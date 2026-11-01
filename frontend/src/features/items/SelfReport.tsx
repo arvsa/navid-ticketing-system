@@ -12,12 +12,11 @@ import { FileList, UploadNow } from "@/components/files";
 import { formatDay } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
-import { usePeople } from "@/people/usePeople";
-import { t } from "@/i18n";
+import { PersonName } from "@/people/PersonPopover";
+import { t, tx } from "@/i18n";
 
 export function SelfReport({ issue }: { issue: IssueDetail }) {
   const viewer = useViewer();
-  const people = usePeople();
   const reports = useReports(issue.id);
   const own = (reports.data ?? []).filter((r) => !r.work_item_id);
   const mine = own.find((r) => r.author_id === viewer.me.user.id);
@@ -31,7 +30,7 @@ export function SelfReport({ issue }: { issue: IssueDetail }) {
         <Card key={r.id} className="p-6">
           <h2 className="text-[20px] font-semibold">{r.title}</h2>
           <p className="mt-1 text-[14px] text-text-3">
-            {r.submitted_at ? t("Filed by {who} · {date}", { who: people.name(r.author_id), date: formatDay(r.submitted_at) }) : t("Draft — only you can see it")}
+            {r.submitted_at ? tx("Filed by {who} · {date}", { who: <PersonName id={r.author_id} short={false} />, date: formatDay(r.submitted_at) }) : t("Draft — only you can see it")}
           </p>
           <p className="mt-4 text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{r.body}</p>
           {r.attachments.length > 0 && (

@@ -2,15 +2,15 @@
 // Numbers are pills that open the matching list; everything else is a row you
 // can click as a whole.
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Undo2 } from "lucide-react";
 import { useDashboard, useIssueList, useIssuesById, useNotifications, useWorkItems } from "@/api/hooks";
 import type { IssueDetail, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar, ProgressBar, TypeBadge, progressOf } from "@/components/badges";
-import { Dot, Panel, RowLink, StatPill } from "@/components/rows";
+import { Dot, Panel, RowLink } from "@/components/rows";
 import { EmptyState, ErrorPanel, Skeleton, cx } from "@/components/ui";
-import { canApprove, canAssign, hasGrant, isAdminOf, isSuper, mayApproveIn } from "@/lib/can";
+import { canAssign, hasGrant, isAdminOf, isSuper, mayApproveIn, waitsHere } from "@/lib/can";
 import { dayNumber, formatDay, formatTime, greeting, inZone, isDueSoon, lateBy, shortAgo, timeAgo, weekdayShort } from "@/lib/dates";
 import { isDone, isSentBack, numberOf } from "@/lib/items";
 import { describeNotification } from "@/lib/notifications";
@@ -18,13 +18,16 @@ import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { WorkButton } from "@/features/work/WorkButton";
 import { RsvpButtons } from "@/features/events/RsvpButtons";
-import { WholeSchool } from "./WholeSchool";
+import { ReviewInPlace, type ReviewTarget } from "@/features/items/WorkPanel";
+import { PersonPopover } from "@/people/PersonPopover";
+import { SetupHome } from "./SetupHome";
 import { num, t, tn } from "@/i18n";
 
 export function HomePage() {
   const viewer = useViewer();
   const { branchId, isAll } = useBranch();
-  if (isSuper(viewer) && isAll) return <WholeSchool />;
+  // Super admins: Setup for the whole school; a branch's dashboard once they pick it.
+  if (isSuper(viewer)) return isAll || !branchId ? <SetupHome /> : <AdminHome />;
   const seesBranch = branchId ? isAdminOf(viewer, branchId) || hasGrant(viewer, branchId, "dashboard.branch") : false;
   return seesBranch ? <AdminHome /> : <StaffHome />;
 }
@@ -43,22 +46,29 @@ function Greeting({ subtitle }: { subtitle?: string }) {
 
 type Need = { kind: "approve" | "overdue" | "owner"; w: WorkItem };
 
+// Each kind of need has its own colour: the row's edge and its chip match.
+const needTone: Record<Need["kind"], { fg: string; bg: string }> = {
+  approve: { fg: "var(--warning)", bg: "var(--warning-soft)" },
+  owner: { fg: "var(--primary-on-soft)", bg: "var(--primary-soft)" },
+  overdue: { fg: "var(--danger)", bg: "var(--danger-soft)" },
+};
+
 function AdminHome() {
   const viewer = useViewer();
   const people = usePeople();
-  const navigate = useNavigate();
   const { branchId, branch, zoneOf } = useBranch();
   const zone = zoneOf(branchId);
   const dash = useDashboard(branchId);
-  const numbers = dash.data?.branches.find((b) => b.branch_id === branchId);
-  const mine = dash.data?.mine;
   // Only offer what this person can act on: the server would refuse the rest.
-  const mayApprove = !!branchId && mayApproveIn(viewer, branchId);
+  // Work waiting for you can also be elsewhere: what you sent to other
+  // branches, or passed on to someone.
+  const mayApprove = (!!branchId && mayApproveIn(viewer, branchId)) || (dash.data?.mine.awaiting_my_approval ?? 0) > 0;
   const mayAssign = !!branchId && (isAdminOf(viewer, branchId) || hasGrant(viewer, branchId, "work_item.assign"));
-  const waiting = useWorkItems({ branch_id: branchId, status: "pending_approval" }, mayApprove);
+  const waiting = useWorkItems({ status: "pending_approval" }, mayApprove);
   const active = useWorkItems({ branch_id: branchId });
   const myWork = useWorkItems({ assignee: "me", branch_id: branchId });
   const [filter, setFilter] = useState<Need["kind"] | "all">("all");
+  const [review, setReview] = useState<ReviewTarget | null>(null);
 
   const live = (active.data ?? []).filter((w) => !isDone(w));
   const overdue = live.filter((w) => w.is_overdue).sort((a, b) => (a.sla_due_at ?? "").localeCompare(b.sla_due_at ?? ""));
@@ -66,10 +76,11 @@ function AdminHome() {
   const unownedRaw = mayAssign ? live.filter((w) => !w.assignee_id) : [];
   const myOpen = (myWork.data ?? []).filter((w) => !isDone(w) && w.status !== "pending_approval");
   const issues = useIssuesById([...waitingRaw, ...unownedRaw, ...overdue.slice(0, 20), ...myOpen.slice(0, 4)].map((w) => w.issue_id));
-  // Item-level rules (never your own work, school-wide work only for super admins…).
+  // This branch's work, plus what waits for you from school-wide items or
+  // work you passed on; item-level rules decide (never your own work, …).
   const toApprove = waitingRaw.filter((w) => {
     const issue = issues.map.get(w.issue_id);
-    return issue ? canApprove(viewer, issue, w) : false;
+    return issue ? waitsHere(viewer, issue, w, branchId) : false;
   });
   const unowned = unownedRaw.filter((w) => {
     const issue = issues.map.get(w.issue_id);
@@ -81,29 +92,16 @@ function AdminHome() {
     ...overdue.filter((w) => w.assignee_id).map((w) => ({ kind: "overdue" as const, w })),
   ];
   const shown = needs.filter((n) => filter === "all" || n.kind === filter).slice(0, 7);
-  const openTotal = numbers?.open_issues_by_type ? Object.values(numbers.open_issues_by_type).reduce((a, b) => a + b, 0) : null;
   const decisions = toApprove.length + unowned.length;
   const loading = (mayApprove && waiting.isLoading) || active.isLoading || issues.isLoading;
 
-  const open = (n: Need) => {
-    const issue = issues.map.get(n.w.issue_id);
-    if (!issue) return;
-    navigate({ to: "/items/$number", params: { number: numberOf(issue.key) }, search: n.kind === "overdue" ? {} : { review: n.w.id } });
-  };
+  // Opens in place; the drawer has a Details button for the full item.
+  const open = (n: Need) => setReview({ issueId: n.w.issue_id, workId: n.w.id });
 
   return (
     <div className="space-y-8">
       <div className="space-y-5">
         <Greeting subtitle={`${branch?.name ?? ""} · ${decisions ? tn(decisions, "{n} thing needs a decision from you", "{n} things need a decision from you") : t("nothing needs you right now")}`} />
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-          {mayApprove && (
-            <StatPill value={mine?.awaiting_my_approval ?? toApprove.length} label={t("to approve")} tone={toApprove.length ? "warning" : "neutral"} link={{ to: "/approvals" }} />
-          )}
-          {numbers?.overdue_work_items != null && <StatPill value={numbers.overdue_work_items} label={t("overdue")} tone={numbers.overdue_work_items ? "danger" : "neutral"} onClick={() => setFilter("overdue")} />}
-          {openTotal != null && <StatPill value={openTotal} label={t("open items")} link={{ to: "/items" }} />}
-          {numbers?.due_next_7_days != null && <StatPill value={numbers.due_next_7_days} label={t("due this week")} link={{ to: "/items" }} />}
-          <StatPill value={mine?.upcoming_events.length ?? "—"} label={t("events soon")} link={{ to: "/calendar" }} />
-        </div>
       </div>
       {dash.error && <ErrorPanel error={dash.error} onRetry={() => dash.refetch()} />}
 
@@ -127,8 +125,9 @@ function AdminHome() {
                     key={k}
                     onClick={() => setFilter(k)}
                     aria-pressed={filter === k}
-                    className={cx("h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap", filter === k ? "bg-text text-surface" : "text-text-2 hover:bg-sunken")}
+                    className={cx("h-8 rounded-full px-3 text-[13px] font-medium whitespace-nowrap", filter === k ? "bg-selected text-on-selected" : "text-text-2 hover:bg-sunken")}
                   >
+                    {k !== "all" && <span className="me-1.5 inline-block size-2 rounded-full align-middle" style={{ background: needTone[k].fg }} aria-hidden />}
                     {label} <span className="tabular opacity-70">{num(n)}</span>
                   </button>
                 ))}
@@ -148,18 +147,28 @@ function AdminHome() {
                 {shown.map((n) => {
                   const issue = issues.map.get(n.w.issue_id);
                   const p = people.get(n.w.assignee_id);
+                  const tone = needTone[n.kind];
                   return (
-                    <li key={`${n.kind}-${n.w.id}`}>
+                    <li key={`${n.kind}-${n.w.id}`} className="relative">
+                      <span className="absolute inset-y-2 start-0 w-1 rounded-full" style={{ background: tone.fg }} aria-hidden />
                       <RowLink
+                        className="ps-4"
                         onClick={() => open(n)}
-                        leading={
+                        aside={
                           n.w.assignee_id ? (
-                            <Avatar first={p?.first_name} last={p?.last_name} id={n.w.assignee_id} size={36} />
+                            <PersonPopover id={n.w.assignee_id} className="rounded-full">
+                              <Avatar first={p?.first_name} last={p?.last_name} id={n.w.assignee_id} size={36} />
+                            </PersonPopover>
                           ) : (
-                            <span className="size-9 shrink-0 rounded-full border-2 border-dashed border-border-strong" aria-hidden />
+                            <span className="block size-9 rounded-full border-2 border-dashed border-border-strong" aria-hidden />
                           )
                         }
-                        title={issue?.title ?? "…"}
+                        title={
+                          <span className="flex min-w-0 items-center gap-2">
+                            {issue && <TypeBadge type={issue.type} className="h-5 px-1.5 text-[12px]" />}
+                            <span className="truncate">{issue?.title ?? "…"}</span>
+                          </span>
+                        }
                         meta={
                           n.kind === "approve"
                             ? t("{name} handed it in · {ago} ago", { name: people.short(n.w.assignee_id), ago: n.w.submitted_at ? shortAgo(n.w.submitted_at) : "" })
@@ -168,13 +177,9 @@ function AdminHome() {
                               : `${people.short(n.w.assignee_id)} · ${n.w.status === "blocked" ? t("blocked") : n.w.status === "open" ? t("not started") : t("in progress")}`
                         }
                         trailing={
-                          n.kind === "approve" ? (
-                            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-[13px] font-semibold text-warning">{t("Review")}</span>
-                          ) : n.kind === "owner" ? (
-                            <span className="rounded-full bg-sunken px-2.5 py-0.5 text-[13px] font-semibold">{t("Assign")}</span>
-                          ) : (
-                            <span className="text-[14px] font-semibold text-danger">{n.w.sla_due_at && lateBy(n.w.sla_due_at)}</span>
-                          )
+                          <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-semibold" style={{ color: tone.fg, background: tone.bg }}>
+                            {n.kind === "approve" ? t("Review") : n.kind === "owner" ? t("Assign") : n.w.sla_due_at ? lateBy(n.w.sla_due_at) : t("Overdue")}
+                          </span>
                         }
                       />
                     </li>
@@ -189,6 +194,7 @@ function AdminHome() {
             )}
           </Panel>
 
+          <ReviewInPlace target={review} onChange={setReview} />
           <SentOut branchId={branchId} zone={zone} />
         </div>
 
@@ -359,19 +365,12 @@ function StaffHome() {
   );
   const issues = useIssuesById(todo.slice(0, 8).map((w) => w.issue_id));
   const replies = (dash.data?.mine.upcoming_events ?? []).filter((e) => e.my_rsvp === "pending");
-  const tickets = dash.data?.branches.find((b) => b.branch_id === branchId)?.open_public_tickets;
   const overdue = todo.filter((w) => w.is_overdue).length;
 
   return (
     <div className="space-y-8">
       <div className="space-y-5">
-        <Greeting subtitle={branch?.name} />
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-          <StatPill value={todo.length} label={t("to do")} tone={todo.length ? "primary" : "neutral"} link={{ to: "/my-work" }} />
-          {overdue > 0 && <StatPill value={overdue} label={t("overdue")} tone="danger" link={{ to: "/my-work" }} />}
-          {replies.length > 0 && <StatPill value={replies.length} label={t("to reply")} tone="warning" link={{ to: "/calendar" }} />}
-          {tickets != null && tickets > 0 && <StatPill value={tickets} label={t("open questions")} link={{ to: "/items", search: { type: "ticket" } }} />}
-        </div>
+        <Greeting subtitle={`${branch?.name ?? ""} · ${todo.length ? tn(todo.length, "{n} thing to do", "{n} things to do") : t("nothing to do right now")}${overdue ? ` · ${tn(overdue, "{n} overdue", "{n} overdue")}` : ""}`} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -392,6 +391,16 @@ function StaffHome() {
         </Panel>
 
         <div className="space-y-6">
+          {(dash.data?.mine.awaiting_my_approval ?? 0) > 0 && (
+            <Panel title={t("Waiting for your review")}>
+              <RowLink
+                link={{ to: "/approvals" }}
+                leading={<Dot tone="warning" />}
+                title={tn(dash.data!.mine.awaiting_my_approval, "{n} hand-in to review", "{n} hand-ins to review")}
+                meta={t("Work you sent or passed on, handed back to you")}
+              />
+            </Panel>
+          )}
           {replies.length > 0 && (
             <Panel title={t("Reply needed")}>
               <ul className="space-y-1">

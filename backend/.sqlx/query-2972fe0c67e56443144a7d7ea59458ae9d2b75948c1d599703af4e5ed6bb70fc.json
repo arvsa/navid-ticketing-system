@@ -1,0 +1,229 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id AS \"id!\", issue_id AS \"issue_id!\", target_id AS \"target_id!\", branch_id AS \"branch_id!\",\n               assignee_id, handoff_chain AS \"handoff_chain!\", work_reviewer(handoff_chain, assignee_id) AS reviewer_id,\n               status AS \"status!: WorkStatus\", sla_due_at, is_overdue AS \"is_overdue!\",\n               submitted_at, decided_by, decided_at, decision_note, version AS \"version!\",\n               created_at AS \"created_at!\", updated_at AS \"updated_at!\"\n        FROM work_item_overview WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "target_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "target_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "assignee_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "assignee_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "handoff_chain!",
+        "type_info": "UuidArray",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "handoff_chain"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "reviewer_id",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "status!: WorkStatus",
+        "type_info": {
+          "Custom": {
+            "name": "work_status",
+            "kind": {
+              "Enum": [
+                "open",
+                "in_progress",
+                "blocked",
+                "pending_approval",
+                "approved",
+                "cancelled"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "sla_due_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "sla_due_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "is_overdue!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "is_overdue"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "submitted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "submitted_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "decided_by",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decided_by"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "decided_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decided_at"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "decision_note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "decision_note"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "version!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "work_item_overview",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2972fe0c67e56443144a7d7ea59458ae9d2b75948c1d599703af4e5ed6bb70fc"
+}

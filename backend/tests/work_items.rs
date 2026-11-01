@@ -213,28 +213,23 @@ async fn approval_rules(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn super_admin_work_is_approved_by_super_admins_only(pool: PgPool) {
+async fn the_sender_approves_work_they_sent_to_another_branch(pool: PgPool) {
     let c = setup(pool).await;
+    // Admin of A sends work to multi, in branch B.
     let (issue, items) = c
-        .issue(&c.root, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "HQ job", "targets": [{ "user_id": c.org.plain_a }] }))
+        .issue(&c.admin, json!({ "branch_id": null, "type": "action", "title": "HQ job", "targets": [{ "user_id": c.org.multi, "branch_id": c.org.branch_b }] }))
         .await;
     let id = items[0]["id"].as_str().unwrap().to_owned();
+    c.ok(&c.multi, &id, "submit", json!({})).await;
+    // The sender hears about it; so do B's approvers, who may decide too.
+    assert_eq!(notifications_of(&c.app.db, c.org.admin_a, "submitted_for_approval").await, 1);
+    assert_eq!(notifications_of(&c.app.db, c.org.admin_b, "submitted_for_approval").await, 1);
+    // A's other approvers have no say in B.
+    assert_status(&c.go(&c.boss_like, &id, "approve", json!({})).await, StatusCode::NOT_FOUND, None);
 
-    // Branch admins may still assign and update their branch's work...
-    c.ok(&c.admin, &id, "assign", json!({ "assignee_id": c.org.multi })).await;
-    c.ok(&c.admin, &id, "assign", json!({ "assignee_id": c.org.plain_a })).await;
-    c.ok(&c.plain, &id, "submit", json!({})).await;
-    // ...but not approve, reject or cancel it.
-    for t in ["approve", "reject", "cancel"] {
-        assert_status(&c.go(&c.admin, &id, t, json!({ "note": "n" })).await, StatusCode::FORBIDDEN, None);
-        assert_status(&c.go(&c.boss_like, &id, t, json!({ "note": "n" })).await, StatusCode::FORBIDDEN, None);
-    }
-    assert_eq!(notifications_of(&c.app.db, c.org.admin_a, "submitted_for_approval").await, 0);
-    assert_eq!(notifications_of(&c.app.db, c.org.root, "submitted_for_approval").await, 1);
-
-    c.ok(&c.root, &id, "approve", json!({})).await;
+    c.ok(&c.admin, &id, "approve", json!({})).await;
     // The only item is done: the issue closed itself.
-    let issue = call(&c.app, &c.root, Method::GET, &format!("/api/issues/{issue}"), None).await;
+    let issue = call(&c.app, &c.admin, Method::GET, &format!("/api/issues/{issue}"), None).await;
     assert_eq!(issue.body["state"], "closed");
     assert!(issue.body["closed_by"].is_null());
 }
@@ -431,4 +426,75 @@ async fn work_item_reads_follow_the_issue(pool: PgPool) {
     assert!(list.body["items"].as_array().unwrap().is_empty());
     let res = call(&c.app, &c.plain, Method::GET, &format!("/api/work-items/{}", Uuid::new_v4()), None).await;
     assert_status(&res, StatusCode::NOT_FOUND, None);
+}
+
+// ---------------------------------------------------------------------------
+// Passing work along
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn passed_work_is_reviewed_up_the_chain_and_sent_back_down(pool: PgPool) {
+    let c = setup(pool).await;
+    let manager = as_user(&c.app, "manager_a@example.com").await;
+    // The admin gives the head of department (manager_a) a job...
+    let (issue, items) = c
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "Inventory", "targets": [{ "user_id": c.org.manager_a }] }))
+        .await;
+    let id = items[0]["id"].as_str().unwrap().to_owned();
+
+    // ...who passes it to someone in the department.
+    let passed = c.ok(&manager, &id, "pass", json!({ "assignee_id": c.org.plain_a })).await;
+    assert_eq!(passed["assignee_id"], c.org.plain_a.to_string());
+    assert_eq!(passed["handoff_chain"], json!([c.org.manager_a, c.org.plain_a]));
+    assert_eq!(passed["reviewer_id"], c.org.manager_a.to_string());
+    assert_eq!(notifications_of(&c.app.db, c.org.plain_a, "assigned").await, 1);
+    // Only the holder passes it on; never back up the chain, nor outside the branch.
+    assert_status(&c.go(&manager, &id, "pass", json!({ "assignee_id": c.org.multi })).await, StatusCode::FORBIDDEN, None);
+    let back_up = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.manager_a })).await;
+    assert_status(&back_up, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_assignee"));
+    let elsewhere = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.admin_b })).await;
+    assert_status(&elsewhere, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_assignee"));
+
+    // The hand-in goes to the head, not yet to the admin or the branch's approvers.
+    c.ok(&c.plain, &id, "submit", json!({})).await;
+    assert_eq!(notifications_of(&c.app.db, c.org.manager_a, "submitted_for_approval").await, 1);
+    assert_eq!(notifications_of(&c.app.db, c.org.admin_a, "submitted_for_approval").await, 0);
+    assert_status(&c.go(&c.boss_like, &id, "approve", json!({})).await, StatusCode::FORBIDDEN, None);
+
+    // The head approves: it moves up as their hand-in, to the admin.
+    let up = c.ok(&manager, &id, "approve", json!({})).await;
+    assert_eq!(up["status"], "pending_approval");
+    assert_eq!(up["assignee_id"], c.org.manager_a.to_string());
+    assert!(up["reviewer_id"].is_null());
+    assert_eq!(notifications_of(&c.app.db, c.org.plain_a, "approved").await, 1);
+    assert_eq!(notifications_of(&c.app.db, c.org.admin_a, "submitted_for_approval").await, 1);
+
+    // The admin sends it back: it returns to the head...
+    let back = c.ok(&c.admin, &id, "reject", json!({ "note": "Count the storeroom too" })).await;
+    assert_eq!(back["status"], "in_progress");
+    assert_eq!(back["assignee_id"], c.org.manager_a.to_string());
+    assert_eq!(notifications_of(&c.app.db, c.org.manager_a, "rejected").await, 1);
+    // ...who passes it down again, and up it comes once more.
+    c.ok(&manager, &id, "pass", json!({ "assignee_id": c.org.plain_a })).await;
+    c.ok(&c.plain, &id, "submit", json!({})).await;
+    c.ok(&manager, &id, "approve", json!({})).await;
+    let done = c.ok(&c.admin, &id, "approve", json!({})).await;
+    assert_eq!(done["status"], "approved");
+    let issue = call(&c.app, &c.admin, Method::GET, &format!("/api/issues/{issue}"), None).await;
+    assert_eq!(issue.body["state"], "closed");
+
+    // Every pass is in the history.
+    let history = call(&c.app, &c.admin, Method::GET, &format!("/api/issues/{}/history", issue.body["id"].as_str().unwrap()), None).await;
+    let passes = history.body["items"].as_array().unwrap().iter().filter(|h| h["action"] == "pass").count();
+    assert_eq!(passes, 2);
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn assigning_starts_the_chain_again(pool: PgPool) {
+    let c = setup(pool).await;
+    let id = c.action_for_plain().await;
+    c.ok(&c.plain, &id, "pass", json!({ "assignee_id": c.org.manager_a })).await;
+    let reassigned = c.ok(&c.admin, &id, "assign", json!({ "assignee_id": c.org.plain_a })).await;
+    assert_eq!(reassigned["handoff_chain"], json!([]));
+    assert!(reassigned["reviewer_id"].is_null());
 }

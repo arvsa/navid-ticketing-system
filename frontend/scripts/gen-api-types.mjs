@@ -9,7 +9,7 @@ const url = process.env.OPENAPI_URL ?? "http://127.0.0.1:8080/api/openapi.json";
 const doc = await (await fetch(url)).json();
 doc.components.schemas.Transition ??= {
   type: "string",
-  enum: ["start", "block", "unblock", "submit", "approve", "reject", "claim", "assign", "cancel"],
+  enum: ["start", "block", "unblock", "submit", "approve", "reject", "claim", "assign", "cancel", "pass"],
 };
 for (const [path, ops] of Object.entries(doc.paths)) {
   for (const [method, op] of Object.entries(ops)) {

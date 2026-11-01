@@ -1,6 +1,7 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{DefaultBodyLimit, Multipart, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
     routing::{get, patch, post},
     Json, Router,
 };
@@ -12,9 +13,10 @@ use crate::{
     authz::Actor,
     domain::{
         groups::{self, EffectivePermissions},
-        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch},
+        member_import::{self, ImportReport},
+        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient},
     },
-    error::AppResult,
+    error::{AppError, AppResult},
     pagination::{Page, PageParams},
     AppState,
 };
@@ -26,6 +28,67 @@ pub fn routes() -> Router<AppState> {
         .route("/branches/{id}/members/{user_id}/effective-permissions", get(effective_permissions))
         .route("/users/{id}/reset-password", post(reset_password))
         .route("/users/{id}/active", patch(set_active))
+        .route("/recipients", get(recipients))
+        .route("/members/import-template", get(import_template))
+}
+
+/// Imports hash a password per new account, so they get the upload timeout.
+pub fn import_routes() -> Router<AppState> {
+    Router::new().route(
+        "/branches/{id}/members/import",
+        post(import).layer(DefaultBodyLimit::max(member_import::MAX_BYTES + 64 * 1024)),
+    )
+}
+
+/// POST /api/branches/{id}/members/import, `multipart/form-data` with a `file`
+/// part (xlsx, xls, ods or csv) and optional `dry_run` and `skip_errors`
+/// fields (`true`): check only, or import the good rows and leave out the
+/// ones with a problem.
+#[utoipa::path(post, path = "/api/branches/{id}/members/import", operation_id = "importMembers", tag = "members", params(("id" = uuid::Uuid, Path, description = "id")), request_body(content_type = "multipart/form-data", description = "A `file` part (max 2 MB, at most 500 people) and optional `dry_run` and `skip_errors` fields"), responses((status = 200, body = ImportReport), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn import(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath(id): ApiPath<Uuid>,
+    multipart: Result<Multipart, axum::extract::multipart::MultipartRejection>,
+) -> AppResult<Json<ImportReport>> {
+    let upload_error = |e: axum::extract::multipart::MultipartError| {
+        if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            AppError::PayloadTooLarge { message: "import files are limited to 2 MB".into() }
+        } else {
+            AppError::validation("invalid_upload", e.body_text())
+        }
+    };
+    let mut multipart = multipart.map_err(|e| AppError::validation("invalid_upload", e.body_text()))?;
+    let (mut file, mut dry_run, mut skip_errors) = (None, false, false);
+    while let Some(field) = multipart.next_field().await.map_err(upload_error)? {
+        match field.name() {
+            Some("file") => file = Some(field.bytes().await.map_err(upload_error)?),
+            Some("dry_run") => dry_run = field.text().await.map_err(upload_error)?.trim() == "true",
+            Some("skip_errors") => skip_errors = field.text().await.map_err(upload_error)?.trim() == "true",
+            _ => {}
+        }
+    }
+    let file = file.ok_or_else(|| AppError::validation("invalid_upload", "a `file` part is required"))?;
+    Ok(Json(member_import::run(&s.db, &actor, id, &file, dry_run, skip_errors).await?))
+}
+
+/// GET /api/members/import-template: an empty workbook with the header row.
+#[utoipa::path(get, path = "/api/members/import-template", operation_id = "memberImportTemplate", tag = "members", responses((status = 200, description = "An Excel workbook", content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn import_template(_actor: Actor) -> AppResult<impl IntoResponse> {
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            (header::CONTENT_DISPOSITION, "attachment; filename=\"people-import.xlsx\""),
+            (header::CACHE_CONTROL, "private, no-store"),
+        ],
+        member_import::template()?,
+    ))
+}
+
+/// People in every branch, to send a school-wide item to.
+#[utoipa::path(get, path = "/api/recipients", operation_id = "listRecipients", tag = "members", responses((status = 200, body = Vec<Recipient>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn recipients(State(s): State<AppState>, actor: Actor) -> AppResult<Json<Vec<Recipient>>> {
+    Ok(Json(members::recipients(&s.db, &actor).await?))
 }
 
 /// Flat on purpose: `serde(flatten)` breaks typed query-string fields.

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT group_id FROM group_permission WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "group_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aea3216d683f8b33aac44c151064e178889798cf90bddccdcc6dd03a239d116e"
+}

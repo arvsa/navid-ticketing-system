@@ -6,6 +6,7 @@ import * as Popover from "@radix-ui/react-popover";
 import {
   Bell,
   Calendar,
+  ChartColumn,
   Check,
   ChevronDown,
   Download,
@@ -19,6 +20,7 @@ import {
   Moon,
   Plus,
   Search,
+  Settings,
   Shield,
   Sun,
   User,
@@ -28,9 +30,10 @@ import { useDashboard, useIssueList, useNotifications, useUnreadCount, useMarkRe
 import { useLogout, useSession } from "@/auth/session";
 import { Avatar, TypeBadge } from "@/components/badges";
 import { BrandMark } from "@/components/brand";
-import { Drawer, Menu, MenuItem, MenuLabel, MenuSeparator, cx } from "@/components/ui";
+import { Drawer, IconButton, Menu, MenuItem, MenuLabel, MenuSeparator, cx } from "@/components/ui";
 import { hasGrant, hasGrantAnywhere, isAdminOf, isSuper } from "@/lib/can";
-import { APP_NAME, BRAND_NAME } from "@/lib/labels";
+import { APP_NAME } from "@/lib/labels";
+import { useSchoolName } from "@/lib/useSchoolName";
 import { describeNotification } from "@/lib/notifications";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
@@ -40,6 +43,8 @@ import { useBranch } from "./BranchContext";
 import { NewItemProvider } from "./NewItem";
 import { useNewItem } from "./newItemContext";
 import { setTheme, getTheme, type Theme } from "./theme";
+import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
+import { guard } from "@/lib/unsaved";
 import { lang, num, quote, setLang, t } from "@/i18n";
 
 type NavEntry = { to: string; label: string; icon: ReactNode; count?: number | null; exact?: boolean };
@@ -52,15 +57,26 @@ function useNav() {
   const mine = dash.data?.mine;
   const pendingRsvps = mine?.upcoming_events.filter((e) => e.my_rsvp === "pending").length ?? 0;
   const superAdmin = isSuper(v);
-  const canApprove = superAdmin || (branchId ? hasGrant(v, branchId, "work_item.approve") : hasGrantAnywhere(v, "work_item.approve"));
+  // Approvers, and anyone with a hand-in waiting for them (work they passed on).
+  const canApprove =
+    (branchId ? hasGrant(v, branchId, "work_item.approve") : hasGrantAnywhere(v, "work_item.approve")) || (mine?.awaiting_my_approval ?? 0) > 0;
 
-  const main: NavEntry[] = [
-    { to: "/", label: superAdmin && isAll ? t("Overview") : t("Home"), icon: <Home className="size-[18px]" />, exact: true },
-    { to: "/my-work", label: t("My work"), icon: <ListChecks className="size-[18px]" />, count: mine?.open_work_items || null },
-    { to: "/items", label: t("Items"), icon: <List className="size-[18px]" /> },
-  ];
-  if (canApprove) main.push({ to: "/approvals", label: t("To approve"), icon: <Check className="size-[18px]" />, count: mine?.awaiting_my_approval || null });
-  main.push({ to: "/calendar", label: t("Calendar"), icon: <Calendar className="size-[18px]" />, count: pendingRsvps || null });
+  // Super admins run the app: setup first, the daily pages out of the way.
+  const main: NavEntry[] = superAdmin
+    ? [
+        isAll
+          ? { to: "/", label: t("Setup"), icon: <Settings className="size-[18px]" />, exact: true }
+          : { to: "/", label: t("Dashboard"), icon: <Home className="size-[18px]" />, exact: true },
+        { to: "/analytics", label: t("Analytics"), icon: <ChartColumn className="size-[18px]" /> },
+        { to: "/items", label: t("Items"), icon: <List className="size-[18px]" /> },
+      ]
+    : [
+        { to: "/", label: t("Home"), icon: <Home className="size-[18px]" />, exact: true },
+        { to: "/my-work", label: t("My work"), icon: <ListChecks className="size-[18px]" />, count: mine?.open_work_items || null },
+        { to: "/items", label: t("Items"), icon: <List className="size-[18px]" /> },
+      ];
+  if (!superAdmin && canApprove) main.push({ to: "/approvals", label: t("To approve"), icon: <Check className="size-[18px]" />, count: mine?.awaiting_my_approval || null });
+  if (!superAdmin) main.push({ to: "/calendar", label: t("Calendar"), icon: <Calendar className="size-[18px]" />, count: pendingRsvps || null });
 
   const manage: NavEntry[] = [];
   const canPeople = branchId ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") : me.memberships.some((m) => m.is_admin) || superAdmin;
@@ -68,7 +84,7 @@ function useNav() {
   if (superAdmin) manage.push({ to: "/branches", label: t("Branches & admins"), icon: <Shield className="size-4" /> });
   const canExport = superAdmin || (branchId ? hasGrant(v, branchId, "export.run") : hasGrantAnywhere(v, "export.run"));
   if (canExport) manage.push({ to: "/export", label: t("Export to Excel"), icon: <Download className="size-4" /> });
-  const manageTitle = superAdmin && isAll ? t("Run the school") : branch ? t("Run {name}", { name: branch.name }) : t("Manage");
+  const manageTitle = superAdmin ? t("Set up") : isAll ? t("Run the school") : branch ? t("Run {name}", { name: branch.name }) : t("Manage");
   return { main, manage, manageTitle };
 }
 
@@ -85,7 +101,7 @@ function NavPill({ entry }: { entry: NavEntry }) {
       aria-current={active ? "page" : undefined}
       className={cx(
         "inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-[15px] font-medium whitespace-nowrap transition-colors",
-        active ? "bg-text text-surface" : "text-text-2 hover:bg-sunken hover:text-text",
+        active ? "bg-selected text-on-selected" : "text-text-2 hover:bg-sunken hover:text-text",
       )}
     >
       {entry.icon}
@@ -115,7 +131,7 @@ function ManageMenu({ entries, title }: { entries: NavEntry[]; title: string }) 
         <button
           className={cx(
             "inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[15px] font-medium",
-            active ? "bg-text text-surface" : "text-text-2 hover:bg-sunken hover:text-text",
+            active ? "bg-selected text-on-selected" : "text-text-2 hover:bg-sunken hover:text-text",
           )}
         >
           {t("Manage")}{" "}<ChevronDown className="size-4" />
@@ -151,14 +167,14 @@ function BranchChip() {
       }
     >
       {ctx.canChooseAll && (
-        <MenuItem onSelect={() => ctx.setBranch("all")}>
+        <MenuItem onSelect={() => guard(() => ctx.setBranch("all"))}>
           <span className="flex-1">{superAdmin ? t("Whole school ({n} branches)", { n: ctx.options.length }) : t("All my branches")}</span>
           {ctx.isAll && <Check className="size-4" />}
         </MenuItem>
       )}
       <MenuSeparator />
       {ctx.options.map((o) => (
-        <MenuItem key={o.id} onSelect={() => ctx.setBranch(o.id)}>
+        <MenuItem key={o.id} onSelect={() => guard(() => ctx.setBranch(o.id))}>
           <span className="flex-1">{o.name}</span>
           {o.membership?.is_admin && <span className="text-[12px] text-text-3">{t("Admin")}</span>}
           {ctx.branchId === o.id && <Check className="size-4" />}
@@ -226,7 +242,7 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
           ["fa", "فارسی"],
         ] as const
       ).map(([l, label]) => (
-        <MenuItem key={l} onSelect={() => setLang(l)}>
+        <MenuItem key={l} onSelect={() => guard(() => setLang(l))}>
           <Languages className="size-4" />
           <span className="flex-1" lang={l}>
             {label}
@@ -235,7 +251,7 @@ function AccountMenu({ extra }: { extra?: NavEntry[] }) {
         </MenuItem>
       ))}
       <MenuSeparator />
-      <MenuItem onSelect={() => logout.mutate()}>
+      <MenuItem onSelect={() => guard(() => logout.mutate())}>
         <LogOut className="size-4" />{" "}{t("Sign out")}
       </MenuItem>
     </Menu>
@@ -386,6 +402,7 @@ function BellPopover() {
 function PhoneBottomNav() {
   const unread = useUnreadCount();
   const openNew = useNewItem();
+  const superAdmin = isSuper({ me: useSession() });
   const path = useRouterState({ select: (s) => s.location.pathname });
   const item = (to: string, label: string, icon: ReactNode, badge?: number) => {
     const active = to === "/" ? path === "/" : path.startsWith(to);
@@ -399,14 +416,16 @@ function PhoneBottomNav() {
   };
   return (
     <nav aria-label={t("Main")} className="fixed inset-x-3 bottom-3 z-30 flex items-center rounded-[22px] border border-border bg-surface/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-2 backdrop-blur md:hidden">
-      {item("/", t("Home"), <Home className="size-6" />)}
-      {item("/my-work", t("My work"), <ListChecks className="size-6" />)}
-      <div className="flex flex-1 justify-center">
-        <button onClick={() => openNew()} aria-label={t("New item")} className="flex size-12 items-center justify-center rounded-full bg-primary text-on-primary shadow-2">
-          <Plus className="size-6" />
-        </button>
-      </div>
-      {item("/calendar", t("Calendar"), <Calendar className="size-6" />)}
+      {superAdmin ? item("/", t("Setup"), <Settings className="size-6" />) : item("/", t("Home"), <Home className="size-6" />)}
+      {superAdmin ? item("/items", t("Items"), <List className="size-6" />) : item("/my-work", t("My work"), <ListChecks className="size-6" />)}
+      {!superAdmin && (
+        <div className="flex flex-1 justify-center">
+          <button onClick={() => openNew()} aria-label={t("New item")} className="flex size-12 items-center justify-center rounded-full bg-primary text-on-primary shadow-2">
+            <Plus className="size-6" />
+          </button>
+        </div>
+      )}
+      {superAdmin ? item("/people", t("People"), <Users className="size-6" />) : item("/calendar", t("Calendar"), <Calendar className="size-6" />)}
       {item("/inbox", t("Inbox"), <Inbox className="size-6" />, unread.data)}
     </nav>
   );
@@ -415,13 +434,16 @@ function PhoneBottomNav() {
 function TopBar({ onSearch }: { onSearch: () => void }) {
   const { main, manage, manageTitle } = useNav();
   const openNew = useNewItem();
+  // Super admins send from their Setup page, not from the top bar.
+  const superAdmin = isSuper({ me: useSession() });
+  const schoolName = useSchoolName();
   return (
     <header className="sticky top-0 z-30 px-3 pt-3 md:px-6">
       <div className="mx-auto flex h-16 max-w-[1320px] items-center gap-2 rounded-[22px] border border-border bg-surface/90 px-3 shadow-2 backdrop-blur-md">
-        <Link to="/" className="flex shrink-0 items-center gap-2.5 rounded-[14px] pe-2" aria-label={`${BRAND_NAME} · ${APP_NAME}`}>
+        <Link to="/" className="flex shrink-0 items-center gap-2.5 rounded-[14px] pe-2" aria-label={`${schoolName} · ${APP_NAME}`}>
           <BrandMark size={42} />
           <span className="hidden flex-col leading-tight 2xl:flex">
-            <span className="text-[14px] font-bold text-brand dark:text-primary">{BRAND_NAME}</span>
+            <span className="text-[14px] font-bold text-brand dark:text-primary">{schoolName}</span>
             <span className="text-[12px] text-text-3">{APP_NAME}</span>
           </span>
         </Link>
@@ -449,12 +471,11 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
             <LivePill />
           </span>
           <BellPopover />
-          <button
-            onClick={() => openNew()}
-            className="hidden h-10 items-center gap-1.5 rounded-full bg-primary pe-4 ps-3 font-semibold text-on-primary hover:bg-primary-hover md:inline-flex"
-          >
-            <Plus className="size-5" />{" "}{t("New")}
-          </button>
+          {!superAdmin && (
+            <span className="hidden md:inline-flex">
+              <IconButton variant="primary" label={t("New item")} hintAlign="end" icon={<Plus className="size-5" />} onClick={() => openNew()} />
+            </span>
+          )}
           <AccountMenu extra={[...main.filter((e) => e.to === "/items" || e.to === "/approvals"), ...manage]} />
         </div>
       </div>
@@ -494,6 +515,7 @@ function Shell() {
       </main>
       <PhoneBottomNav />
       <QuickSearch open={search} onOpenChange={setSearch} />
+      <UnsavedChangesDialog />
     </div>
   );
 }

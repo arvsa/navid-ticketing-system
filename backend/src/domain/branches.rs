@@ -79,7 +79,8 @@ pub struct NewBranch {
     pub name: String,
     pub timezone: String,
     pub email: Option<String>,
-    pub first_admin_user_id: Uuid,
+    /// Optional: a new branch can get its admin later, once its people are in.
+    pub first_admin_user_id: Option<Uuid>,
 }
 
 pub async fn create(db: &PgPool, actor: &Actor, input: NewBranch) -> AppResult<Branch> {
@@ -88,10 +89,15 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewBranch) -> AppResult<B
     validate_timezone(&input.timezone)?;
     let email = input.email.as_deref().map(validate_email).transpose()?;
 
-    let admin = relations::load_user(db, input.first_admin_user_id)
-        .await?
-        .filter(|u| u.is_active)
-        .ok_or_else(|| AppError::validation("invalid_admin", "the first admin must be an active user"))?;
+    let admin = match input.first_admin_user_id {
+        Some(id) => Some(
+            relations::load_user(db, id)
+                .await?
+                .filter(|u| u.is_active)
+                .ok_or_else(|| AppError::validation("invalid_admin", "the first admin must be an active user"))?,
+        ),
+        None => None,
+    };
 
     let mut tx = db.begin().await?;
     let branch_id = sqlx::query_scalar!(
@@ -108,16 +114,18 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewBranch) -> AppResult<B
     )
     .fetch_one(&mut *tx)
     .await?;
-    // The schema's deferred trigger rejects the branch at commit unless it
-    // has an admin by then; a trigger has already created "All members".
-    sqlx::query!(
-        "INSERT INTO branch_membership (user_id, branch_id, is_admin, added_by) VALUES ($1, $2, true, $3)",
-        admin.user_id,
-        branch_id,
-        actor.user_id,
-    )
-    .execute(&mut *tx)
-    .await?;
+    // A trigger has already created "All members" (and the copies of the
+    // school-wide groups).
+    if let Some(admin) = &admin {
+        sqlx::query!(
+            "INSERT INTO branch_membership (user_id, branch_id, is_admin, added_by) VALUES ($1, $2, true, $3)",
+            admin.user_id,
+            branch_id,
+            actor.user_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
 
     audit::record(
         &mut tx,
@@ -134,8 +142,10 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewBranch) -> AppResult<B
         },
     )
     .await?;
-    audit_membership(&mut tx, actor, branch_id, admin.user_id, "create", None, json!({ "is_admin": true })).await?;
-    emit_branch_event(&mut tx, "branch_changed", branch_id, vec![admin.user_id]).await?;
+    if let Some(admin) = &admin {
+        audit_membership(&mut tx, actor, branch_id, admin.user_id, "create", None, json!({ "is_admin": true })).await?;
+    }
+    emit_branch_event(&mut tx, "branch_changed", branch_id, admin.iter().map(|a| a.user_id).collect()).await?;
 
     let branch = fetch(&mut *tx, branch_id).await?;
     tx.commit().await?;

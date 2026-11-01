@@ -1,7 +1,7 @@
 import type { IssueType } from "@/api/types";
 import { hasGrant, isAdminOf, isSuper, type Viewer } from "@/lib/can";
 
-export { canSendType, creatableTypes, isSuper } from "@/lib/can";
+export { canSendType, canTargetWholeBranch, creatableTypes, isSuper } from "@/lib/can";
 
 export function canSetPrivateIn(v: Viewer, branchId: string | null, type?: IssueType) {
   if (isSuper(v)) return true;

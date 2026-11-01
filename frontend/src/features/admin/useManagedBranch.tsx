@@ -5,6 +5,7 @@ import { useBranch } from "@/app/BranchContext";
 import { hasGrant, isAdminOf, type Viewer } from "@/lib/can";
 import type { Permission } from "@/api/types";
 import { cx, inputClass } from "@/components/ui";
+import { guard } from "@/lib/unsaved";
 import { t } from "@/i18n";
 
 export function useManagedBranch(viewer: Viewer, perm?: Permission, preferred?: string) {
@@ -14,7 +15,15 @@ export function useManagedBranch(viewer: Viewer, perm?: Permission, preferred?: 
   const current = branchId && manageable.some((o) => o.id === branchId) ? branchId : picked ?? manageable[0]?.id;
   const picker =
     !branchId && manageable.length > 1 ? (
-      <select value={current} onChange={(e) => setPicked(e.target.value)} className={cx(inputClass, "h-11 w-auto")} aria-label={t("Branch")}>
+      <select
+        value={current}
+        onChange={(e) => {
+          const next = e.target.value;
+          guard(() => setPicked(next));
+        }}
+        className={cx(inputClass, "h-11 w-auto")}
+        aria-label={t("Branch")}
+      >
         {manageable.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}
@@ -22,5 +31,8 @@ export function useManagedBranch(viewer: Viewer, perm?: Permission, preferred?: 
         ))}
       </select>
     ) : null;
-  return { branchId: current, branch: options.find((o) => o.id === current), picker, manageable };
+  // For pages that build their own picker: the branches it offers, and a raw
+  // setter (callers guard unsaved changes themselves).
+  const choices = branchId && manageable.some((o) => o.id === branchId) ? manageable.filter((o) => o.id === branchId) : manageable;
+  return { branchId: current, branch: options.find((o) => o.id === current), picker, manageable, choices, pick: setPicked };
 }

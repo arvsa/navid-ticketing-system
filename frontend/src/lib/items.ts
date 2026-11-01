@@ -84,7 +84,8 @@ export function primaryAction(issue: IssueDetail, v: Viewer): PrimaryAction {
   if (mine?.status === "in_progress") return issue.type === "report" ? { kind: "write-report", work: mine } : { kind: "submit", work: mine };
   const waiting = issue.work_items.filter((w) => canApprove(v, issue, w));
   if (waiting.length) return { kind: "review", count: waiting.length, first: waiting[0] };
-  if (issue.requires_super_admin_approval && !v.me.user.is_super_admin) {
+  // School-wide work waiting for someone in a branch I run.
+  if (!issue.branch_id) {
     const ours = issue.work_items.find((w) => !w.assignee_id && !isDone(w) && v.me.memberships.some((m) => m.is_admin && m.branch.id === w.branch_id));
     if (ours) return { kind: "assign", work: ours };
   }
@@ -105,10 +106,9 @@ export function useItemLabels(issue: IssueDetail) {
     const p = people.get(id);
     if (p) return short ? people.short(id) : people.name(id);
     if (!id) return t("Nobody");
-    // The backend sets requires_super_admin_approval exactly when a super admin
-    // created the item, and only super admins create school-wide items.
-    if (id === issue.created_by && (issue.branch_id === null || issue.requires_super_admin_approval)) return SCHOOL_OFFICE;
-    if (issue.requires_super_admin_approval && issue.work_items.some((w) => w.decided_by === id)) return SCHOOL_OFFICE;
+    // Super admins belong to no branch: someone we can't place who sent a
+    // school-wide item is the school office.
+    if (id === issue.created_by && !issue.branch_id) return SCHOOL_OFFICE;
     return UNKNOWN_PERSON;
   };
   const known: string[] = [];

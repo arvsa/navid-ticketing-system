@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (r.author_id = $3 OR (r.submitted_at IS NOT NULL AND w.assignee_id = $3)) AS \"ok!\"\n        FROM issue_report r\n        JOIN issue i ON i.id = r.issue_id\n        LEFT JOIN work_item w ON w.id = r.work_item_id\n        WHERE r.id = $1 AND r.issue_id = $2\n          AND CASE WHEN r.work_item_id IS NULL THEN i.state = 'open'\n                   ELSE w.status NOT IN ('approved', 'cancelled') END\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "703a8466b9de2a573260f4d84f27977eb907a6c8890a18e5afb1df2a36851dd0"
+}

@@ -2,6 +2,8 @@
 export const keys = {
   me: ["me"] as const,
   branches: ["branches"] as const,
+  settings: ["settings"] as const,
+  analytics: (weeks: number) => ["analytics", weeks] as const,
   branch: (id: string) => ["branches", id] as const,
   members: (branchId: string, extra?: object) => ["branches", branchId, "members", extra ?? {}] as const,
   groups: (branchId: string, extra?: object) => ["branches", branchId, "groups", extra ?? {}] as const,
@@ -9,6 +11,7 @@ export const keys = {
     ["branches", branchId, "members", { group_id: groupId }] as const,
   effective: (branchId: string, userId: string) => ["effective-permissions", branchId, userId] as const,
   people: ["people"] as const,
+  recipients: ["recipients"] as const,
   myGroups: (branchId: string) => ["my-groups", branchId] as const,
   issues: ["issues"] as const,
   issueList: (filters: object) => ["issues", "list", filters] as const,
@@ -26,4 +29,6 @@ export const keys = {
   dashboard: (branchId?: string) => ["dashboard", branchId ?? "all"] as const,
   catalog: ["permissions", "catalog"] as const,
   groupGrants: (groupId: string) => ["groups", groupId, "permissions"] as const,
+  schoolGroupCopies: (groupId: string) => ["school-groups", groupId, "copies"] as const,
+  schoolGroups: ["school-groups"] as const,
 };

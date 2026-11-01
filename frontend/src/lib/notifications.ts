@@ -7,7 +7,9 @@
 // becomes `before` and `after`.
 import type { Notification } from "@/api/types";
 import { quote, t } from "@/i18n";
+import { UNKNOWN_PERSON } from "@/people/usePeople";
 import { formatWhen } from "./dates";
+import { SCHOOL_OFFICE } from "./items";
 import { workStatusLabel } from "./labels";
 
 export type NotificationText = {
@@ -21,7 +23,9 @@ export type NotificationText = {
 };
 
 export function describeNotification(n: Notification, nameOf: (id?: string | null) => string): NotificationText {
-  const actor = n.actor_id ? nameOf(n.actor_id) : undefined;
+  let actor = n.actor_id ? nameOf(n.actor_id) : undefined;
+  // Groups are run by your branch's admins (whom you know) or super admins.
+  if (actor === UNKNOWN_PERSON && (n.kind === "added_to_group" || n.kind === "permissions_changed")) actor = SCHOOL_OFFICE;
   const item = n.issue_title ? quote(n.issue_title) : n.issue_key ?? t("an item");
   const p = (n.payload ?? {}) as Record<string, unknown>;
   const dueWhen = typeof p.sla_due_at === "string" ? formatWhen(p.sla_due_at) : null;
@@ -29,13 +33,14 @@ export function describeNotification(n: Notification, nameOf: (id?: string | nul
   const due = dueWhen ? t(" · due {when}", { when: dueWhen }) : "";
   const starts = startWhen ? ` · ${startWhen}` : "";
   const status = typeof p.status === "string" ? workStatusLabel[p.status as keyof typeof workStatusLabel] : undefined;
+  const group = typeof p.group_name === "string" ? quote(p.group_name) : undefined;
 
   let sentence: string;
   let suffix = "";
   let tone: NotificationText["tone"] = "info";
   switch (n.kind) {
     case "assigned":
-      sentence = t("{actor} gave you {item}");
+      sentence = p.passed_by ? t("{actor} passed {item} on to you") : t("{actor} gave you {item}");
       suffix = due;
       break;
     case "unassigned":
@@ -89,10 +94,22 @@ export function describeNotification(n: Notification, nameOf: (id?: string | nul
       tone = "danger";
       break;
     case "added_to_group":
-      sentence = actor ? t("{actor} added you to a group") : t("Added you to a group");
+      sentence = group
+        ? actor
+          ? t("{actor} added you to {group}", { group })
+          : t("You were added to {group}", { group })
+        : actor
+          ? t("{actor} added you to a group")
+          : t("Added you to a group");
       break;
     case "permissions_changed":
-      sentence = t("{actor} changed what a group you're in can do");
+      // Sent to branch admins: a member joined or left a group, or a group's
+      // permissions changed (one notice per save).
+      if (typeof p.user_id === "string" && group) {
+        sentence = p.removed
+          ? t("{actor} removed {person} from {group}", { person: nameOf(p.user_id), group })
+          : t("{actor} added {person} to {group}", { person: nameOf(p.user_id), group });
+      } else sentence = group ? t("{actor} changed what {group} can do", { group }) : t("{actor} changed a group's permissions");
       break;
     default:
       sentence = t("Update on {item}");

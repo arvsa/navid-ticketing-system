@@ -34,7 +34,7 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
 
    | Account | Role |
    |---|---|
-   | `superadmin@demo.school` | Super admin (all branches) |
+   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
    | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
    | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
 
@@ -95,7 +95,7 @@ The main endpoints:
 | Events | `GET /calendar?from=...&to=...`, `PUT /events/{id}/rsvp` |
 | Inbox | `GET /notifications`, `GET /notifications/unread-count` |
 | Overview | `GET /dashboard`, `GET /exports?branch_ids=...` (Excel) |
-| People | `GET /branches`, `GET /branches/{id}/members`, `GET /branches/{id}/groups` |
+| People | `GET /branches`, `GET /branches/{id}/members`, `GET /branches/{id}/groups`, `POST /branches/{id}/members/import` (Excel or CSV) |
 
 ## Making requests
 

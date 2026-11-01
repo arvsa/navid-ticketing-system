@@ -62,12 +62,12 @@ pub async fn load_user(db: &PgPool, user_id: Uuid) -> AppResult<Option<UserFacts
 #[derive(Debug, Clone)]
 pub struct IssueFacts {
     pub id: Uuid,
-    /// `None` = cross-branch (super admin) issue.
+    /// `None` = school-wide issue, sent to other branches by a branch admin
+    /// or a holder of `issue.target_other_branches` (or by a super admin).
     pub branch_id: Option<Uuid>,
     pub issue_type: IssueType,
     pub is_private: bool,
     pub created_by: Uuid,
-    pub requires_super_admin_approval: bool,
     /// Distinct branches of the issue's active targets.
     pub target_branch_ids: Vec<Uuid>,
     /// The actor is a user target, a current member of a group target, a
@@ -91,7 +91,7 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
     let my_branches: Vec<Uuid> = actor.branches.keys().copied().collect();
     let row = sqlx::query!(
         r#"
-        SELECT i.id, i.branch_id, ty.code AS issue_type, i.is_private, i.created_by, i.requires_super_admin_approval,
+        SELECT i.id, i.branch_id, ty.code AS issue_type, i.is_private, i.created_by,
                ARRAY(SELECT DISTINCT t.branch_id FROM issue_target t
                      WHERE t.issue_id = i.id AND t.removed_at IS NULL) AS "target_branch_ids!",
                (EXISTS (SELECT 1 FROM issue_target t
@@ -122,7 +122,6 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         issue_type,
         is_private: r.is_private,
         created_by: r.created_by,
-        requires_super_admin_approval: r.requires_super_admin_approval,
         target_branch_ids: r.target_branch_ids,
         actor_targeted: r.targeted,
     }))
@@ -134,6 +133,9 @@ pub struct WorkItemFacts {
     pub id: Uuid,
     pub branch_id: Uuid,
     pub assignee_id: Option<Uuid>,
+    /// Who reviews the holder's hand-in when the work was passed along: one
+    /// level up the chain. `None`: the item's usual approvers.
+    pub reviewer: Option<Uuid>,
     /// The actor belongs to the item's target: is the user target, a current
     /// member of the target group, or a member of the target branch.
     pub actor_in_target: bool,
@@ -144,7 +146,7 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
     let my_branches: Vec<Uuid> = actor.branches.keys().copied().collect();
     let Some(row) = sqlx::query!(
         r#"
-        SELECT w.id, w.issue_id, w.branch_id, w.assignee_id,
+        SELECT w.id, w.issue_id, w.branch_id, w.assignee_id, work_reviewer(w.handoff_chain, w.assignee_id) AS reviewer,
                -- coalesce: `NULL IN (...)` is NULL, not false, for non-group targets
                coalesce(t.removed_at IS NULL AND (
                     (t.user_id = $2 AND t.branch_id = ANY($3))
@@ -168,6 +170,7 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
         id: row.id,
         branch_id: row.branch_id,
         assignee_id: row.assignee_id,
+        reviewer: row.reviewer,
         actor_in_target: row.in_target,
         issue,
     }))

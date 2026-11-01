@@ -2,18 +2,20 @@
 import { useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Building2, Search, User, Users, X } from "lucide-react";
-import type { Group } from "@/api/types";
+import type { BranchPerson, Group } from "@/api/types";
 import type { Person } from "@/people/usePeople";
 import { Avatar } from "./badges";
 import { cx, inputClass } from "./ui";
 import { localeTag, quote, t } from "@/i18n";
 
 export type Recipient =
-  | { kind: "user"; id: string; branchId: string; label: string }
+  /** `note`: the person's branch, on school-wide items. */
+  | { kind: "user"; id: string; branchId: string; label: string; note?: string }
   | { kind: "group"; id: string; branchId: string; label: string; count: number }
   | { kind: "branch"; id: string; branchId: string; label: string };
 
-export const recipientKey = (r: Recipient) => `${r.kind}:${r.id}`;
+// With the branch: on a school-wide item someone in two branches can be picked in either.
+export const recipientKey = (r: Recipient) => `${r.kind}:${r.id}:${r.branchId}`;
 
 export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => void }) {
   const Icon = r.kind === "user" ? User : r.kind === "group" ? Users : Building2;
@@ -22,7 +24,7 @@ export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => 
       <Icon className="size-4 text-text-2" aria-hidden />
       <b>{r.label}</b>
       <span className="text-text-3">
-        {r.kind === "group" ? t("group · {n}", { n: r.count }) : r.kind === "branch" ? t("whole branch") : ""}
+        {r.kind === "group" ? t("group · {n}", { n: r.count }) : r.kind === "branch" ? t("whole branch") : (r.note ?? "")}
       </span>
       {onRemove && (
         <button type="button" onClick={onRemove} aria-label={t("Remove {name}", { name: r.label })} className="ms-1 text-text-3 hover:text-danger">
@@ -33,13 +35,16 @@ export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => 
   );
 }
 
-/** Text field with chips; typing shows matching people, groups (and branches). */
+/** Text field with chips; typing shows matching people, groups (and branches).
+ * School-wide items (`branchId` null) take whole `branches` and people of any
+ * branch (`crossPeople`). */
 export function RecipientPicker({
   value,
   onChange,
   people,
   groups,
   branches,
+  crossPeople,
   branchId,
   placeholder = t("Add a person or group"),
 }: {
@@ -48,6 +53,7 @@ export function RecipientPicker({
   people: Person[];
   groups: Group[];
   branches?: { id: string; name: string }[];
+  crossPeople?: BranchPerson[];
   branchId: string | null;
   placeholder?: string;
 }) {
@@ -67,8 +73,11 @@ export function RecipientPicker({
         if (p.is_active && match(`${p.first_name} ${p.last_name} ${p.email}`))
           out.push({ kind: "user", id: p.id, branchId, label: `${p.first_name} ${p.last_name}` });
     }
+    for (const p of crossPeople ?? [])
+      if (match(`${p.first_name} ${p.last_name} ${p.branch_name}`))
+        out.push({ kind: "user", id: p.user_id, branchId: p.branch_id, label: `${p.first_name} ${p.last_name}`, note: p.branch_name });
     return out.filter((o) => !chosen.has(recipientKey(o))).slice(0, 40);
-  }, [q, people, groups, branches, branchId, chosen]);
+  }, [q, people, groups, branches, crossPeople, branchId, chosen]);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -129,7 +138,7 @@ export function RecipientPicker({
                   <Building2 className="size-5 text-text-2" />
                 )}
                 <span className="flex-1">{o.label}</span>
-                <span className="text-[13px] text-text-3">{o.kind === "group" ? t("{n} people", { n: o.count }) : o.kind === "branch" ? t("Whole branch") : t("Person")}</span>
+                <span className="text-[13px] text-text-3">{o.kind === "group" ? t("{n} people", { n: o.count }) : o.kind === "branch" ? t("Whole branch") : (o.note ?? t("Person"))}</span>
               </button>
             ))
           )}

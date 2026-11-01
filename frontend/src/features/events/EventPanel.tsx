@@ -11,11 +11,11 @@ import { rsvpLabel } from "@/lib/labels";
 import { targetName, useGroupDirectory } from "@/lib/items";
 import { usePeople } from "@/people/usePeople";
 import { RsvpButtons } from "./RsvpButtons";
-import { localeTag, num, quote, t, tn } from "@/i18n";
+import { PersonName, PersonPopover } from "@/people/PersonPopover";
+import { localeTag, num, quote, t, tn, tx } from "@/i18n";
 
 export function EventHeader({ issue }: { issue: IssueDetail }) {
   const { zoneOf } = useBranch();
-  const people = usePeople();
   const ev = issue.event!;
   const zone = zoneOf(issue.branch_id);
   const suffix = zoneSuffix(zone);
@@ -41,7 +41,7 @@ export function EventHeader({ issue }: { issue: IssueDetail }) {
               <MapPin className="size-5" aria-hidden /> {ev.location}
             </span>
           )}
-          <span>{t("Organised by {name}", { name: people.short(issue.created_by) })}</span>
+          <span>{tx("Organised by {name}", { name: <PersonName id={issue.created_by} /> })}</span>
         </div>
       </div>
     </Card>
@@ -116,10 +116,10 @@ export function WhosComing({ issue }: { issue: IssueDetail }) {
       {going.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {going.slice(0, 4).map((r) => (
-            <span key={r.user_id} className="inline-flex items-center gap-2 rounded-full bg-sunken py-1 pe-4 ps-1">
+            <PersonPopover key={r.user_id} id={r.user_id} className="inline-flex items-center gap-2 rounded-full bg-sunken py-1 pe-4 ps-1 hover:no-underline">
               <Avatar first={r.first_name} last={r.last_name} id={r.user_id} size={32} />
               {r.first_name} {r.last_name[0]}.
-            </span>
+            </PersonPopover>
           ))}
           <Button className="rounded-full" onClick={() => setAll(true)}>
             {t("See all {n}", { n: total })}
@@ -146,10 +146,14 @@ function RsvpList({ items }: { items: Rsvp[] }) {
         .sort((a, b) => order[a.response] - order[b.response] || a.first_name.localeCompare(b.first_name, localeTag))
         .map((r) => (
           <li key={r.user_id} className="flex items-start gap-3 py-3">
-            <Avatar first={r.first_name} last={r.last_name} id={r.user_id} size={32} />
+            <PersonPopover id={r.user_id} className="shrink-0 rounded-full">
+              <Avatar first={r.first_name} last={r.last_name} id={r.user_id} size={32} />
+            </PersonPopover>
             <div className="min-w-0 flex-1">
               <div>
-                {r.first_name} {r.last_name}
+                <PersonPopover id={r.user_id}>
+                  {r.first_name} {r.last_name}
+                </PersonPopover>
               </div>
               {r.note && <div className="text-[14px] text-text-2">{quote(r.note)}</div>}
             </div>

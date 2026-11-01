@@ -65,6 +65,8 @@ pub enum Permission {
     IssueClose,
     IssueSetPrivate,
     IssueTarget,
+    /// Send school-wide items to people in other branches.
+    IssueTargetOtherBranches,
     WorkItemUpdate,
     WorkItemAssign,
     WorkItemApprove,
@@ -79,7 +81,7 @@ pub enum Permission {
 }
 
 impl Permission {
-    pub const ALL: [Permission; 17] = [
+    pub const ALL: [Permission; 18] = [
         Self::IssueRead,
         Self::IssueReadPrivate,
         Self::IssueCreate,
@@ -87,6 +89,7 @@ impl Permission {
         Self::IssueClose,
         Self::IssueSetPrivate,
         Self::IssueTarget,
+        Self::IssueTargetOtherBranches,
         Self::WorkItemUpdate,
         Self::WorkItemAssign,
         Self::WorkItemApprove,
@@ -108,6 +111,7 @@ impl Permission {
             Self::IssueClose => "issue.close",
             Self::IssueSetPrivate => "issue.set_private",
             Self::IssueTarget => "issue.target",
+            Self::IssueTargetOtherBranches => "issue.target_other_branches",
             Self::WorkItemUpdate => "work_item.update",
             Self::WorkItemAssign => "work_item.assign",
             Self::WorkItemApprove => "work_item.approve",
@@ -137,6 +141,7 @@ impl Permission {
                 | IssueClose
                 | IssueSetPrivate
                 | IssueTarget
+                | IssueTargetOtherBranches
                 | WorkItemUpdate
                 | WorkItemAssign
                 | WorkItemApprove
@@ -150,8 +155,16 @@ impl Permission {
             IssueRead => &[Own, Targeted, Branch],
             IssueEdit | IssueClose | IssueSetPrivate | IssueTarget => &[Own, Branch],
             WorkItemUpdate | WorkItemAssign | CommentCreate => &[Targeted, Branch],
-            IssueReadPrivate | IssueCreate | WorkItemApprove | CommentInternal | CommentModerate | MemberView
-            | MemberManage | DashboardBranch | ExportRun => &[Branch],
+            IssueReadPrivate
+            | IssueCreate
+            | IssueTargetOtherBranches
+            | WorkItemApprove
+            | CommentInternal
+            | CommentModerate
+            | MemberView
+            | MemberManage
+            | DashboardBranch
+            | ExportRun => &[Branch],
         }
     }
 }

@@ -29,8 +29,8 @@ function write(key: string, value: string) {
 function detectLang(): Lang {
   const saved = read(LANG_KEY);
   if (saved === "en" || saved === "fa") return saved;
-  if (typeof navigator !== "undefined" && /^fa\b/i.test(navigator.language)) return "fa";
-  return "en";
+  // Farsi unless someone picked English.
+  return "fa";
 }
 
 export const lang: Lang = detectLang();

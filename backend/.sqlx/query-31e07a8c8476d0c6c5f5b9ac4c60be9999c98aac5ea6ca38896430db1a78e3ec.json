@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM branch_membership m JOIN app_user u ON u.id = m.user_id\n                          WHERE m.user_id = $1 AND m.branch_id = $2 AND m.left_at IS NULL AND u.is_active) AS \"ok!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "31e07a8c8476d0c6c5f5b9ac4c60be9999c98aac5ea6ca38896430db1a78e3ec"
+}

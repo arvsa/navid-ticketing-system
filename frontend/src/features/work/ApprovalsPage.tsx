@@ -9,10 +9,11 @@ import type { WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar, TypeBadge } from "@/components/badges";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, LoadingRows, PageHeader } from "@/components/ui";
-import { canApprove } from "@/lib/can";
+import { waitsHere } from "@/lib/can";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
 import { useViewer } from "@/lib/useViewer";
+import { PersonPopover } from "@/people/PersonPopover";
 import { usePeople } from "@/people/usePeople";
 import { useApproveWithUndo } from "./approve";
 import { RowLink } from "@/components/rows";
@@ -23,7 +24,8 @@ export function ApprovalsPage() {
   const people = usePeople();
   const approve = useApproveWithUndo();
   const { branchId, branch, branchById, isAll } = useBranch();
-  const waiting = useWorkItems({ status: "pending_approval", branch_id: branchId });
+  // Across branches: what waits for you can be elsewhere (see waitsHere).
+  const waiting = useWorkItems({ status: "pending_approval" });
   const raw = (waiting.data ?? []).filter((w) => w.assignee_id !== viewer.me.user.id);
   const issues = useIssuesById(raw.map((w) => w.issue_id));
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -32,7 +34,7 @@ export function ApprovalsPage() {
 
   const mine = raw.filter((w) => {
     const issue = issues.map.get(w.issue_id);
-    return issue ? canApprove(viewer, issue, w) && !hidden.has(w.id) : false;
+    return issue ? waitsHere(viewer, issue, w, branchId) && !hidden.has(w.id) : false;
   });
   const groups = new Map<string, WorkItem[]>();
   for (const w of [...mine].sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""))) {
@@ -99,7 +101,11 @@ export function ApprovalsPage() {
                         <RowLink
                           className="w-auto min-w-0 flex-1"
                           link={{ to: "/items/$number", params: { number: n }, search: { review: w.id } }}
-                          leading={<Avatar first={p?.first_name} last={p?.last_name} id={w.assignee_id ?? ""} size={40} />}
+                          aside={
+                            <PersonPopover id={w.assignee_id} className="rounded-full">
+                              <Avatar first={p?.first_name} last={p?.last_name} id={w.assignee_id ?? ""} size={40} />
+                            </PersonPopover>
+                          }
                           title={
                             <>
                               {people.name(w.assignee_id)}

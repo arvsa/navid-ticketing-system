@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM group_permission gp WHERE gp.id = $1 AND gp.group_id = $2\n           RETURNING gp.permission_key, (SELECT code FROM issue_type WHERE id = gp.issue_type_id) AS \"issue_type?\",\n                     gp.scope AS \"scope: Scope\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "permission_key"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope: Scope",
+        "type_info": {
+          "Custom": {
+            "name": "permission_scope",
+            "kind": {
+              "Enum": [
+                "own",
+                "targeted",
+                "branch"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "group_permission",
+            "name": "scope"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "3c3227f4ed1aa33e085e05922636b82aca0639a311dcf5764aa1099bab03093f"
+}

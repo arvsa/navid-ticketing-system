@@ -22,7 +22,7 @@ Screens follow the designs in `../School Ticketing UI-png` and the behaviour in
 
 3. Open http://localhost:5173 and sign in with a demo account, password
    `demo-password`:
-   - `superadmin@demo.school` — super admin, sees the whole school
+   - `superadmin@demo.school` — super admin, runs the app from the Setup page
    - `admin@north.demo.school` — North Campus admin
    - `member4@north.demo.school` — a staff member
 

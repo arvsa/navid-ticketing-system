@@ -2,13 +2,14 @@
 
 [package]
 name = "backend"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 default-run = "backend"
 
 [dependencies]
 argon2 = "0.6.0"
 axum = { version = "0.8.9", features = ["macros", "multipart"] }
+calamine = "0.36.1"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 rand = "0.10.3"
@@ -31,7 +32,6 @@ utoipa = { version = "6.0.0", features = ["axum_extras", "uuid", "time"] }
 uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
-calamine = "0.36.1"
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
 tokio = { version = "1.53.3", features = ["full"] }

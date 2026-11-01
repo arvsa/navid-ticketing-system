@@ -43,6 +43,12 @@ pub enum Action<'a> {
     },
     /// Set or clear `app_user.is_super_admin`.
     SetSuperAdmin,
+    /// Change the app's settings (the school's name).
+    EditSettings,
+    /// The whole-school analytics.
+    ViewAnalytics,
+    /// Everyone's names and emails, for chosen branches or all.
+    ExportPeople,
     ViewBranch {
         branch_id: Uuid,
     },
@@ -56,6 +62,9 @@ pub enum Action<'a> {
     ManageGroups {
         branch_id: Uuid,
     },
+    /// List, create and change school-wide groups (no branch), their members
+    /// and grants.
+    ManageSchoolGroups,
     /// A member's effective permissions, with the group each comes from.
     ViewEffectivePermissions {
         branch_id: Uuid,
@@ -93,6 +102,10 @@ pub enum Action<'a> {
     SetUserActive {
         target: &'a UserFacts,
     },
+
+    /// List the people of every branch (names only), to address a
+    /// school-wide item to them.
+    FindPeopleInOtherBranches,
 
     // -- issues ----------------------------------------------------------------
     CreateIssue {
@@ -149,6 +162,14 @@ pub enum Action<'a> {
     CancelWorkItem {
         item: &'a WorkItemFacts,
     },
+    /// Pass work you hold on to someone else in its branch.
+    PassWorkItem {
+        item: &'a WorkItemFacts,
+    },
+    /// Pass a question you were asked on to someone else.
+    PassTicket {
+        issue: &'a IssueFacts,
+    },
 
     // -- dashboard and export ------------------------------------------------
     ViewBranchDashboard {
@@ -171,8 +192,10 @@ impl Action<'_> {
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
-            | ModerateComments { issue } => Some(issue),
-            UpdateWorkItem { item }
+            | ModerateComments { issue }
+            | PassTicket { issue } => Some(issue),
+            PassWorkItem { item }
+            | UpdateWorkItem { item }
             | ClaimWorkItem { item }
             | AssignWorkItem { item }
             | ApproveWorkItem { item }
@@ -185,13 +208,15 @@ impl Action<'_> {
     fn is_super_admin_only(&self) -> bool {
         use Action::*;
         match self {
-            CreateBranch | EditBranch { .. } | SetBranchAdmin { .. } | SetSuperAdmin => true,
-            CreateIssue { branch_id, targets_whole_branches, .. } => branch_id.is_none() || *targets_whole_branches,
-            EditIssue { issue } | CloseIssue { issue } | SetIssuePrivate { issue } => {
-                issue.requires_super_admin_approval
-            }
-            TargetIssue { issue, whole_branch } => issue.requires_super_admin_approval || *whole_branch,
-            ApproveWorkItem { item } | CancelWorkItem { item } => item.issue.requires_super_admin_approval,
+            CreateBranch
+            | EditBranch { .. }
+            | SetBranchAdmin { .. }
+            | SetSuperAdmin
+            | ManageSchoolGroups
+            | EditSettings
+            | ViewAnalytics
+            | ExportPeople
+            | ExportPeople => true,
             Export { branch_ids } => branch_ids.len() != 1,
             // A super admin's account is only ever touched by super admins.
             AddMember { existing: Some(target), .. } => target.is_super_admin,
@@ -220,7 +245,14 @@ impl Action<'_> {
     fn branches(&self) -> Vec<Uuid> {
         use Action::*;
         match self {
-            CreateBranch | SetSuperAdmin => vec![],
+            CreateBranch
+            | SetSuperAdmin
+            | ManageSchoolGroups
+            | FindPeopleInOtherBranches
+            | EditSettings
+            | ViewAnalytics
+            | ExportPeople
+            | ExportPeople => vec![],
             EditBranch { branch_id }
             | SetBranchAdmin { branch_id }
             | ViewBranch { branch_id }
@@ -239,7 +271,8 @@ impl Action<'_> {
             | ClaimWorkItem { item }
             | AssignWorkItem { item }
             | ApproveWorkItem { item }
-            | CancelWorkItem { item } => vec![item.branch_id],
+            | CancelWorkItem { item }
+            | PassWorkItem { item } => vec![item.branch_id],
             Export { branch_ids } => branch_ids.to_vec(),
             ReadIssue { issue }
             | EditIssue { issue }
@@ -248,7 +281,8 @@ impl Action<'_> {
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
-            | ModerateComments { issue } => issue.branches(),
+            | ModerateComments { issue }
+            | PassTicket { issue } => issue.branches(),
         }
     }
 }
@@ -281,10 +315,62 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
     if action.is_super_admin_only() {
         return Err(Forbidden);
     }
+    // 2b. Sending to other branches or whole branches, or changing who a
+    // school-wide item goes to.
+    if let Some(allowed) = across_branches(actor, &action) {
+        return if allowed { Ok(()) } else { Err(Forbidden) };
+    }
+    // 2c. Passing on what you hold: work you're assigned, or a question you were asked.
+    match action {
+        Action::PassWorkItem { item } => {
+            return if item.assignee_id == Some(actor.user_id) { Ok(()) } else { Err(Forbidden) };
+        }
+        Action::PassTicket { issue } => {
+            return if issue.actor_targeted && issue.issue_type == IssueType::Ticket { Ok(()) } else { Err(Forbidden) };
+        }
+        _ => {}
+    }
+    // 2d. Work passed along is reviewed one level up the chain: by whoever
+    // passed it on (or the branch's admins), before the sender sees it.
+    if let Action::ApproveWorkItem { item } = action {
+        if let Some(reviewer) = item.reviewer {
+            let allowed = reviewer == actor.user_id || actor.is_admin_of(item.branch_id);
+            return if allowed { Ok(()) } else { Err(Forbidden) };
+        }
+    }
+    // 2e. The sender approves (or cancels) the work on what they sent.
+    if let Action::ApproveWorkItem { item } | Action::CancelWorkItem { item } = action {
+        if item.issue.created_by == actor.user_id {
+            return Ok(());
+        }
+    }
 
     // 3. The resource's branch(es). Not a member of any: it isn't visible.
+    let mut ids = action.branches();
+    // A school-wide item: its sender works on the item itself under the rules
+    // of their own branches, and only they edit, close or hide it (it spans
+    // branches the receiving admins don't run). Work items still follow the
+    // branch they're in.
+    if let Some(issue) = action.issue() {
+        let issue_level = !matches!(
+            action,
+            Action::UpdateWorkItem { .. }
+                | Action::ClaimWorkItem { .. }
+                | Action::AssignWorkItem { .. }
+                | Action::ApproveWorkItem { .. }
+                | Action::CancelWorkItem { .. }
+        );
+        if issue_level && issue.branch_id.is_none() {
+            if matches!(action, Action::EditIssue { .. } | Action::CloseIssue { .. } | Action::SetIssuePrivate { .. }) {
+                ids.clear();
+            }
+            if issue.created_by == actor.user_id {
+                ids.extend(actor.branches.keys().copied());
+            }
+        }
+    }
     let branches: Vec<(Uuid, &BranchAccess)> =
-        action.branches().into_iter().filter_map(|b| actor.branch(b).map(|access| (b, access))).collect();
+        ids.into_iter().filter_map(|b| actor.branch(b).map(|access| (b, access))).collect();
     if branches.is_empty() {
         return Err(if action.issue().is_some() { Forbidden } else { NotFound });
     }
@@ -305,6 +391,50 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
     }
     // 7. Otherwise deny.
     Err(Forbidden)
+}
+
+/// Sending to other branches, or to a whole branch: branch admins always
+/// may; others need `issue.target_other_branches` (for the kind, plus the
+/// right to create it) in one of their branches. Only its sender changes who
+/// a school-wide item goes to. `None` for every other action, including a
+/// branch item going to people or groups of its own branch.
+fn across_branches(actor: &Actor, action: &Action<'_>) -> Option<bool> {
+    let branch_only = |s: Scope| s == Scope::Branch;
+    let sends_across = |access: &BranchAccess, issue_type: Option<IssueType>| {
+        access.is_admin
+            || match issue_type {
+                Some(ty) => has_grant(access, Permission::IssueTargetOtherBranches, Some(ty), branch_only),
+                None => access
+                    .grants
+                    .iter()
+                    .any(|g| g.permission == Permission::IssueTargetOtherBranches && g.scope == Scope::Branch),
+            }
+    };
+    let may_send = |issue_type: IssueType| {
+        actor.branches.values().any(|access| {
+            sends_across(access, Some(issue_type))
+                && (access.is_admin || has_grant(access, Permission::IssueCreate, Some(issue_type), branch_only))
+        })
+    };
+    // A branch item going to its whole branch: decided by the branch's rules
+    // once the sender may send to whole branches there.
+    let whole_own_branch = |branch_id: Uuid, issue_type: IssueType| match actor.branch(branch_id) {
+        Some(access) if !sends_across(access, Some(issue_type)) => Some(false),
+        // Not a member: the branch rules answer (not found).
+        _ => None,
+    };
+    match *action {
+        Action::FindPeopleInOtherBranches => Some(actor.branches.values().any(|access| sends_across(access, None))),
+        Action::CreateIssue { branch_id: None, issue_type, .. } => Some(may_send(issue_type)),
+        Action::TargetIssue { issue, .. } if issue.branch_id.is_none() => {
+            Some(issue.created_by == actor.user_id && may_send(issue.issue_type))
+        }
+        Action::CreateIssue { branch_id: Some(b), issue_type, targets_whole_branches: true } => {
+            whole_own_branch(b, issue_type)
+        }
+        Action::TargetIssue { issue, whole_branch: true } => whole_own_branch(issue.branch_id?, issue.issue_type),
+        _ => None,
+    }
 }
 
 /// Readability of an issue. Must agree with the SQL `issue_visible`.
@@ -374,9 +504,16 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         | EditBranch { .. }
         | SetBranchAdmin { .. }
         | SetSuperAdmin
+        | EditSettings
+        | ViewAnalytics
+        | ExportPeople
         | ManageGroups { .. }
+        | ManageSchoolGroups
         | ReactivateMember { .. }
         | ReadIssue { .. }
+        | PassWorkItem { .. }
+        | PassTicket { .. }
+        | FindPeopleInOtherBranches
         | CancelWorkItem { .. } => {
             let _ = branch_id;
             false
@@ -509,14 +646,20 @@ mod tests {
             issue_type: ty,
             is_private: false,
             created_by,
-            requires_super_admin_approval: false,
             target_branch_ids: vec![A],
             actor_targeted: false,
         }
     }
 
     fn item(issue: IssueFacts, assignee: Option<Uuid>, actor_in_target: bool) -> WorkItemFacts {
-        WorkItemFacts { id: Uuid::from_u128(0x77), branch_id: A, assignee_id: assignee, actor_in_target, issue }
+        WorkItemFacts {
+            id: Uuid::from_u128(0x77),
+            branch_id: A,
+            assignee_id: assignee,
+            reviewer: None,
+            actor_in_target,
+            issue,
+        }
     }
 
     use AuthzError::*;
@@ -547,40 +690,40 @@ mod tests {
     }
 
     #[test]
-    fn cross_branch_issues_and_branch_targets_are_super_admin_only() {
+    fn admins_send_to_other_branches_and_whole_branches() {
         let cross =
             Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
-        let branch_target =
+        let own_branch =
             Action::CreateIssue { branch_id: Some(A), issue_type: IssueType::Action, targets_whole_branches: true };
-        for action in [cross, branch_target] {
+        for action in [cross, own_branch] {
             ok(&super_admin(), action);
-            denied(&admin(1), action, Forbidden);
-            denied(&admin_like(2), action, Forbidden);
+            ok(&admin(1), action);
+            // Holders of the grant may; creating alone isn't enough.
+            ok(&admin_like(2), action);
+            denied(
+                &actor(3, &[(A, false, vec![grant(Permission::IssueCreate, None, Scope::Branch)])]),
+                action,
+                Forbidden,
+            );
         }
+        // A whole branch elsewhere needs no admin role there.
+        let other_branch =
+            Action::CreateIssue { branch_id: Some(B), issue_type: IssueType::Action, targets_whole_branches: true };
+        denied(&admin(1), other_branch, NotFound);
     }
 
     #[test]
-    fn super_admin_issues_are_edited_closed_retargeted_and_approved_by_super_admins_only() {
-        let mut sa_issue = issue(uid(0), IssueType::Action);
-        sa_issue.requires_super_admin_approval = true;
-        let work = item(sa_issue.clone(), Some(uid(3)), true);
-
-        for a in [admin(1), admin_like(2)] {
-            denied(&a, Action::EditIssue { issue: &sa_issue }, Forbidden);
-            denied(&a, Action::CloseIssue { issue: &sa_issue }, Forbidden);
-            denied(&a, Action::TargetIssue { issue: &sa_issue, whole_branch: false }, Forbidden);
-            denied(&a, Action::SetIssuePrivate { issue: &sa_issue }, Forbidden);
-            denied(&a, Action::ApproveWorkItem { item: &work }, Forbidden);
-        }
-        ok(&super_admin(), Action::EditIssue { issue: &sa_issue });
-        ok(&super_admin(), Action::ApproveWorkItem { item: &work });
-
-        // Branch admins may still read, comment, assign and update their branch's work.
-        let a = admin(1);
-        ok(&a, Action::ReadIssue { issue: &sa_issue });
-        ok(&a, Action::CommentOnIssue { issue: &sa_issue });
-        ok(&a, Action::AssignWorkItem { item: &work });
-        ok(&a, Action::UpdateWorkItem { item: &work });
+    fn the_sender_approves_and_cancels_the_work_they_sent() {
+        let sent = issue(uid(1), IssueType::Action);
+        let work = item(sent.clone(), Some(uid(3)), true);
+        let sender = member(1);
+        ok(&sender, Action::ApproveWorkItem { item: &work });
+        ok(&sender, Action::CancelWorkItem { item: &work });
+        // ...but not their own work, and nobody else's item.
+        let own = item(sent, Some(uid(1)), true);
+        denied(&sender, Action::ApproveWorkItem { item: &own }, Forbidden);
+        let theirs = item(issue(uid(9), IssueType::Action), Some(uid(3)), true);
+        denied(&sender, Action::ApproveWorkItem { item: &theirs }, Forbidden);
     }
 
     #[test]
@@ -774,9 +917,9 @@ mod tests {
         denied(&m, Action::TargetIssue { issue: &mine, whole_branch: false }, Forbidden);
         let my_ticket = issue(m.user_id, IssueType::Ticket);
         ok(&m, Action::TargetIssue { issue: &my_ticket, whole_branch: false });
-        // Whole-branch targets: super admins only, even for admins.
-        denied(&admin(5), Action::TargetIssue { issue: &my_ticket, whole_branch: true }, Forbidden);
-        ok(&super_admin(), Action::TargetIssue { issue: &my_ticket, whole_branch: true });
+        // Whole-branch targets need the cross-branch permission (admins have it).
+        denied(&m, Action::TargetIssue { issue: &my_ticket, whole_branch: true }, Forbidden);
+        ok(&admin(5), Action::TargetIssue { issue: &my_ticket, whole_branch: true });
         denied(&m, Action::SetIssuePrivate { issue: &my_ticket }, Forbidden);
     }
 
@@ -821,13 +964,71 @@ mod tests {
     }
 
     #[test]
+    fn school_wide_groups_are_super_admin_only() {
+        ok(&super_admin(), Action::ManageSchoolGroups);
+        denied(&admin(1), Action::ManageSchoolGroups, Forbidden);
+        denied(&admin_like(2), Action::ManageSchoolGroups, Forbidden);
+    }
+
+    #[test]
+    fn school_wide_items_need_admin_or_target_other_branches() {
+        use IssueType::{Event, Report};
+        let create = |ty| Action::CreateIssue { branch_id: None, issue_type: ty, targets_whole_branches: false };
+        let mut grants = baseline();
+        grants.push(grant(Permission::IssueTargetOtherBranches, Some(Report), Scope::Branch));
+        let sender = actor(1, &[(A, false, grants)]);
+        ok(&sender, create(Report));
+        // Needs the grant for that kind, and the right to create it.
+        denied(&sender, create(Event), Forbidden);
+        let mut no_create = vec![grant(Permission::IssueTargetOtherBranches, None, Scope::Branch)];
+        no_create.push(grant(Permission::IssueRead, None, Scope::Branch));
+        denied(&actor(2, &[(A, false, no_create)]), create(IssueType::Action), Forbidden);
+        // Admins always may.
+        ok(&admin(3), create(Report));
+        ok(&admin(3), Action::FindPeopleInOtherBranches);
+        ok(&sender, Action::FindPeopleInOtherBranches);
+        ok(&super_admin(), Action::FindPeopleInOtherBranches);
+        denied(&member(4), create(Report), Forbidden);
+        denied(&member(4), Action::FindPeopleInOtherBranches, Forbidden);
+        // Whole branches too, with the grant.
+        let whole = Action::CreateIssue { branch_id: None, issue_type: Report, targets_whole_branches: true };
+        ok(&sender, whole);
+    }
+
+    #[test]
+    fn the_sender_of_a_school_wide_item_keeps_their_own_branch_rules() {
+        let mut grants = baseline();
+        grants.push(grant(Permission::IssueTargetOtherBranches, None, Scope::Branch));
+        let sender = actor(1, &[(A, false, grants.clone())]);
+        let sent = IssueFacts { branch_id: None, target_branch_ids: vec![B], ..issue(uid(1), IssueType::Report) };
+        ok(&sender, Action::ReadIssue { issue: &sent });
+        ok(&sender, Action::EditIssue { issue: &sent });
+        ok(&sender, Action::CloseIssue { issue: &sent });
+        ok(&sender, Action::CommentOnIssue { issue: &sent });
+        ok(&sender, Action::TargetIssue { issue: &sent, whole_branch: false });
+        ok(&sender, Action::TargetIssue { issue: &sent, whole_branch: true });
+        // The sender approves the work, wherever it is.
+        let work = WorkItemFacts { branch_id: B, ..item(sent.clone(), Some(uid(7)), false) };
+        ok(&sender, Action::ApproveWorkItem { item: &work });
+        // Another holder of the grant can't change someone else's recipients.
+        let other = actor(2, &[(A, true, grants)]);
+        let mut targeted = sent.clone();
+        targeted.actor_targeted = true;
+        denied(&other, Action::TargetIssue { issue: &targeted, whole_branch: false }, Forbidden);
+        // Admins of the receiving branch read, comment and approve their part,
+        // but the item itself is the sender's.
+        let admin_b = actor(3, &[(B, true, vec![])]);
+        ok(&admin_b, Action::ReadIssue { issue: &sent });
+        ok(&admin_b, Action::CommentOnIssue { issue: &sent });
+        ok(&admin_b, Action::ApproveWorkItem { item: &work });
+        denied(&admin_b, Action::TargetIssue { issue: &sent, whole_branch: false }, Forbidden);
+        denied(&admin_b, Action::EditIssue { issue: &sent }, Forbidden);
+        denied(&admin_b, Action::CloseIssue { issue: &sent }, Forbidden);
+    }
+
+    #[test]
     fn cross_branch_issues_use_every_targeted_branch() {
-        let cross = IssueFacts {
-            branch_id: None,
-            requires_super_admin_approval: true,
-            target_branch_ids: vec![A, B],
-            ..issue(uid(0), IssueType::Action)
-        };
+        let cross = IssueFacts { branch_id: None, target_branch_ids: vec![A, B], ..issue(uid(0), IssueType::Action) };
         let admin_b = actor(1, &[(B, true, vec![])]);
         ok(&admin_b, Action::ReadIssue { issue: &cross });
         ok(&admin_b, Action::CommentOnIssue { issue: &cross });
@@ -863,13 +1064,36 @@ mod tests {
     #[test]
     fn cancelling_work_directly_is_admin_only() {
         let i = issue(uid(9), IssueType::Action);
-        let w = item(i.clone(), Some(uid(8)), false);
+        let w = item(i, Some(uid(8)), false);
         ok(&admin(1), Action::CancelWorkItem { item: &w });
         denied(&admin_like(2), Action::CancelWorkItem { item: &w }, Forbidden);
-        let sa_issue = IssueFacts { requires_super_admin_approval: true, ..i };
-        let sa_item = item(sa_issue, Some(uid(8)), false);
-        denied(&admin(1), Action::CancelWorkItem { item: &sa_item }, Forbidden);
-        ok(&super_admin(), Action::CancelWorkItem { item: &sa_item });
+        ok(&super_admin(), Action::CancelWorkItem { item: &w });
+    }
+
+    #[test]
+    fn work_passed_along_is_reviewed_one_level_up() {
+        // Sent by uid(9); first given to the head (uid 4), who passed it to uid(5).
+        let sent = issue(uid(9), IssueType::Action);
+        let passed = WorkItemFacts { reviewer: Some(uid(4)), ..item(sent, Some(uid(5)), true) };
+        ok(&actor(4, &[(A, false, baseline())]), Action::ApproveWorkItem { item: &passed });
+        ok(&admin(1), Action::ApproveWorkItem { item: &passed });
+        // Not the sender or the branch's approvers yet: it isn't at the top.
+        denied(&member(9), Action::ApproveWorkItem { item: &passed }, Forbidden);
+        denied(&admin_like(2), Action::ApproveWorkItem { item: &passed }, Forbidden);
+        // Only the holder passes it on.
+        ok(&member(5), Action::PassWorkItem { item: &passed });
+        denied(&actor(4, &[(A, false, baseline())]), Action::PassWorkItem { item: &passed }, Forbidden);
+    }
+
+    #[test]
+    fn questions_are_passed_on_by_the_people_asked() {
+        let mut ticket = issue(uid(9), IssueType::Ticket);
+        ticket.actor_targeted = true;
+        ok(&member(1), Action::PassTicket { issue: &ticket });
+        let mut action = issue(uid(9), IssueType::Action);
+        action.actor_targeted = true;
+        denied(&member(1), Action::PassTicket { issue: &action }, Forbidden);
+        denied(&member(2), Action::PassTicket { issue: &issue(uid(9), IssueType::Ticket) }, Forbidden);
     }
 
     #[test]

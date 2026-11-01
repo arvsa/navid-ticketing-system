@@ -49,6 +49,8 @@ impl Actor {
 
         // Grants via groups, active groups only. group_member rows are removed
         // by trigger when a membership ends, so these are current branches.
+        // (School-wide groups are templates with no members; their copies
+        // are ordinary branch groups.)
         let grants = sqlx::query!(
             r#"
             SELECT gm.branch_id, gp.permission_key, t.code AS "issue_type?", gp.scope AS "scope: Scope"

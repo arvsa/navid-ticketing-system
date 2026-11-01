@@ -413,11 +413,22 @@ pub async fn notifications_of(db: &PgPool, user: Uuid, kind: &str) -> i64 {
     .unwrap()
 }
 
-/// Uploads one file as `multipart/form-data`, with optional extra text fields.
+/// Uploads one file to an issue, with optional extra text fields.
 pub async fn upload(
     app: &TestApp,
     cookie: &str,
     issue_id: &str,
+    file: (&str, &str, &[u8]),
+    fields: &[(&str, String)],
+) -> TestResponse {
+    post_multipart(app, cookie, &format!("/api/issues/{issue_id}/attachments"), file, fields).await
+}
+
+/// Posts one file as `multipart/form-data`, with optional extra text fields.
+pub async fn post_multipart(
+    app: &TestApp,
+    cookie: &str,
+    uri: &str,
     file: (&str, &str, &[u8]),
     fields: &[(&str, String)],
 ) -> TestResponse {
@@ -435,7 +446,7 @@ pub async fn upload(
     );
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    app.req(Method::POST, &format!("/api/issues/{issue_id}/attachments"))
+    app.req(Method::POST, uri)
         .cookie(cookie)
         .raw(&format!("multipart/form-data; boundary={boundary}"), body)
         .send()

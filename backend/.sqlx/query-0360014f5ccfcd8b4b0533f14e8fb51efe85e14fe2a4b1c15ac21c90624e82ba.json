@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, branch_id AS \"branch_id!\" FROM user_group WHERE template_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "branch_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "0360014f5ccfcd8b4b0533f14e8fb51efe85e14fe2a4b1c15ac21c90624e82ba"
+}

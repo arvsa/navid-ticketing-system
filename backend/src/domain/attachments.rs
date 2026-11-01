@@ -76,8 +76,8 @@ pub async fn upload(
 ) -> AppResult<AttachmentMeta> {
     let issue = issues::readable(db, actor, issue_id).await?;
 
-    // Who may attach where: to your own comment, to your own editable
-    // report, or to the issue thread if you may comment on it.
+    // Who may attach where: to your own comment, to an editable report you
+    // wrote or whose work you hold, or to the issue thread if you may comment on it.
     match (up.comment_id, up.report_id) {
         (Some(_), Some(_)) => {
             return Err(AppError::validation("invalid_parent", "attach to a comment or a report, not both"));
@@ -97,12 +97,15 @@ pub async fn upload(
                 return Err(AppError::forbidden("forbidden", "only the author attaches files to a comment"));
             }
         }
-        (None, Some(report_id)) => match reports::editable_author(db, report_id, issue_id).await? {
+        (None, Some(report_id)) => match reports::editable_by(db, report_id, issue_id, actor.user_id).await? {
             None => return Err(AppError::validation("invalid_parent", "the report doesn't exist or is locked")),
-            Some(author) if author != actor.user_id => {
-                return Err(AppError::forbidden("forbidden", "only the author attaches files to a report"));
+            Some(false) => {
+                return Err(AppError::forbidden(
+                    "forbidden",
+                    "only the author or the work's holder attaches files to a report",
+                ));
             }
-            Some(_) => {}
+            Some(true) => {}
         },
         (None, None) => authorize(actor, Action::CommentOnIssue { issue: &issue })?,
     }

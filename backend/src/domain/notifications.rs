@@ -36,6 +36,13 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// News about an item, which muting it silences. Everything else asks
+    /// something of the recipient (work given to them, a hand-in to review,
+    /// a mention, an invitation) and always arrives.
+    pub fn is_update(self) -> bool {
+        matches!(self, Self::Commented | Self::StatusChanged | Self::ChangedByAdmin | Self::EventUpdated)
+    }
+
     pub const ALL: [Kind; 18] = [
         Self::Assigned,
         Self::Unassigned,
@@ -94,7 +101,14 @@ pub struct Notice {
 /// Inserts one notification per recipient, in the caller's transaction. The
 /// actor is never notified about their own change.
 pub async fn notify(tx: &mut Tx, recipients: &[Uuid], notice: Notice) -> AppResult<()> {
-    let recipients: Vec<Uuid> = recipients.iter().copied().filter(|r| Some(*r) != notice.actor_id).collect();
+    let mut recipients: Vec<Uuid> = recipients.iter().copied().filter(|r| Some(*r) != notice.actor_id).collect();
+    // Updates skip people who muted the item; what needs them never does.
+    if let (Some(issue_id), true) = (notice.issue_id, notice.kind.is_update()) {
+        let muted = sqlx::query_scalar!("SELECT user_id FROM issue_mute WHERE issue_id = $1", issue_id)
+            .fetch_all(&mut **tx)
+            .await?;
+        recipients.retain(|r| !muted.contains(r));
+    }
     if recipients.is_empty() {
         return Ok(());
     }
@@ -116,16 +130,23 @@ pub async fn notify(tx: &mut Tx, recipients: &[Uuid], notice: Notice) -> AppResu
     signal_recipients(tx, recipients).await
 }
 
-/// Tells the recipients' open streams their inbox changed.
-pub(crate) async fn signal_recipients(tx: &mut Tx, recipients: Vec<Uuid>) -> AppResult<()> {
-    if recipients.is_empty() {
-        return Ok(());
+/// Recipients per event: Postgres caps a NOTIFY payload at 8000 bytes, and a
+/// UUID takes 39 of them in JSON.
+const RECIPIENTS_PER_EVENT: usize = 150;
+
+/// Tells the recipients' open streams their inbox changed. Large batches (the
+/// SLA job after a quiet spell) are split over several events.
+pub(crate) async fn signal_recipients(tx: &mut Tx, mut recipients: Vec<Uuid>) -> AppResult<()> {
+    recipients.sort();
+    recipients.dedup();
+    for chunk in recipients.chunks(RECIPIENTS_PER_EVENT) {
+        realtime::emit(
+            tx,
+            realtime::Event { kind: "notification", issue_id: None, branch_ids: vec![], recipient_ids: chunk.to_vec() },
+        )
+        .await?;
     }
-    realtime::emit(
-        tx,
-        realtime::Event { kind: "notification", issue_id: None, branch_ids: vec![], recipient_ids: recipients },
-    )
-    .await
+    Ok(())
 }
 
 /// Active, current admins of a branch.

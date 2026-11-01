@@ -51,7 +51,6 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
     assert!(ticket.body["key"].as_str().unwrap().starts_with("ISS-"));
     assert_eq!(ticket.body["targets"].as_array().unwrap().len(), 1);
     assert!(items(&ticket).is_empty(), "tickets have no work items");
-    assert_eq!(ticket.body["requires_super_admin_approval"], false);
     // Admins hear about new tickets.
     assert_eq!(notifications_of(&app.db, org.admin_a, "ticket_created").await, 1);
 
@@ -216,15 +215,19 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     .await;
     assert_eq!(hours_from_now(&items(&explicit)[0]["sla_due_at"]), 5);
 
-    // Whole-branch targets: super admin only. Shared: one unassigned item;
-    // per_member: one per current branch member (the fixture's 5 + the latecomer).
+    // Whole-branch targets: admins (and holders of issue.target_other_branches).
+    // Shared: one unassigned item; per_member: one per current branch member
+    // (the fixture's 5 + the latecomer).
     let branch_target = json!({ "branch_id": a, "type": "action", "title": "B", "targets": [{ "branch_id": a }] });
-    assert_status(&post_issue(&app, &admin, branch_target.clone()).await, StatusCode::FORBIDDEN, None);
-    let res = post_issue(&app, &root, branch_target).await;
+    let boss_like = as_user(&app, "boss_like_a@example.com").await;
+    let manager = as_user(&app, "manager_a@example.com").await;
+    assert_status(&post_issue(&app, &manager, branch_target.clone()).await, StatusCode::FORBIDDEN, None);
+    // Every other grant isn't enough without the cross-branch one.
+    assert_status(&post_issue(&app, &boss_like, branch_target.clone()).await, StatusCode::FORBIDDEN, None);
+    let res = post_issue(&app, &admin, branch_target).await;
     assert_status(&res, StatusCode::CREATED, None);
     assert_eq!(items(&res).len(), 1);
     assert!(items(&res)[0]["assignee_id"].is_null());
-    assert_eq!(res.body["requires_super_admin_approval"], true);
     let res = post_issue(&app, &root, json!({
         "branch_id": a, "type": "action", "title": "B", "completion_mode": "per_member", "targets": [{ "branch_id": a }]
     }))
@@ -233,14 +236,14 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn cross_branch_issues_are_for_super_admins_and_whole_branches(pool: PgPool) {
+async fn admins_send_school_wide_items_to_whole_branches(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
-    let root = as_root(&app).await;
-    let admin = as_user(&app, "admin_a@example.com").await;
+    let root = as_user(&app, "admin_a@example.com").await;
+    let plain = as_user(&app, "plain_a@example.com").await;
 
     let body = json!({ "branch_id": null, "type": "action", "title": "All schools", "targets": [{ "branch_id": org.branch_a }, { "branch_id": org.branch_b }] });
-    assert_status(&post_issue(&app, &admin, body.clone()).await, StatusCode::FORBIDDEN, None);
+    assert_status(&post_issue(&app, &plain, body.clone()).await, StatusCode::FORBIDDEN, None);
     let res = post_issue(&app, &root, body).await;
     assert_status(&res, StatusCode::CREATED, None);
     assert!(res.body["branch_id"].is_null());
@@ -263,6 +266,93 @@ async fn cross_branch_issues_are_for_super_admins_and_whole_branches(pool: PgPoo
         let list = call(&app, &multi, Method::GET, &format!("/api/issues?branch_id={branch}"), None).await;
         assert!(list.body["items"].as_array().unwrap().iter().any(|i| i["id"] == id.as_str()));
     }
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let to_b = |title: &str| {
+        json!({ "branch_id": null, "type": "action", "title": title,
+                "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] })
+    };
+
+    // Admins always may; others need the grant.
+    let admin = as_user(&app, "admin_a@example.com").await;
+    assert_status(&post_issue(&app, &admin, to_b("Yes")).await, StatusCode::CREATED, None);
+    assert_status(&call(&app, &admin, Method::GET, "/api/recipients", None).await, StatusCode::OK, None);
+    let plain = as_user(&app, "plain_a@example.com").await;
+    assert_status(&post_issue(&app, &plain, to_b("No")).await, StatusCode::FORBIDDEN, None);
+    assert_status(&app.get("/api/recipients").await, StatusCode::UNAUTHORIZED, None);
+    assert_status(&call(&app, &plain, Method::GET, "/api/recipients", None).await, StatusCode::FORBIDDEN, None);
+
+    create_group(
+        &app.db,
+        org.branch_a,
+        "Coordinators",
+        &[("issue.target_other_branches", Some("action"), "branch"), ("issue.create", Some("action"), "branch")],
+        &[org.plain_a],
+    )
+    .await;
+    let plain = as_user(&app, "plain_a@example.com").await;
+    let people = call(&app, &plain, Method::GET, "/api/recipients", None).await;
+    assert_status(&people, StatusCode::OK, None);
+    assert!(people
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["user_id"] == org.admin_b.to_string() && p["branch_id"] == org.branch_b.to_string()));
+
+    // A person in another branch: one assigned item there.
+    let res = post_issue(&app, &plain, to_b("Fill in the survey")).await;
+    assert_status(&res, StatusCode::CREATED, None);
+    assert!(res.body["branch_id"].is_null());
+    let work = items(&res);
+    assert_eq!(work.len(), 1);
+    assert_eq!(work[0]["branch_id"], org.branch_b.to_string());
+    assert_eq!(work[0]["assignee_id"], org.admin_b.to_string());
+
+    // Whole branches too; a person needs their real branch.
+    let whole =
+        json!({ "branch_id": null, "type": "action", "title": "W", "targets": [{ "branch_id": org.branch_b }] });
+    assert_status(&post_issue(&app, &plain, whole).await, StatusCode::CREATED, None);
+    let wrong_branch = json!({ "branch_id": null, "type": "action", "title": "W",
+                               "targets": [{ "user_id": org.plain_a, "branch_id": org.branch_b }] });
+    assert_status(
+        &post_issue(&app, &plain, wrong_branch).await,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Some("invalid_target"),
+    );
+    // Only the kinds the grant names (they may create reports, but not send them across).
+    let report = json!({ "branch_id": null, "type": "report", "title": "R",
+                         "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
+    assert_status(&post_issue(&app, &plain, report).await, StatusCode::FORBIDDEN, None);
+
+    // The receiver sees it; the sender edits it, the receiving admin can't.
+    let id = id_of(&res);
+    let admin_b = as_user(&app, "admin_b@example.com").await;
+    let seen = call(&app, &admin_b, Method::GET, &format!("/api/issues/{id}"), None).await;
+    assert_status(&seen, StatusCode::OK, None);
+    let version = seen.body["version"].clone();
+    let rename = |title: &str| Some(json!({ "version": version, "title": title }));
+    assert_status(
+        &call(&app, &admin_b, Method::PATCH, &format!("/api/issues/{id}"), rename("Mine now")).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
+    assert_status(
+        &call(&app, &plain, Method::PATCH, &format!("/api/issues/{id}"), rename("Fill in the survey by Friday")).await,
+        StatusCode::OK,
+        None,
+    );
+    // The sender's branch colleagues don't: it lives in the receivers' branches.
+    let boss = as_user(&app, "boss_like_a@example.com").await;
+    assert_status(
+        &call(&app, &boss, Method::GET, &format!("/api/issues/{id}"), None).await,
+        StatusCode::NOT_FOUND,
+        None,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -557,7 +647,7 @@ async fn closing_cancels_remaining_work_and_freezes_the_issue(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn super_admin_issues_are_closed_by_super_admins_only(pool: PgPool) {
+async fn items_a_super_admin_sends_are_ordinary_items(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let root = as_root(&app).await;
@@ -565,16 +655,14 @@ async fn super_admin_issues_are_closed_by_super_admins_only(pool: PgPool) {
     let res = post_issue(&app, &root, json!({ "branch_id": org.branch_a, "type": "action", "title": "From HQ", "targets": [{ "user_id": org.plain_a }] })).await;
     let uri = format!("/api/issues/{}", id_of(&res));
 
-    assert_status(&call(&app, &admin, Method::GET, &uri, None).await, StatusCode::OK, None);
-    for (method, path, body) in [
-        (Method::PATCH, uri.clone(), json!({ "version": 1, "title": "x" })),
-        (Method::POST, format!("{uri}/close"), json!({ "version": 1 })),
-        (Method::POST, format!("{uri}/targets"), json!({ "user_id": org.manager_a })),
-    ] {
-        assert_status(&call(&app, &admin, method, &path, Some(body)).await, StatusCode::FORBIDDEN, None);
-    }
+    // The branch's admins run it like any other item.
     assert_status(
-        &call(&app, &root, Method::POST, &format!("{uri}/close"), Some(json!({ "version": 1 }))).await,
+        &call(&app, &admin, Method::PATCH, &uri, Some(json!({ "version": 1, "title": "From the office" }))).await,
+        StatusCode::OK,
+        None,
+    );
+    assert_status(
+        &call(&app, &admin, Method::POST, &format!("{uri}/close"), Some(json!({ "version": 2 }))).await,
         StatusCode::OK,
         None,
     );

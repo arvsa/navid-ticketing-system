@@ -24,7 +24,10 @@ use crate::{
 const XLSX: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/dashboard", get(show)).route("/exports", get(export))
+    Router::new()
+        .route("/dashboard", get(show))
+        .route("/exports", get(export))
+        .route("/exports/people", get(export_people))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -76,7 +79,28 @@ async fn export(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<E
         from: parse_time(q.from.as_deref())?,
         to: parse_time(q.to.as_deref())?,
     };
-    let file = exports::run(&s.db, &actor, query).await?;
+    xlsx(exports::run(&s.db, &actor, query).await?)
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+struct PeopleExportParams {
+    /// Comma-separated; leave out for every branch.
+    branch_ids: Option<String>,
+}
+
+/// GET /api/exports/people?branch_ids= (super admins)
+#[utoipa::path(get, path = "/api/exports/people", operation_id = "exportPeople", tag = "dashboard", params(PeopleExportParams), responses((status = 200, description = "An Excel workbook", content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn export_people(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiQuery(q): ApiQuery<PeopleExportParams>,
+) -> AppResult<Response> {
+    let branch_ids = parse_list(q.branch_ids.as_deref(), |p| p.parse().ok(), "branch_ids are UUIDs")?;
+    xlsx(exports::people(&s.db, &actor, branch_ids).await?)
+}
+
+fn xlsx(file: exports::ExportFile) -> AppResult<Response> {
     let disposition = format!("attachment; filename=\"{}\"", file.file_name);
     Ok((
         [

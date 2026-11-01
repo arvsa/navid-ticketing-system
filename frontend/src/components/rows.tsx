@@ -71,8 +71,11 @@ export function RowLink({
   meta,
   trailing,
   chevron = true,
+  aside,
   className,
 }: {
+  /** Shown before the row but outside its link, so it can be clickable itself (a person's avatar). */
+  aside?: ReactNode;
   link?: LinkProps;
   onClick?: () => void;
   leading?: ReactNode;
@@ -93,16 +96,22 @@ export function RowLink({
       {chevron && <ChevronRight className="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" aria-hidden />}
     </>
   );
-  if (link)
-    return (
-      <Link {...link} className={cx(rowCls, className)}>
+  const row = (cls: string) =>
+    link ? (
+      <Link {...link} className={cls}>
         {body}
       </Link>
+    ) : (
+      <button type="button" onClick={onClick} className={cls}>
+        {body}
+      </button>
     );
+  if (!aside) return row(cx(rowCls, className));
   return (
-    <button type="button" onClick={onClick} className={cx(rowCls, className)}>
-      {body}
-    </button>
+    <div className={cx("flex w-full items-center rounded-[14px] transition-colors hover:bg-sunken", className)}>
+      <span className="shrink-0 ps-3">{aside}</span>
+      {row(cx(rowCls, "min-w-0 flex-1 hover:bg-transparent"))}
+    </div>
   );
 }
 

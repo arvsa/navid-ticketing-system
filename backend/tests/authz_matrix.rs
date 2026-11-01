@@ -92,15 +92,14 @@ impl Fixture {
     }
 }
 
-async fn insert_issue(db: &PgPool, branch: Option<Uuid>, ty: &str, private: bool, by: Uuid, super_issue: bool) -> Uuid {
+async fn insert_issue(db: &PgPool, branch: Option<Uuid>, ty: &str, private: bool, by: Uuid) -> Uuid {
     sqlx::query_scalar!(
-        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by, requires_super_admin_approval)
-           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'Matrix', $3, $4, $5) RETURNING id"#,
+        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by)
+           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'Matrix', $3, $4) RETURNING id"#,
         branch,
         ty,
         private,
-        by,
-        super_issue
+        by
     )
     .fetch_one(db)
     .await
@@ -201,24 +200,24 @@ async fn seed(db: &PgPool) -> Fixture {
         for ty in TYPES {
             for private in [false, true] {
                 let vis = if private { "priv" } else { "pub" };
-                let id = insert_issue(db, Some(branch), ty, private, u(&users, creator), false).await;
+                let id = insert_issue(db, Some(branch), ty, private, u(&users, creator)).await;
                 issues.insert(format!("{vis}_{ty}_{creator}"), id);
             }
         }
     }
     // Issues owned by the own-scope grantees.
     for name in ["g_read_own", "g_edit_own", "g_close_own", "g_private_own", "g_target_own"] {
-        let id = insert_issue(db, Some(a), "action", true, u(&users, name), false).await;
+        let id = insert_issue(db, Some(a), "action", true, u(&users, name)).await;
         issues.insert(format!("own_{name}"), id);
     }
 
     let mut items = HashMap::new();
     // Private action for plain_a: targeted through a user target / assignee.
-    let id = insert_issue(db, Some(a), "action", true, u(&users, "admin_a"), false).await;
+    let id = insert_issue(db, Some(a), "action", true, u(&users, "admin_a")).await;
     items.insert("wi_plain_a", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
     issues.insert("priv_action_for_plain_a".to_owned(), id);
     // Shared group work, unassigned and claimable by Team members.
-    let id = insert_issue(db, Some(a), "action", false, u(&users, "admin_a"), false).await;
+    let id = insert_issue(db, Some(a), "action", false, u(&users, "admin_a")).await;
     items.insert("wi_shared", target_with_item(db, id, a, None, Some(team)).await);
     issues.insert("pub_action_team".to_owned(), id);
     // Work assigned to the targeted-scope grantees, and to approvers themselves.
@@ -228,13 +227,13 @@ async fn seed(db: &PgPool) -> Fixture {
         ("wi_admin_a", "admin_a"),
         ("wi_deputy_a", "deputy_a"),
     ] {
-        let id = insert_issue(db, Some(a), "action", false, u(&users, "plain_a"), false).await;
+        let id = insert_issue(db, Some(a), "action", false, u(&users, "plain_a")).await;
         items.insert(key, target_with_item(db, id, a, Some(u(&users, who)), None).await);
     }
-    let report = insert_issue(db, Some(a), "report", false, u(&users, "admin_a"), false).await;
+    let report = insert_issue(db, Some(a), "report", false, u(&users, "admin_a")).await;
     items.insert("wi_report", target_with_item(db, report, a, Some(u(&users, "plain_a")), None).await);
     // A ticket addressed to the targeted-comment grantee.
-    let id = insert_issue(db, Some(a), "ticket", false, u(&users, "admin_a"), false).await;
+    let id = insert_issue(db, Some(a), "ticket", false, u(&users, "admin_a")).await;
     sqlx::query!(
         "INSERT INTO issue_target (issue_id, branch_id, kind, user_id) VALUES ($1, $2, 'user', $3)",
         id,
@@ -245,16 +244,16 @@ async fn seed(db: &PgPool) -> Fixture {
     .await
     .unwrap();
     issues.insert("ticket_to_g_comment_targeted".to_owned(), id);
-    // A super admin issue in A, with work for plain_a.
-    let id = insert_issue(db, Some(a), "action", false, u(&users, "root"), true).await;
+    // An item a super admin sent in A, with work for plain_a: an ordinary item now.
+    let id = insert_issue(db, Some(a), "action", false, u(&users, "root")).await;
     items.insert("wi_sa", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
     issues.insert("sa_action_a".to_owned(), id);
     // A cross-branch super admin issue sent to both branches, and a private one to B only.
-    let id = insert_issue(db, None, "action", false, u(&users, "root"), true).await;
+    let id = insert_issue(db, None, "action", false, u(&users, "root")).await;
     items.insert("wi_cross_a", target_with_item(db, id, a, None, None).await);
     items.insert("wi_cross_b", target_with_item(db, id, b, None, None).await);
     issues.insert("cross".to_owned(), id);
-    let id = insert_issue(db, None, "ticket", true, u(&users, "root"), true).await;
+    let id = insert_issue(db, None, "ticket", true, u(&users, "root")).await;
     target_with_item(db, id, b, None, None).await;
     issues.insert("cross_private_b".to_owned(), id);
 
@@ -430,7 +429,8 @@ async fn matrix(pool: PgPool) {
         ("g_approve", "approve", "wi_deputy_a", Allow),
         ("g_approve_report", "approve", "wi_report", Allow),
         ("g_approve_report", "approve", "wi_deputy_a", Forbidden),
-        ("plain_a", "approve", "wi_deputy_a", Forbidden),
+        ("plain_a", "approve", "wi_deputy_a", Allow), // the item is theirs: senders approve
+        ("plain_a", "approve", "wi_report", Forbidden),
         // ---- comment.create: targeted (created or targeted), branch ----
         ("g_comment_targeted", "comment", "ticket_to_g_comment_targeted", Allow),
         ("g_comment_targeted", "comment", "pub_ticket_plain_a", Forbidden),
@@ -465,20 +465,24 @@ async fn matrix(pool: PgPool) {
         ("root", "set_admin", "A", Allow),
         ("admin_a", "set_super_admin", "-", Forbidden),
         ("root", "set_super_admin", "-", Allow),
-        ("admin_a", "create:action", "cross", Forbidden),
+        // ---- sending to other branches and whole branches: admins (and holders of the grant) ----
+        ("admin_a", "create:action", "cross", Allow),
         ("root", "create:action", "cross", Allow),
-        ("admin_a", "create:action", "A+branch", Forbidden),
+        ("admin_a", "create:action", "A+branch", Allow),
         ("root", "create:action", "A+branch", Allow),
-        ("admin_a", "approve", "wi_sa", Forbidden),
-        ("deputy_a", "approve", "wi_sa", Forbidden),
+        // ---- what a super admin sends is an ordinary item ----
+        ("admin_a", "approve", "wi_sa", Allow),
+        ("deputy_a", "approve", "wi_sa", Allow),
         ("root", "approve", "wi_sa", Allow),
-        ("admin_a", "edit", "sa_action_a", Forbidden),
-        ("admin_a", "close", "sa_action_a", Forbidden),
-        ("admin_a", "target", "sa_action_a", Forbidden),
-        ("admin_a", "private", "sa_action_a", Forbidden),
-        ("deputy_a", "edit", "sa_action_a", Forbidden),
+        ("admin_a", "edit", "sa_action_a", Allow),
+        ("admin_a", "close", "sa_action_a", Allow),
+        ("admin_a", "target", "sa_action_a", Allow),
+        ("admin_a", "private", "sa_action_a", Allow),
+        ("deputy_a", "edit", "sa_action_a", Allow),
         ("root", "close", "sa_action_a", Allow),
-        ("admin_a", "target_branch", "pub_ticket_plain_a", Forbidden),
+        ("admin_a", "target_branch", "pub_ticket_plain_a", Allow),
+        ("plain_a", "target_branch", "pub_ticket_plain_a", Forbidden),
+        // ---- super admin only, continued ----
         ("admin_a", "export", "A+B", Forbidden),
         ("multi", "export", "A+B", Forbidden),
         ("root", "export", "A+B", Allow),

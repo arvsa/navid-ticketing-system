@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Info, Lock, MoreHorizontal, Unlock, X } from "lucide-react";
+import { Bell, BellOff, CheckCircle2, Forward, Info, Lock, MoreHorizontal, Pencil, Unlock, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { setIssue, useComments, useHistory, useIssue, useIssueByNumber, useTransition } from "@/api/hooks";
@@ -10,8 +10,8 @@ import type { IssueDetail, Target } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Pill, PriorityText, TypeBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
-import { Button, Card, ErrorPanel, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
-import { canClose, canEdit, canSetPrivate, canTarget, isAdminOf, isSuper } from "@/lib/can";
+import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
+import { canClose, canEdit, canPassTicket, canSetPrivate, canTarget, isAdminOf } from "@/lib/can";
 import { formatDateTime, formatDay, timeAgo, zoneSuffix } from "@/lib/dates";
 import { historyLines } from "@/lib/history";
 import { isDone, numberOf, primaryAction, targetName, useGroupDirectory, useItemLabels } from "@/lib/items";
@@ -21,9 +21,12 @@ import { usePeople } from "@/people/usePeople";
 import { EventHeader, RsvpCard, WhosComing } from "@/features/events/EventPanel";
 import type { ItemSearch } from "@/app/router";
 import { CommentThread } from "./Comments";
+import { keys } from "@/api/keys";
 import { ConfirmDialog, EditDialog, SendToMoreDialog, useIssueAction } from "./ItemDialogs";
+import { PassDialog } from "@/features/work/PassDialog";
 import { PeopleList, ReviewDrawer, StatusTiles } from "./WorkPanel";
 import { SelfReport } from "./SelfReport";
+import { PersonName } from "@/people/PersonPopover";
 import { quote, t, tn, tx } from "@/i18n";
 
 export function ItemPage() {
@@ -69,7 +72,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const comments = useComments(issue.id);
   const history = useHistory(issue.id, search.tab === "history");
   const [filter, setFilter] = useState<null | "approved" | "waiting" | "progress" | "not_started">(null);
-  const [dialog, setDialog] = useState<null | "edit" | "send" | "close" | "cancel">(null);
+  const [dialog, setDialog] = useState<null | "edit" | "send" | "close" | "cancel" | "pass">(null);
   const close = useIssueAction(issue, "close");
   const cancel = useIssueAction(issue, "cancel");
   const zone = zoneOf(issue.branch_id) ?? zoneOf(issue.work_items[0]?.branch_id);
@@ -81,9 +84,16 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const due = live.map((w) => w.sla_due_at).filter(Boolean).sort()[0] ?? issue.work_items.map((w) => w.sla_due_at).filter(Boolean).sort()[0];
   const commentCount = (comments.data ?? []).filter((c) => !c.work_item_id && !c.deleted).length;
   const primary = primaryAction(issue, viewer);
-  const schoolWideForBranchAdmin = issue.requires_super_admin_approval && !isSuper(viewer);
+  // A school-wide item someone else sent: this branch hands out its part; the sender approves.
+  const receivedSchoolWide = !issue.branch_id && issue.created_by !== viewer.me.user.id;
 
   const qc = useQueryClient();
+  // Muting stops the item's updates; what needs you still arrives.
+  const setMuted = useMutation({
+    mutationFn: () => (issue.muted ? api.del(`/issues/${issue.id}/mute`) : api.put(`/issues/${issue.id}/mute`)),
+    onSuccess: () => (qc.invalidateQueries({ queryKey: keys.issue(issue.id) }), toast.success(issue.muted ? t("You'll get updates again") : t("Muted. You'll still be told when something needs you."))),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
   const setPrivate = useMutation({
     mutationFn: () => api.patch<IssueDetail>(`/issues/${issue.id}`, { version: issue.version, is_private: !issue.is_private }),
     onSuccess: (u) => (setIssue(qc, u), toast.success(u.is_private ? t("Now private") : t("Now visible to the branch"))),
@@ -95,16 +105,16 @@ function ItemView({ issue }: { issue: IssueDetail }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const who = issue.created_by === viewer.me.user.id ? t("you") : labels.person(issue.created_by);
+  const who = <PersonName id={issue.created_by} label={issue.created_by === viewer.me.user.id ? t("you") : labels.person(issue.created_by)} />;
   const subtitle = (
     <>
       {issue.type === "ticket"
-        ? t("Asked by {who}", { who })
+        ? tx("Asked by {who}", { who })
         : issue.targets.length === 0
           ? issue.type === "event"
-            ? t("Organised by {who}", { who })
-            : t("Filed by {who}", { who })
-          : t("Sent by {who}", { who })}
+            ? tx("Organised by {who}", { who })
+            : tx("Filed by {who}", { who })
+          : tx("Sent by {who}", { who })}
       {labels.sentTo && <> {tx("to {names}", { names: <b className="text-text">{labels.sentTo}</b> })}</>}
       {hasWork && issue.work_items.length > 1 && ` · ${modeLabel[issue.completion_mode]}`}
       {hasWork && due && <> · {tx("due {date}", { date: <b className="text-text">{formatDateTime(due, zone)}</b> })}</>}
@@ -121,7 +131,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const menu = (
     <Menu
       trigger={
-        <Button size="lg" aria-label={t("More actions")} className="w-12 px-0">
+        <Button variant="ghost" aria-label={t("More actions")} className="w-10 px-0">
           <MoreHorizontal className="size-5" />
         </Button>
       }
@@ -133,6 +143,16 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         </MenuItem>
       )}
       {canTarget(viewer, issue) && <MenuItem onSelect={() => setDialog("send")}>{t("Send to more people")}</MenuItem>}
+      {canPassTicket(viewer, issue) && (
+        <MenuItem onSelect={() => setDialog("pass")}>
+          <Forward className="size-4 rtl:-scale-x-100" />
+          {t("Pass this question on")}
+        </MenuItem>
+      )}
+      <MenuItem onSelect={() => setMuted.mutate()}>
+        {issue.muted ? <Bell className="size-4" /> : <BellOff className="size-4" />}
+        {issue.muted ? t("Get updates again") : t("Mute updates")}
+      </MenuItem>
       <MenuItem
         onSelect={() => {
           navigator.clipboard?.writeText(`${location.origin}/items/${numberOf(issue.key)}`);
@@ -155,11 +175,11 @@ function ItemView({ issue }: { issue: IssueDetail }) {
     <div className="flex flex-wrap items-center gap-2">
       <PrimaryButton issue={issue} onClose={() => setDialog("close")} onEdit={() => setDialog("edit")} onReview={(id) => setSearch({ review: id })} />
       {canEdit(viewer, issue) && primary.kind !== "edit-event" && (
-        <Button size="lg" onClick={() => setDialog("edit")}>
-          {t("Edit")}
-        </Button>
+        <IconButton variant="ghost" label={t("Edit")} icon={<Pencil className="size-4" />} onClick={() => setDialog("edit")} />
       )}
-      {menu}
+      <Hint label={t("More actions")} align="end">
+        {menu}
+      </Hint>
     </div>
   );
 
@@ -177,8 +197,8 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         <Banner tone="success" icon={<CheckCircle2 className="size-5" />}>
           {issue.closed_by
             ? issue.type === "ticket"
-              ? t("Answered and closed by {who}", { who: labels.person(issue.closed_by) })
-              : t("Closed by {who}", { who: labels.person(issue.closed_by) })
+              ? tx("Answered and closed by {who}", { who: <PersonName id={issue.closed_by} label={labels.person(issue.closed_by)} /> })
+              : tx("Closed by {who}", { who: <PersonName id={issue.closed_by} label={labels.person(issue.closed_by)} /> })
             : issue.type === "ticket"
               ? t("Answered and closed automatically")
               : t("Closed automatically")}
@@ -187,12 +207,12 @@ function ItemView({ issue }: { issue: IssueDetail }) {
       )}
       {issue.state === "cancelled" && (
         <Banner tone="danger" icon={<X className="size-5" />}>
-          {issue.closed_by ? t("Cancelled by {who}.", { who: labels.person(issue.closed_by) }) : t("Cancelled.")} {issue.type === "event" ? t("Invitees were told.") : t("Everyone involved was told.")}
+          {issue.closed_by ? tx("Cancelled by {who}.", { who: <PersonName id={issue.closed_by} label={labels.person(issue.closed_by)} /> }) : t("Cancelled.")} {issue.type === "event" ? t("Invitees were told.") : t("Everyone involved was told.")}
         </Banner>
       )}
-      {schoolWideForBranchAdmin && issue.work_items.some((w) => isAdminOf(viewer, w.branch_id)) && (
+      {receivedSchoolWide && issue.work_items.some((w) => isAdminOf(viewer, w.branch_id)) && (
         <Banner tone="info" icon={<Info className="size-5" />}>
-          {t("Sent by school leadership. You can comment and assign your branch's part. Only super admins approve this work.")}
+          {t("Sent from another branch. You hand out your branch's part; the sender approves the work, and so can you.")}
         </Banner>
       )}
 
@@ -224,9 +244,9 @@ function ItemView({ issue }: { issue: IssueDetail }) {
                     <Lock className="size-4" />{" "}{t("Private")}
                   </span>
                 )}
-                {issue.requires_super_admin_approval && hasWork && (
+                {!issue.branch_id && hasWork && (
                   <span className="inline-flex items-center gap-1 text-text-2">
-                    <Lock className="size-4" />{" "}{t("A super admin signs this off")}
+                    <Lock className="size-4" />{" "}{t("The sender approves this")}
                   </span>
                 )}
               </div>
@@ -322,6 +342,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
       <ReviewDrawer issue={issue} workId={search.review} onClose={() => setSearch({ review: undefined })} onSelect={(id) => setSearch({ review: id })} />
       {dialog === "edit" && <EditDialog issue={issue} open onOpenChange={(o) => !o && setDialog(null)} />}
       {dialog === "send" && <SendToMoreDialog issue={issue} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog === "pass" && <PassDialog issue={issue} open onOpenChange={(o) => !o && setDialog(null)} />}
       <ConfirmDialog
         open={dialog === "close"}
         onOpenChange={(o) => !o && setDialog(null)}
@@ -376,7 +397,7 @@ function PrimaryButton({ issue, onClose, onEdit, onReview }: { issue: IssueDetai
   const run = (work: Parameters<typeof tr.mutate>[0]["item"], transition: "start" | "claim" | "unblock", done: string) =>
     tr.mutate({ item: work, transition }, { onSuccess: () => toast.success(done), onError: (e) => toast.error(errorMessage(e)) });
   const btn = (label: string, onClick: () => void) => (
-    <Button variant="primary" size="lg" loading={tr.isPending} onClick={onClick}>
+    <Button variant="primary" loading={tr.isPending} onClick={onClick}>
       {label}
     </Button>
   );

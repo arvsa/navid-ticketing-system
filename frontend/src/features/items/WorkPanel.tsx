@@ -1,18 +1,22 @@
 // Assignments of an Action or Report: status tiles, the people list and the
 // review drawer (Report detail + review panel design; UX_SPEC §4.5.2, §4.5.6).
 import { useState } from "react";
-import { Check, ChevronDown, ChevronRight, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Check, ChevronDown, ChevronRight, ExternalLink, X } from "lucide-react";
 import { toast } from "sonner";
-import { useReports, useTransition } from "@/api/hooks";
-import type { IssueDetail, Report, WorkItem, WorkStatus } from "@/api/types";
+import { api } from "@/api/client";
+import { useIssue, useReports, useTransition } from "@/api/hooks";
+import { keys } from "@/api/keys";
+import type { Comment, IssueDetail, Report, WorkItem, WorkStatus } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar, StatusBadge } from "@/components/badges";
-import { FileList } from "@/components/files";
+import { AttachButton, FileList, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { PersonSelect } from "@/components/pickers";
 import { Button, Drawer, DrawerClose, Field, cx, inputClass } from "@/components/ui";
-import { canApprove, canAssign, canCancelWork, isAdminOf, isSuper, membership } from "@/lib/can";
+import { canApprove, canAssign, canCancelWork, isSuper, membership } from "@/lib/can";
 import { formatDay, lateBy, timeAgo } from "@/lib/dates";
-import { isSentBack, sortWork, useItemLabels } from "@/lib/items";
+import { isSentBack, numberOf, sortWork, useItemLabels } from "@/lib/items";
 import { errorMessage, workStatusLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -20,7 +24,8 @@ import { useApproveWithUndo } from "@/features/work/approve";
 import { StatPill } from "@/components/rows";
 import { ConfirmDialog } from "./ItemDialogs";
 import { CommentThread } from "./Comments";
-import { quote, t, tn } from "@/i18n";
+import { PersonName, PersonPopover } from "@/people/PersonPopover";
+import { quote, t, tn, tx } from "@/i18n";
 
 type Bucket = "approved" | "waiting" | "progress" | "not_started";
 const bucketOf = (s: WorkStatus): Bucket | null =>
@@ -42,7 +47,7 @@ export function StatusTiles({ issue, filter, onFilter }: { issue: IssueDetail; f
     { b: "approved", label: t("approved"), tone: "success" },
   ];
   return (
-    <div className="-m-1 flex gap-2 overflow-x-auto p-1 scrollbar-none">
+    <div className="-mx-1 flex gap-2 overflow-x-auto p-1 scrollbar-none">
       {pills.map((pill) => (
         <StatPill
           key={pill.b}
@@ -87,8 +92,12 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
   const labels = useItemLabels(issue);
   const schoolWide = issue.branch_id === null;
   const everything = sortWork(issue.work_items, myId).filter((w) => w.status !== "cancelled");
-  // On school-wide items, each branch handles its own part; only super admins see them all.
-  const all = schoolWide && !isSuper(viewer) ? everything.filter((w) => membership(viewer, w.branch_id)) : everything;
+  // On school-wide items, each branch handles its own part; the sender and
+  // super admins see them all, and anyone sees work they passed on.
+  const all =
+    schoolWide && !isSuper(viewer) && issue.created_by !== myId
+      ? everything.filter((w) => membership(viewer, w.branch_id) || w.handoff_chain.includes(myId))
+      : everything;
   const otherBranches = new Set(everything.filter((w) => !all.includes(w)).map((w) => w.branch_id)).size;
   let rows = filter ? all.filter((w) => bucketOf(w.status) === filter) : all;
   const approved = rows.filter((w) => w.status === "approved");
@@ -108,16 +117,17 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
           const assign = !w.assignee_id && canAssign(viewer, issue, w);
           const isMe = w.assignee_id === myId;
           return (
-            <li key={w.id}>
-              <button
-                onClick={() => onReview(w.id)}
-                className={cx("group flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-start hover:bg-sunken", reviewing === w.id && "bg-warning-soft")}
-              >
+            <li key={w.id} className={cx("flex items-center rounded-[14px] hover:bg-sunken", reviewing === w.id && "bg-warning-soft")}>
+              <span className="shrink-0 ps-3">
                 {w.assignee_id ? (
-                  <Avatar first={p?.first_name} last={p?.last_name} id={w.assignee_id} size={40} />
+                  <PersonPopover id={w.assignee_id} className="rounded-full">
+                    <Avatar first={p?.first_name} last={p?.last_name} id={w.assignee_id} size={40} />
+                  </PersonPopover>
                 ) : (
-                  <span className="size-10 shrink-0 rounded-full border-2 border-dashed border-border-strong" aria-hidden />
+                  <span className="block size-10 rounded-full border-2 border-dashed border-border-strong" aria-hidden />
                 )}
+              </span>
+              <button onClick={() => onReview(w.id)} className="group flex min-w-0 flex-1 items-center gap-3 rounded-[14px] px-3 py-3 text-start">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
                     {schoolWide && labels.branchName(w.branch_id) && <span className="text-text-2">{labels.branchName(w.branch_id)} · </span>}
@@ -153,20 +163,67 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
   );
 }
 
-export function ReviewDrawer({ issue, workId, onClose, onSelect }: { issue: IssueDetail; workId?: string; onClose: () => void; onSelect: (id: string) => void }) {
+export function ReviewDrawer({
+  issue,
+  workId,
+  onClose,
+  onSelect,
+  showDetails,
+}: {
+  issue: IssueDetail;
+  workId?: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  /** Off the item's own page: offer a way through to it. */
+  showDetails?: boolean;
+}) {
   return (
     <Drawer open={!!workId} onOpenChange={(o) => !o && onClose()} label={t("Review")}>
-      {workId && <ReviewBody key={workId} issue={issue} workId={workId} onClose={onClose} onSelect={onSelect} />}
+      {workId && <ReviewBody key={workId} issue={issue} workId={workId} onClose={onClose} onSelect={onSelect} showDetails={showDetails} />}
     </Drawer>
   );
 }
 
-function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; workId: string; onClose: () => void; onSelect: (id: string) => void }) {
+export type ReviewTarget = { issueId: string; workId: string };
+
+/** The review drawer opened from a list (Home), so the list stays put. The
+ * issue is loaded by id, so the drawer survives the row leaving the list
+ * (after an approval, say). */
+export function ReviewInPlace({ target, onChange }: { target: ReviewTarget | null; onChange: (t: ReviewTarget | null) => void }) {
+  const issue = useIssue(target?.issueId);
+  if (!target || !issue.data) return null;
+  return (
+    <ReviewDrawer
+      issue={issue.data}
+      workId={target.workId}
+      onClose={() => onChange(null)}
+      onSelect={(workId) => onChange({ issueId: target.issueId, workId })}
+      showDetails
+    />
+  );
+}
+
+function ReviewBody({
+  issue,
+  workId,
+  onClose,
+  onSelect,
+  showDetails,
+}: {
+  issue: IssueDetail;
+  workId: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  showDetails?: boolean;
+}) {
   const viewer = useViewer();
   const people = usePeople();
   const transition = useTransition();
   const approveLater = useApproveWithUndo();
+  const qc = useQueryClient();
   const reports = useReports(issue.id, issue.type === "report");
+  const files = useFilePicker();
+  const [sendingFiles, setSendingFiles] = useState(false);
   const [note, setNote] = useState("");
   const [needNote, setNeedNote] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -192,8 +249,31 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
   const labels = useItemLabels(issue);
   const report = reports.data?.find((r) => r.work_item_id === w.id);
   const goNext = () => (next ? onSelect(next.id) : onClose());
+  // Files for the decision go on this part's thread, where the assignee sees them.
+  const sendFiles = async () => {
+    if (!files.files.length) return true;
+    setSendingFiles(true);
+    try {
+      const c = await api.post<Comment>(`/issues/${issue.id}/comments`, {
+        body: files.files.length === 1 ? t("Attached {name}", { name: files.files[0].name }) : t("Attached {n} files", { n: files.files.length }),
+        is_internal_only: false,
+        mention_user_ids: [],
+        work_item_id: w.id,
+      });
+      const failed = await uploadAll(issue.id, files.files, { comment_id: c.id });
+      reportFailedUploads(failed, "");
+      files.clear();
+      qc.invalidateQueries({ queryKey: ["issues", issue.id, "comments"] });
+      qc.invalidateQueries({ queryKey: keys.issue(issue.id) });
+      return true;
+    } catch (e) {
+      toast.error(errorMessage(e));
+      return false;
+    } finally {
+      setSendingFiles(false);
+    }
+  };
   const branchPeople = people.inBranch(w.branch_id);
-  const branchAdminOnSchoolWide = issue.requires_super_admin_approval && !isSuper(viewer) && w.status === "pending_approval" && isAdminOf(viewer, w.branch_id);
 
   return (
     <>
@@ -212,9 +292,21 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
               : `${labels.branchName(w.branch_id) ?? t("This part")} · ${t("not assigned yet")}`}
           </h2>
         </div>
-        <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
-          <X className="size-5" />
-        </DrawerClose>
+        <div className="flex shrink-0 items-center gap-2">
+          {showDetails && (
+            <Link
+              to="/items/$number"
+              params={{ number: numberOf(issue.key) }}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-border px-3 text-[14px] font-semibold hover:bg-sunken"
+            >
+              <ExternalLink className="size-4" aria-hidden />
+              {t("Details")}
+            </Link>
+          )}
+          <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
+            <X className="size-5" />
+          </DrawerClose>
+        </div>
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
         <p className="text-text-2">
@@ -222,9 +314,23 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
             ? `${t("Submitted {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" })} · ${w.decided_at ? t("handed in again after being sent back") : t("first submission")}`
             : `${workStatusLabel[w.status]}${w.sla_due_at ? ` · ${t("due {date}", { date: formatDay(w.sla_due_at) })}` : ""}`}
         </p>
+        {w.handoff_chain.length > 1 && (
+          <p className="text-[14px] text-text-2">
+            {t("Passed along:")}{" "}
+            {w.handoff_chain.map((id, i) => (
+              <span key={id}>
+                {i > 0 && <span className="mx-1 inline-block rtl:-scale-x-100" aria-hidden>→</span>}
+                <PersonName id={id} label={labels.person(id)} />
+              </span>
+            ))}
+          </p>
+        )}
+        {w.status === "pending_approval" && w.reviewer_id && !approve && (
+          <p className="rounded-[10px] bg-sunken p-3">{tx("{name} reviews this first.", { name: <PersonName id={w.reviewer_id} label={labels.person(w.reviewer_id)} /> })}</p>
+        )}
         {w.decision_note && w.status !== "pending_approval" && (
           <div className="rounded-[10px] bg-sunken p-3 text-[15px]">
-            <b>{t("Note from {name}:", { name: labels.person(w.decided_by) })}</b> {quote(w.decision_note)}
+            <b>{tx("Note from {name}:", { name: <PersonName id={w.decided_by} label={labels.person(w.decided_by)} /> })}</b> {quote(w.decision_note)}
           </div>
         )}
         {issue.type === "report" &&
@@ -259,7 +365,12 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
             )}
           </Field>
         )}
-        {branchAdminOnSchoolWide && <p className="rounded-[10px] bg-sunken p-3">{t("Only super admins approve this work.")}</p>}
+        {approve && (
+          <div className="space-y-2">
+            <PendingFiles files={files.files} onRemove={files.remove} />
+            <AttachButton onPick={files.add} />
+          </div>
+        )}
 
         {!approve && canAssign(viewer, issue, w) && (
           <div className="space-y-3">
@@ -302,7 +413,9 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
               variant="success"
               size="lg"
               icon={<Check className="size-5" />}
-              onClick={() => {
+              loading={sendingFiles}
+              onClick={async () => {
+                if (!(await sendFiles())) return;
                 approveLater([w], note, issue.type === "report" ? t("Approved {name}'s report", { name: people.short(w.assignee_id) }) : t("Approved {name}'s work", { name: people.short(w.assignee_id) }));
                 goNext();
               }}
@@ -311,9 +424,10 @@ function ReviewBody({ issue, workId, onClose, onSelect }: { issue: IssueDetail; 
             </Button>
             <Button
               size="lg"
-              loading={transition.isPending}
-              onClick={() => {
+              loading={transition.isPending || sendingFiles}
+              onClick={async () => {
                 if (!note.trim()) return setNeedNote(true);
+                if (!(await sendFiles())) return;
                 transition.mutate(
                   { item: w, transition: "reject", note: note.trim() },
                   {

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT school_name FROM app_settings FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "school_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_settings",
+            "name": "school_name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6c42845b74c49dae28d4de8f430b98c82b9afdb9fd3aea0e7ce3d5a7537fb47b"
+}

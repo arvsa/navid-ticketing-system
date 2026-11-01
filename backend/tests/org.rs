@@ -878,3 +878,114 @@ async fn departing_members_work_items_become_unassigned(pool: PgPool) {
     .await;
     assert!(dup.is_err());
 }
+
+// ---------------------------------------------------------------------------
+// Member import
+// ---------------------------------------------------------------------------
+
+async fn import(app: &TestApp, cookie: &str, branch: Uuid, csv: &str, dry_run: bool) -> TestResponse {
+    let uri = format!("/api/branches/{branch}/members/import");
+    post_multipart(app, cookie, &uri, ("people.csv", "text/csv", csv.as_bytes()), &[("dry_run", dry_run.to_string())])
+        .await
+}
+
+fn outcomes(res: &TestResponse) -> Vec<String> {
+    res.body["rows"].as_array().unwrap().iter().map(|r| r["outcome"].as_str().unwrap().to_owned()).collect()
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn importing_members_previews_then_adds_everyone_or_no_one(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let manager = as_user(&app, "manager_a@example.com").await;
+    let users_before = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
+
+    // A bad row blocks the whole import.
+    let bad = "email,first_name,last_name\nnew1@example.com,New,One\nnot-an-email,X,Y\nNEW1@example.com,Dup,Licate\n";
+    let res = import(&app, &manager, org.branch_a, bad, false).await;
+    assert_status(&res, StatusCode::OK, None);
+    assert_eq!(res.body["imported"], false);
+    assert_eq!(outcomes(&res), ["create", "error", "error"]);
+    assert_eq!(res.body["rows"][1]["error"]["code"], "invalid_email");
+    assert_eq!(res.body["rows"][2]["error"]["code"], "duplicate_email");
+    let users = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
+    assert_eq!(users, users_before);
+
+    // Preview, then import: new, from another branch, already here, no names.
+    let good = "Email,First name,Last name\nnew1@example.com,New,One\nadmin_b@example.com,,\nplain_a@example.com,,\n";
+    let res = import(&app, &manager, org.branch_a, good, true).await;
+    assert_eq!(res.body["imported"], false);
+    assert_eq!(outcomes(&res), ["create", "add", "skip"]);
+    assert!(res.body["rows"][0].get("temporary_password").is_none());
+
+    let res = import(&app, &manager, org.branch_a, good, false).await;
+    assert_status(&res, StatusCode::OK, None);
+    assert_eq!(res.body["imported"], true);
+    assert_eq!(res.body["rows"][0]["row"], 2);
+    let temp = res.body["rows"][0]["temporary_password"].as_str().unwrap().to_owned();
+    let login = app.login("new1@example.com", &temp).await;
+    assert_eq!(login.status, StatusCode::OK);
+    assert_eq!(login.body["user"]["must_change_password"], true);
+    let admin_b = as_user(&app, "admin_b@example.com").await;
+    let me = call(&app, &admin_b, Method::GET, "/api/me", None).await;
+    assert_eq!(me.body["memberships"].as_array().unwrap().len(), 2);
+    assert!(res.body["rows"][2].get("user_id").is_none());
+
+    // Again: everyone is here now.
+    let res = import(&app, &manager, org.branch_a, good, false).await;
+    assert_eq!(outcomes(&res), ["skip", "skip", "skip"]);
+
+    // A new account needs names.
+    let res = import(&app, &manager, org.branch_a, "email\nnoname@example.com\n", true).await;
+    assert_eq!(res.body["rows"][0]["error"]["code"], "invalid_name");
+
+    // No email column.
+    let res = import(&app, &manager, org.branch_a, "name\nA\n", true).await;
+    assert_status(&res, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_import"));
+
+    // A plain member can't import.
+    let plain = as_user(&app, "plain_a@example.com").await;
+    let res = import(&app, &plain, org.branch_a, good, true).await;
+    assert_status(&res, StatusCode::FORBIDDEN, None);
+
+    // The template is a workbook the import reads.
+    let res = call(&app, &manager, Method::GET, "/api/members/import-template", None).await;
+    assert_status(&res, StatusCode::OK, None);
+    let uri = format!("/api/branches/{}/members/import", org.branch_a);
+    let xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    let back = post_multipart(&app, &manager, &uri, ("people.xlsx", xlsx, &res.bytes), &[]).await;
+    assert_status(&back, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_import"));
+    assert_eq!(back.body["error"]["message"], "the file has no people in it, only the header row");
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn a_branch_opens_without_an_admin_then_fills_up_and_gets_one(pool: PgPool) {
+    let app = TestApp::new(pool);
+    Org::seed(&app.db).await;
+    let root = as_root(&app).await;
+
+    // Open it with no one in it.
+    let res = call(&app, &root, Method::POST, "/api/branches", Some(json!({ "code": "TEH", "name": "Tehran", "timezone": "Asia/Tehran" }))).await;
+    assert_status(&res, StatusCode::CREATED, None);
+    let branch: Uuid = res.body["id"].as_str().unwrap().parse().unwrap();
+
+    // Import its people.
+    let csv = "email,first_name,last_name\nhead@teh.org,Sara,Ahmadi\nteacher@teh.org,Ali,Rezaei\n";
+    let res = import(&app, &root, branch, csv, false).await;
+    assert_status(&res, StatusCode::OK, None);
+    assert_eq!(res.body["imported"], true);
+    let id_of = |email: &str| {
+        res.body["rows"].as_array().unwrap().iter().find(|r| r["email"] == email).unwrap()["user_id"].as_str().unwrap().to_owned()
+    };
+    let (head, teacher) = (id_of("head@teh.org"), id_of("teacher@teh.org"));
+
+    // Without an admin, members still come and go.
+    let res = call(&app, &root, Method::DELETE, &format!("/api/branches/{branch}/members/{teacher}"), None).await;
+    assert_status(&res, StatusCode::NO_CONTENT, None);
+
+    // Appoint the admin; from then on the branch keeps one.
+    let uri = format!("/api/branches/{branch}/admins/{head}");
+    assert_status(&call(&app, &root, Method::PUT, &uri, None).await, StatusCode::NO_CONTENT, None);
+    let last = call(&app, &root, Method::DELETE, &uri, None).await;
+    assert_status(&last, StatusCode::CONFLICT, Some("last_admin"));
+}

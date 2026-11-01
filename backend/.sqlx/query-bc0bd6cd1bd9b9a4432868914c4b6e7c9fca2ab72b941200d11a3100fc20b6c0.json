@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH weeks AS (\n            SELECT generate_series($1::timestamptz, $1::timestamptz + make_interval(weeks => $2 - 1), interval '1 week') AS week\n        )\n        SELECT b.id AS branch_id, w.week AS \"week!\",\n               (SELECT count(*) FROM issue i\n                WHERE i.created_at >= w.week AND i.created_at < w.week + interval '1 week'\n                  AND (i.branch_id = b.id OR (i.branch_id IS NULL AND EXISTS (\n                        SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = b.id)))) AS \"created!\",\n               (SELECT count(*) FROM work_item wi\n                WHERE wi.branch_id = b.id AND wi.status = 'approved'\n                  AND wi.decided_at >= w.week AND wi.decided_at < w.week + interval '1 week') AS \"finished!\"\n        FROM branch b CROSS JOIN weeks w\n        WHERE b.is_active\n        ORDER BY b.id, w.week\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "week!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "created!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "finished!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bc0bd6cd1bd9b9a4432868914c4b6e7c9fca2ab72b941200d11a3100fc20b6c0"
+}

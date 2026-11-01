@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod attachments;
 pub mod audit;
 pub mod branches;
@@ -7,9 +8,11 @@ pub mod events;
 pub mod exports;
 pub mod groups;
 pub mod issues;
+pub mod member_import;
 pub mod members;
 pub mod notifications;
 pub mod reports;
+pub mod settings;
 pub mod targets;
 pub mod types;
 pub mod work_items;

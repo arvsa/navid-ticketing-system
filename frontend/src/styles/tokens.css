@@ -25,7 +25,11 @@
   --sent-back-bg: #fdeadf; --sent-back-edge: #f3c3a6; --sent-back: #9a3412;
   --nav-bg: #111521; --nav-surface: #1b2030; --nav-border: #2a3042;
   --nav-text: #e7e9ef; --nav-text-2: #9ea4b5; --nav-active: #232a3d;
+  --selected: #15171d; --on-selected: #ffffff;
   --bar-ok: #1f7a4a; --bar-wait: #e0a33a; --bar-prog: #7d93e0; --bar-block: #d0473a; --bar-track: #e4e4e9;
+  /* Charts (validated with the dataviz palette checks, both themes): two
+     categorical series, and the reserved "critical" status. */
+  --viz-1: #2a78d6; --viz-2: #eb6834; --viz-critical: #d03b3b;
   --sh-1: 0 1px 2px rgb(20 22 30 / 0.05);
   --sh-2: 0 4px 12px rgb(20 22 30 / 0.08);
   --sh-3: 0 16px 40px rgb(20 22 30 / 0.18);
@@ -34,31 +38,35 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f1218; --surface: #171b23; --surface-2: #1c212b; --sunken: #0b0e13;
-  --border: #2a303b; --border-strong: #3a4150; --input-border: #4f5768;
-  --text: #e8eaee; --text-2: #b4bac6; --text-3: #959caa;
-  --primary: #5ccbb5; --primary-hover: #7ad8c5; --on-primary: #0b1513;
-  --primary-soft: #12302b; --primary-on-soft: #93e2d1; --focus: #5ccbb5;
+  /* Warm graphite, lifted off black, with clear text and lively but not
+     neon colours. Selected tabs are a raised surface, not a bright fill. */
+  --bg: #2a2927; --surface: #32312e; --surface-2: #383734; --sunken: #242321;
+  --border: #43413d; --border-strong: #54514c; --input-border: #67635c;
+  --text: #e0d9cc; --text-2: #c0b8ab; --text-3: #a59f95;
+  --primary: #78c2a4; --primary-hover: #8fd0b5; --on-primary: #10201a;
+  --primary-soft: #2f4038; --primary-on-soft: #a9dcc6; --focus: #78c2a4;
   --brand: #006858; --brand-deep: #00352d; --brand-teal: #47a6a1; --brand-cream: #fcf2ad; --brand-ink: #111513;
-  --success: #7fd3a6; --success-soft: #14321f; --success-solid: #1f8a4c;
-  --warning: #ffcb6b; --warning-soft: #3a2c0c; --warning-edge: #b8862a;
-  --danger: #ff9c92; --danger-soft: #3d1a17; --danger-solid: #c4320a;
-  --ticket: #7cd4d0; --ticket-soft: #12302f;
-  --action: #9db5ff; --action-soft: #1c2747;
-  --report: #b9a0f5; --report-soft: #2a2142;
-  --event: #f2c27a; --event-soft: #3a2b12;
-  --st-open: #b4bac6; --st-open-bg: #262b35;
-  --st-prog: #9db5ff; --st-prog-bg: #1c2747;
-  --st-block: #ff9c92; --st-block-bg: #3d1a17;
-  --st-wait: #ffcb6b; --st-wait-bg: #3a2c0c;
-  --st-ok: #7fd3a6; --st-ok-bg: #14321f;
-  --st-cxl: #8d94a2; --st-cxl-bg: #232831;
-  --private: #c6cbd6; --private-bg: #2a2f3a; --staff-bg: #2e2610; --staff-edge: #b8862a;
-  --sent-back-bg: #3a2014; --sent-back-edge: #6b3a22; --sent-back: #ffb48a;
-  --nav-bg: #0b0d13; --nav-surface: #151925; --nav-border: #232838;
-  --nav-text: #e7e9ef; --nav-text-2: #9ea4b5; --nav-active: #1d2333;
-  --bar-ok: #4fbf82; --bar-wait: #e0a33a; --bar-prog: #6f86d6; --bar-block: #e0675b; --bar-track: #2a303b;
-  --sh-1: none; --sh-2: 0 4px 12px rgb(0 0 0 / 0.4); --sh-3: 0 16px 40px rgb(0 0 0 / 0.5);
+  --success: #9fd08f; --success-soft: #33402f; --success-solid: #4f8a4a;
+  --warning: #ecc274; --warning-soft: #4a3d24; --warning-edge: #b08a45;
+  --danger: #f0988a; --danger-soft: #4d302a; --danger-solid: #b5523e;
+  --ticket: #86cfc5; --ticket-soft: #2e403d;
+  --action: #9fb2ec; --action-soft: #343a4e;
+  --report: #c3a9ec; --report-soft: #3d344a;
+  --event: #e9b77a; --event-soft: #4a3a26;
+  --st-open: #c0b8ab; --st-open-bg: #3a3936;
+  --st-prog: #9fb2ec; --st-prog-bg: #343a4e;
+  --st-block: #f0988a; --st-block-bg: #4d302a;
+  --st-wait: #ecc274; --st-wait-bg: #4a3d24;
+  --st-ok: #9fd08f; --st-ok-bg: #33402f;
+  --st-cxl: #a59f95; --st-cxl-bg: #383633;
+  --private: #d4cdc1; --private-bg: #3d3b37; --staff-bg: #45391f; --staff-edge: #b08a45;
+  --sent-back-bg: #4a3326; --sent-back-edge: #6e4b36; --sent-back: #f2b28e;
+  --nav-bg: #2f2e2b; --nav-surface: #363532; --nav-border: #45433f;
+  --nav-text: #e0d9cc; --nav-text-2: #bdb7ad; --nav-active: #3e3c38;
+  --selected: #4a4844; --on-selected: #e6dfd3;
+  --bar-ok: #84bd78; --bar-wait: #d9a94f; --bar-prog: #8a9fe0; --bar-block: #e0705c; --bar-track: #43413d;
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-critical: #d03b3b;
+  --sh-1: none; --sh-2: 0 4px 14px rgb(0 0 0 / 0.22); --sh-3: 0 16px 40px rgb(0 0 0 / 0.32);
   color-scheme: dark;
 }
 

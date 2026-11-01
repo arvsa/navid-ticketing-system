@@ -13,6 +13,7 @@ mod notifications;
 pub mod openapi;
 mod permissions;
 mod reports;
+mod settings;
 mod work_items;
 
 use std::time::Duration;
@@ -56,10 +57,12 @@ pub fn router(state: AppState) -> Router {
         // time to the response head.
         .merge(notifications::routes())
         .merge(dashboard::routes())
+        .merge(settings::routes())
         .merge(openapi::routes())
         .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, REQUEST_TIMEOUT));
-    let uploads =
-        attachments::routes().layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, UPLOAD_TIMEOUT));
+    let uploads = attachments::routes()
+        .merge(members::import_routes())
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, UPLOAD_TIMEOUT));
 
     let api = timed
         .merge(uploads)

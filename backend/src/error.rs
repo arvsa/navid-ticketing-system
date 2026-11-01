@@ -158,6 +158,9 @@ fn map_constraint(constraint: &str) -> Option<AppError> {
         "user_group_name_uq" => {
             AppError::conflict("group_name_taken", "a group with this name already exists in the branch")
         }
+        "user_group_school_name_uq" => {
+            AppError::conflict("group_name_taken", "a school-wide group with this name already exists")
+        }
         "group_permission_uq" => AppError::conflict("grant_exists", "this group already has this grant"),
         "issue_target_once" => AppError::conflict("target_exists", "the issue is already sent to this target"),
         "work_item_once_per_assignee" => {

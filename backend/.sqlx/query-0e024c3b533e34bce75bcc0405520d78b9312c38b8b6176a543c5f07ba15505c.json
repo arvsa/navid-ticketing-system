@@ -1,0 +1,138 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT u.email::text AS \"email!\", u.first_name, u.last_name, b.name AS branch, b.code, b.timezone,\n               m.is_admin, u.is_active, u.last_login_at, m.joined_at,\n               (SELECT string_agg(g.name, ', ' ORDER BY g.name) FROM group_member gm\n                JOIN user_group g ON g.id = gm.group_id\n                WHERE gm.user_id = u.id AND gm.branch_id = b.id AND NOT g.is_default AND g.archived_at IS NULL) AS groups\n        FROM branch_membership m\n        JOIN app_user u ON u.id = m.user_id\n        JOIN branch b ON b.id = m.branch_id\n        WHERE m.left_at IS NULL AND ($1::uuid[] IS NULL OR b.id = ANY($1))\n        ORDER BY b.code, u.last_name, u.first_name, u.email\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "code",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "timezone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "timezone"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_admin",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "branch_membership",
+            "name": "is_admin"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "is_active"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "last_login_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "last_login_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "joined_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "branch_membership",
+            "name": "joined_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "groups",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "0e024c3b533e34bce75bcc0405520d78b9312c38b8b6176a543c5f07ba15505c"
+}

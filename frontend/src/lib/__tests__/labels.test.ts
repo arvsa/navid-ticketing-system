@@ -12,7 +12,7 @@ describe("labels", () => {
     for (const v of PRIORITIES) expect(priorityLabel[v]).toBeTruthy();
     for (const v of RSVP_RESPONSES) expect(rsvpLabel[v]).toBeTruthy();
     for (const v of SCOPES) expect(scopeLabel[v]).toBeTruthy();
-    expect(Object.keys(permissionInfo)).toHaveLength(17);
+    expect(Object.keys(permissionInfo)).toHaveLength(18);
   });
 });
 
@@ -22,13 +22,13 @@ const me = (id = "me"): MeResponse => ({
 });
 const work = (patch: Partial<WorkItem>): WorkItem => ({
   id: "w", issue_id: "i", target_id: "t", branch_id: "br", assignee_id: "me", status: "open",
-  is_overdue: false, version: 1, created_at: "", updated_at: "", ...patch,
+  is_overdue: false, handoff_chain: [], version: 1, created_at: "", updated_at: "", ...patch,
 });
 const issue = (patch: Partial<IssueDetail>): IssueDetail => ({
   id: "i", key: "ISS-1", number: 1, branch_id: "br", type: "action", title: "T", priority: "medium",
-  is_private: false, completion_mode: "per_member", state: "open", requires_super_admin_approval: false,
+  is_private: false, completion_mode: "per_member", state: "open",
   created_by: "boss", version: 1, created_at: "", updated_at: "", targets: [], work_items: [], attachments: [],
-  watching: false, ...patch,
+  watching: false, muted: false, ...patch,
 });
 
 describe("primaryAction", () => {
@@ -62,6 +62,14 @@ describe("primaryAction", () => {
     admin.memberships[0].is_admin = true;
     const p = primaryAction(issue({ work_items: [work({ assignee_id: "x", status: "pending_approval" })] }), { me: admin });
     expect(p.kind).toBe("review");
+  });
+  it("work passed along is reviewed by whoever passed it on", () => {
+    const head = me("head");
+    const passed = work({ assignee_id: "emp", status: "pending_approval", handoff_chain: ["head", "emp"], reviewer_id: "head" });
+    expect(primaryAction(issue({ work_items: [passed] }), { me: head }).kind).toBe("review");
+    // The sender waits for the head.
+    const sender = me("boss");
+    expect(primaryAction(issue({ work_items: [passed] }), { me: sender }).kind).not.toBe("review");
   });
   it("never review your own work", () => {
     const admin = me();

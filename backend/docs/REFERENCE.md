@@ -18,8 +18,8 @@ Environment variables (`.env` is read in development):
 | `LOG_FORMAT` | `pretty` | `pretty` for development, `json` in production. |
 | `RUST_LOG` | `backend=info,tower_http=info,sqlx=warn` | Log filter. |
 
-Built-in limits: JSON bodies 1 MB, uploads 25 MB; requests time out after 30 s
-(uploads 5 min); each database statement after 15 s, locks after 10 s, idle
+Built-in limits: JSON bodies 1 MB, uploads 25 MB, member imports 2 MB and 500 people; requests time out after 30 s
+(uploads and member imports 5 min); each database statement after 15 s, locks after 10 s, idle
 transactions after 60 s.
 
 ## API conventions
@@ -38,6 +38,42 @@ transactions after 60 s.
 - Five wrong passwords in a row lock the account for 15 minutes.
 - While `must_change_password` is set, only the three endpoints above work.
 - Every non-GET request must send `Origin` equal to `APP_ORIGIN`, login included.
+
+## Roles
+
+- **Super admin**: runs the app. Creates branches and their first admins,
+  school-wide groups and accounts in any branch. Can do anything, but isn't
+  part of the daily work: the UI opens on a Setup page.
+- **Branch admin**: runs a branch: its people, groups and their permissions,
+  and any item or work in it. Always may send items to other branches, to
+  people or to whole branches (`issue.target_other_branches`, which admins
+  can also give to others).
+- Everyone else acts through the permissions of their groups.
+- An item is run by its sender: on a school-wide item only they edit, close
+  or resend it. Work is approved by the item's sender or the work's branch
+  approvers (its admins and holders of `work_item.approve`).
+- Whoever holds work may pass it to anyone in its branch
+  (`POST /api/work-items/{id}/pass`, `{version, assignee_id}`). The chain is
+  kept on the work item (`handoff_chain`): a hand-in is reviewed one level up
+  (`reviewer_id`, or the branch's admins); approving there sends it up as
+  that person's hand-in, until the top, where the sender or the branch's
+  approvers give the final approval. Sending back returns it to whoever
+  handed it in. Assigning or claiming starts a new chain.
+- A question (ticket) asked to you can be passed to someone else in your
+  branch: `POST /api/issues/{id}/pass` `{user_id}`.
+- `PUT` / `DELETE /api/issues/{id}/mute`: no more comments or changes from an
+  item; what needs you (work, a hand-in to review, a mention) still arrives.
+
+## Settings and analytics
+
+- `GET /api/settings` (no sign-in needed) and `PATCH /api/settings`
+  `{school_name}` (super admins): the school's name, shown in the header and
+  on the sign-in page. Changing it sends `settings_changed` to everyone.
+- `GET /api/analytics?weeks=12` (super admins, 1 to 52 weeks): per branch,
+  items created and work finished week by week, average hours from work
+  given out to its approval, and the share of finished work with a due date
+  that was handed in on time; per person (the 15 busiest), open, overdue and
+  handed-in work.
 
 ## Real-time updates
 
@@ -98,12 +134,15 @@ an `x-request-id` header to quote when reporting problems.
 | 409 | `target_exists` | The issue is already sent to this target. |
 | 409 | `already_assigned` | Someone already has this work (or this person already has work on the target). |
 | 409 | `already_member` | Already a member of the branch. |
+| 409 | `not_yours` | Only a question asked to you can be passed on. |
 | 409 | `member_is_admin` | Admins can't leave a branch; demote them first. |
 | 409 | `last_admin` | A branch must keep an active admin. |
 | 409 | `last_super_admin` | At least one active super admin must remain. |
 | 409 | `default_group` | "All members" can't be renamed, archived, deleted or joined by hand. |
 | 409 | `not_a_member` | The user isn't a current member of the branch. |
 | 409 | `group_archived` | Restore the group first. |
+| 409 | `managed_by_template` | A branch's copy of a school-wide group: change it in the school-wide group (only its members are chosen in the branch). |
+| 409 | `school_group_has_no_members` | A school-wide group has no members of its own; add people to its copy in each branch. |
 | 409 | `issue_not_open` | The issue is closed or cancelled. |
 | 409 | `event_not_open` | The event is cancelled or over. |
 | 409 | `invalid_transition` | Not a valid work item transition from its current status. |
@@ -151,6 +190,8 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `invalid_report` | Reports are 1 to 100,000 characters. |
 | 422 | `invalid_parent` | The comment or report to attach to doesn't exist or is locked. |
 | 422 | `invalid_upload` | The multipart upload is malformed. |
+| 422 | `invalid_import` | The member import file can't be read, has no `email` column or no people, or has over 500. |
+| 422 | `duplicate_email` | (Import row) The same email is on an earlier row. |
 | 422 | `unsupported_type` | That file type isn't accepted. |
 | 422 | `empty_file` | The file is empty. |
 | 422 | `invalid_response` | RSVP with going, maybe or declined. |

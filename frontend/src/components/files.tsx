@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { upload } from "@/api/client";
 import type { AttachmentMeta } from "@/api/types";
 import { errorMessage } from "@/lib/labels";
-import { cx } from "./ui";
+import { IconButton, cx } from "./ui";
 import { num, t, tn } from "@/i18n";
 
 export const MAX_FILE = 25 * 1024 * 1024;
@@ -135,11 +135,19 @@ export function reportFailedUploads(failed: { name: string; reason: string }[], 
   });
 }
 
-export function AttachButton({ onPick, label = t("Attach files"), dashed = true }: { onPick: (files: FileList | null) => void; label?: string; dashed?: boolean }) {
+export function AttachButton({ onPick, label = t("Attach files"), dashed = true, iconOnly }: { onPick: (files: FileList | null) => void; label?: string; dashed?: boolean; iconOnly?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
+  const input = <input ref={ref} type="file" multiple accept={ACCEPT} className="sr-only" tabIndex={-1} onChange={(e) => (onPick(e.target.files), (e.target.value = ""))} />;
+  if (iconOnly)
+    return (
+      <>
+        {input}
+        <IconButton type="button" variant="ghost" label={label} icon={<Paperclip className="size-4" />} onClick={() => ref.current?.click()} />
+      </>
+    );
   return (
     <>
-      <input ref={ref} type="file" multiple accept={ACCEPT} className="sr-only" tabIndex={-1} onChange={(e) => (onPick(e.target.files), (e.target.value = ""))} />
+      {input}
       <button
         type="button"
         title={t("You can attach {hint}", { hint: ACCEPTED_HINT })}

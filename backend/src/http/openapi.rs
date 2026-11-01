@@ -50,13 +50,16 @@ impl Modify for SessionCookie {
         super::branches::grant_super_admin, super::branches::revoke_super_admin,
         super::members::list, super::members::add, super::members::update, super::members::remove,
         super::members::effective_permissions, super::members::reset_password, super::members::set_active,
+        super::members::recipients, super::members::import, super::members::import_template,
         super::groups::list, super::groups::create, super::groups::update, super::groups::remove,
         super::groups::add_member, super::groups::remove_member,
         super::groups::list_grants, super::groups::grant, super::groups::revoke,
+        super::groups::list_school, super::groups::create_school, super::groups::copies, super::groups::apply_grants,
         super::issues::list, super::issues::create, super::issues::show, super::issues::by_number,
         super::issues::update, super::issues::close, super::issues::cancel,
         super::issues::add_target, super::issues::remove_target,
         super::issues::mark_read, super::issues::watch, super::issues::unwatch, super::issues::history,
+        super::issues::mute, super::issues::unmute, super::issues::pass,
         super::work_items::list, super::work_items::show, super::work_items::transition,
         super::comments::list, super::comments::create, super::comments::update, super::comments::remove,
         super::reports::list, super::reports::create, super::reports::update, super::reports::submit,
@@ -64,7 +67,8 @@ impl Modify for SessionCookie {
         super::events::calendar, super::events::respond, super::events::rsvps,
         super::notifications::list, super::notifications::unread_count,
         super::notifications::read, super::notifications::read_all, super::notifications::stream,
-        super::dashboard::show, super::dashboard::export,
+        super::dashboard::show, super::dashboard::export, super::dashboard::export_people,
+        super::settings::show, super::settings::update, super::settings::analytics,
     )
 )]
 pub struct ApiDoc;

@@ -6,7 +6,8 @@ import { ApiError } from "@/api/client";
 import { useChangePassword, useLogin, useLogout, useMe, takeTemporaryPassword } from "@/auth/session";
 import { Button, Field, inputClass } from "@/components/ui";
 import { BrandMark } from "@/components/brand";
-import { APP_NAME, BRAND_NAME, errorMessage, typePlural } from "@/lib/labels";
+import { APP_NAME, errorMessage, typePlural } from "@/lib/labels";
+import { useSchoolName } from "@/lib/useSchoolName";
 import { lang, setLang, t } from "@/i18n";
 
 function Butterfly({ className, style }: { className?: string; style?: CSSProperties }) {
@@ -26,6 +27,7 @@ function Butterfly({ className, style }: { className?: string; style?: CSSProper
 /** The school's side of the page: logo, motto and what the app is for. On
  * phones it shrinks to a band above the form. */
 function BrandPanel() {
+  const schoolName = useSchoolName();
   const features = [
     { icon: <MessageCircleQuestion className="size-4" />, label: typePlural.ticket },
     { icon: <ListChecks className="size-4" />, label: typePlural.action },
@@ -52,7 +54,7 @@ function BrandPanel() {
       <div className="flex items-center gap-3">
         <BrandMark size={52} className="rounded-[14px] shadow-2" />
         <div className="leading-tight">
-          <div className="text-[17px] font-bold">{BRAND_NAME}</div>
+          <div className="text-[17px] font-bold">{schoolName}</div>
           <div className="text-[14px] text-white/75">{APP_NAME}</div>
         </div>
       </div>
@@ -81,6 +83,7 @@ function BrandPanel() {
 }
 
 function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  const schoolName = useSchoolName();
   return (
     <div className="flex min-h-screen flex-col bg-bg lg:flex-row">
       <BrandPanel />
@@ -102,7 +105,7 @@ function AuthCard({ title, subtitle, children }: { title: string; subtitle?: str
           {subtitle && <p className="mt-1.5 text-text-2">{subtitle}</p>}
           <div className="mt-7">{children}</div>
         </div>
-        <p className="text-center text-[13px] text-text-3">{BRAND_NAME}</p>
+        <p className="text-center text-[13px] text-text-3">{schoolName}</p>
       </main>
     </div>
   );

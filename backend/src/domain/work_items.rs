@@ -8,6 +8,13 @@
 //!                                         └── reject (note required) ──► in_progress
 //! any non-final state ──► cancelled
 //! ```
+//!
+//! Passing along: whoever holds the work may pass it to someone else in its
+//! branch (`handoff_chain` records everyone it went through). Their hand-in
+//! is reviewed one level up the chain; approving there moves it up as that
+//! person's own hand-in, until the top of the chain, where the item's sender
+//! or the branch's approvers give the final approval. Sending back returns
+//! it to whoever handed it in.
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -34,7 +41,14 @@ pub struct WorkItem {
     pub issue_id: Uuid,
     pub target_id: Uuid,
     pub branch_id: Uuid,
+    /// Who holds the work now: does it, or (once it's handed in) waits for review.
     pub assignee_id: Option<Uuid>,
+    /// Everyone it was passed through, from the person first given it to
+    /// the holder. Empty if it was never passed on.
+    pub handoff_chain: Vec<Uuid>,
+    /// Who reviews the holder's hand-in: one level up the chain. `null`: the
+    /// item's sender and the branch's approvers.
+    pub reviewer_id: Option<Uuid>,
     pub status: WorkStatus,
     #[serde(with = "time::serde::rfc3339::option")]
     pub sla_due_at: Option<OffsetDateTime>,
@@ -57,7 +71,8 @@ pub(crate) async fn for_issue(db: &PgPool, issue_id: Uuid) -> AppResult<Vec<Work
         WorkItem,
         r#"
         SELECT id AS "id!", issue_id AS "issue_id!", target_id AS "target_id!", branch_id AS "branch_id!",
-               assignee_id, status AS "status!: WorkStatus", sla_due_at, is_overdue AS "is_overdue!",
+               assignee_id, handoff_chain AS "handoff_chain!", work_reviewer(handoff_chain, assignee_id) AS reviewer_id,
+               status AS "status!: WorkStatus", sla_due_at, is_overdue AS "is_overdue!",
                submitted_at, decided_by, decided_at, decision_note, version AS "version!",
                created_at AS "created_at!", updated_at AS "updated_at!"
         FROM work_item_overview WHERE issue_id = $1 ORDER BY created_at, id
@@ -73,7 +88,8 @@ async fn fetch(db: &PgPool, id: Uuid) -> AppResult<WorkItem> {
         WorkItem,
         r#"
         SELECT id AS "id!", issue_id AS "issue_id!", target_id AS "target_id!", branch_id AS "branch_id!",
-               assignee_id, status AS "status!: WorkStatus", sla_due_at, is_overdue AS "is_overdue!",
+               assignee_id, handoff_chain AS "handoff_chain!", work_reviewer(handoff_chain, assignee_id) AS reviewer_id,
+               status AS "status!: WorkStatus", sla_due_at, is_overdue AS "is_overdue!",
                submitted_at, decided_by, decided_at, decision_note, version AS "version!",
                created_at AS "created_at!", updated_at AS "updated_at!"
         FROM work_item_overview WHERE id = $1
@@ -118,7 +134,8 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &WorkItemQuery, page: &Page
         WorkItem,
         r#"
         SELECT w.id AS "id!", w.issue_id AS "issue_id!", w.target_id AS "target_id!", w.branch_id AS "branch_id!",
-               w.assignee_id, w.status AS "status!: WorkStatus", w.sla_due_at, w.is_overdue AS "is_overdue!",
+               w.assignee_id, w.handoff_chain AS "handoff_chain!", work_reviewer(w.handoff_chain, w.assignee_id) AS reviewer_id,
+               w.status AS "status!: WorkStatus", w.sla_due_at, w.is_overdue AS "is_overdue!",
                w.submitted_at, w.decided_by, w.decided_at, w.decision_note, w.version AS "version!",
                w.created_at AS "created_at!", w.updated_at AS "updated_at!"
         FROM work_item_overview w
@@ -157,6 +174,8 @@ pub enum Transition {
     Claim,
     Assign,
     Cancel,
+    /// Hand the work you hold to someone else in its branch.
+    Pass,
 }
 
 impl Transition {
@@ -171,6 +190,7 @@ impl Transition {
             Self::Claim => "claim",
             Self::Assign => "assign",
             Self::Cancel => "cancel",
+            Self::Pass => "pass",
         }
     }
 }
@@ -181,7 +201,7 @@ pub struct TransitionInput {
     pub version: i32,
     /// Approve (optional) and reject (required).
     pub note: Option<String>,
-    /// Assign only.
+    /// Assign and pass only.
     pub assignee_id: Option<Uuid>,
 }
 
@@ -204,6 +224,7 @@ pub async fn transition(
             Transition::Claim => Action::ClaimWorkItem { item },
             Transition::Assign => Action::AssignWorkItem { item },
             Transition::Cancel => Action::CancelWorkItem { item },
+            Transition::Pass => Action::PassWorkItem { item },
         },
     )?;
     let note = input.note.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_owned);
@@ -213,8 +234,8 @@ pub async fn transition(
     // are serialized.
     let cur = sqlx::query!(
         r#"
-        SELECT w.status AS "status: WorkStatus", w.version, w.assignee_id, w.branch_id, w.issue_id,
-               i.state AS "state: IssueState", ty.code AS issue_type, i.requires_super_admin_approval,
+        SELECT w.status AS "status: WorkStatus", w.version, w.assignee_id, w.branch_id, w.issue_id, w.handoff_chain,
+               i.state AS "state: IssueState", ty.code AS issue_type, i.created_by AS issue_created_by,
                i.completion_mode AS "completion_mode: CompletionMode", t.kind AS "target_kind: TargetKind"
         FROM work_item w
         JOIN issue i ON i.id = w.issue_id
@@ -241,6 +262,8 @@ pub async fn transition(
     use WorkStatus::*;
     let from = cur.status;
     let mut assignee = cur.assignee_id;
+    let mut chain = cur.handoff_chain.clone();
+    let reviewer = reviewer_of(&chain, cur.assignee_id);
     let mut submitted = false;
     let mut decision: Option<Option<String>> = None;
     let to = match t {
@@ -277,10 +300,49 @@ pub async fn transition(
                 };
                 decision = Some(Some(n.clone()));
                 InProgress
+            } else if let Some(up) = reviewer {
+                // Approved one level up the chain: it goes on as their hand-in.
+                decision = Some(note.clone());
+                assignee = Some(up);
+                submitted = true;
+                PendingApproval
             } else {
                 decision = Some(note.clone());
                 Approved
             }
+        }
+        Transition::Pass if matches!(from, Open | InProgress | Blocked) => {
+            let to_user = input
+                .assignee_id
+                .ok_or_else(|| AppError::validation("assignee_required", "assignee_id is required"))?;
+            // Keep the chain down to the holder, then add the new holder.
+            if chain.is_empty() {
+                chain.push(actor.user_id);
+            } else if let Some(pos) = chain.iter().position(|u| *u == actor.user_id) {
+                chain.truncate(pos + 1);
+            }
+            // Never back up the chain (or to yourself): that would loop.
+            if chain.contains(&to_user) {
+                return Err(AppError::validation("invalid_assignee", "pass it to someone below you, not back up"));
+            }
+            if !active_member(&mut tx, to_user, cur.branch_id).await? {
+                return Err(AppError::validation(
+                    "invalid_assignee",
+                    "the person must be an active member of the work's branch",
+                ));
+            }
+            chain.push(to_user);
+            assignee = Some(to_user);
+            // An unsubmitted draft report goes with the work.
+            sqlx::query!(
+                "UPDATE issue_report SET author_id = $3 WHERE work_item_id = $1 AND author_id = $2 AND submitted_at IS NULL",
+                id,
+                actor.user_id,
+                to_user
+            )
+            .execute(&mut *tx)
+            .await?;
+            Open
         }
         Transition::Claim => {
             if cur.target_kind != TargetKind::Group || cur.completion_mode != CompletionMode::Shared {
@@ -290,27 +352,22 @@ pub async fn transition(
                 return Err(AppError::conflict("already_assigned", "someone has already taken this work"));
             }
             assignee = Some(actor.user_id);
+            chain.clear();
             from
         }
         Transition::Assign => {
             let new = input
                 .assignee_id
                 .ok_or_else(|| AppError::validation("assignee_required", "assignee_id is required"))?;
-            let eligible = sqlx::query_scalar!(
-                r#"SELECT EXISTS (SELECT 1 FROM branch_membership m JOIN app_user u ON u.id = m.user_id
-                                  WHERE m.user_id = $1 AND m.branch_id = $2 AND m.left_at IS NULL AND u.is_active) AS "ok!""#,
-                new,
-                cur.branch_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-            if !eligible {
+            if !active_member(&mut tx, new, cur.branch_id).await? {
                 return Err(AppError::validation(
                     "invalid_assignee",
                     "the assignee must be an active member of the branch",
                 ));
             }
             assignee = Some(new);
+            // A new start: whoever assigns doesn't pass it along.
+            chain.clear();
             from
         }
         Transition::Cancel => Cancelled,
@@ -326,6 +383,7 @@ pub async fn transition(
             decided_by = CASE WHEN $6 THEN $7 ELSE decided_by END,
             decided_at = CASE WHEN $6 THEN now() ELSE decided_at END,
             decision_note = CASE WHEN $6 THEN $8 ELSE decision_note END,
+            handoff_chain = $9,
             version = version + 1
         WHERE id = $1 AND version = $2
         "#,
@@ -337,6 +395,7 @@ pub async fn transition(
         decision.is_some(),
         actor.user_id,
         decision.clone().flatten(),
+        &chain,
     )
     .execute(&mut *tx)
     .await?;
@@ -346,6 +405,9 @@ pub async fn transition(
     if assignee != cur.assignee_id {
         old_v["assignee_id"] = json!(cur.assignee_id);
         new_v["assignee_id"] = json!(assignee);
+    }
+    if chain != cur.handoff_chain {
+        new_v["handoff_chain"] = json!(chain);
     }
     if let Some(n) = &decision {
         new_v["decision_note"] = json!(n);
@@ -373,15 +435,34 @@ pub async fn transition(
         payload,
     };
     match t {
-        Transition::Submit => {
-            let approvers =
-                approvers(&mut tx, cur.branch_id, &cur.issue_type, cur.requires_super_admin_approval).await?;
-            let approvers: Vec<Uuid> = approvers.into_iter().filter(|a| Some(*a) != assignee).collect();
-            notifications::notify(&mut tx, &approvers, notice(Kind::SubmittedForApproval, json!({}))).await?;
+        // Handed in, here or one level up the chain: tell whoever reviews it next.
+        Transition::Submit | Transition::Approve if to == PendingApproval => {
+            if t == Transition::Approve {
+                notifications::notify(
+                    &mut tx,
+                    cur.assignee_id.as_slice(),
+                    notice(Kind::Approved, json!({ "note": note })),
+                )
+                .await?;
+            }
+            let next = match reviewer_of(&chain, assignee) {
+                Some(up) => vec![up],
+                None => approvers(&mut tx, cur.branch_id, &cur.issue_type, cur.issue_created_by).await?,
+            };
+            let next: Vec<Uuid> = next.into_iter().filter(|a| Some(*a) != assignee && *a != actor.user_id).collect();
+            notifications::notify(&mut tx, &next, notice(Kind::SubmittedForApproval, json!({}))).await?;
         }
         Transition::Approve => {
             notifications::notify(&mut tx, assignee.as_slice(), notice(Kind::Approved, json!({ "note": note })))
                 .await?;
+        }
+        Transition::Pass => {
+            notifications::notify(
+                &mut tx,
+                assignee.as_slice(),
+                notice(Kind::Assigned, json!({ "passed_by": actor.user_id })),
+            )
+            .await?;
         }
         Transition::Reject => {
             notifications::notify(&mut tx, assignee.as_slice(), notice(Kind::Rejected, json!({ "note": note })))
@@ -406,21 +487,34 @@ pub async fn transition(
     fetch(db, id).await
 }
 
+/// One level up the chain from the holder, if the work was passed along to them.
+fn reviewer_of(chain: &[Uuid], holder: Option<Uuid>) -> Option<Uuid> {
+    let pos = chain.iter().position(|u| Some(*u) == holder)?;
+    pos.checked_sub(1).map(|up| chain[up])
+}
+
+async fn active_member(tx: &mut Tx, user_id: Uuid, branch_id: Uuid) -> AppResult<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM branch_membership m JOIN app_user u ON u.id = m.user_id
+                          WHERE m.user_id = $1 AND m.branch_id = $2 AND m.left_at IS NULL AND u.is_active) AS "ok!""#,
+        user_id,
+        branch_id
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
 fn invalid(t: Transition, from: WorkStatus) -> AppError {
     AppError::conflict("invalid_transition", format!("can't {} work that is {}", t.name(), from.as_str()))
 }
 
-/// Everyone who can approve work on the issue: all active super admins for a
-/// super admin issue; otherwise the branch's admins and members holding
-/// `work_item.approve` for the type.
-async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, super_issue: bool) -> AppResult<Vec<Uuid>> {
-    if super_issue {
-        return Ok(sqlx::query_scalar!("SELECT id FROM app_user WHERE is_super_admin AND is_active")
-            .fetch_all(&mut **tx)
-            .await?);
-    }
+/// Everyone who can approve work on the issue: its sender, the branch's
+/// admins and members holding `work_item.approve` for the type.
+async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, sender: Uuid) -> AppResult<Vec<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
+        SELECT $3::uuid AS "user_id!"
+        UNION
         SELECT m.user_id FROM branch_membership m JOIN app_user u ON u.id = m.user_id
         WHERE m.branch_id = $1 AND m.left_at IS NULL AND u.is_active
           AND (m.is_admin OR EXISTS (
@@ -432,7 +526,8 @@ async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, super_issue: 
                   AND (gp.issue_type_id IS NULL OR gp.issue_type_id = (SELECT id FROM issue_type WHERE code = $2))))
         "#,
         branch_id,
-        issue_type
+        issue_type,
+        sender
     )
     .fetch_all(&mut **tx)
     .await?)

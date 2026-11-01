@@ -7,7 +7,7 @@ import { Lock, X } from "lucide-react";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { useGroups } from "@/api/hooks";
+import { useGroups, useRecipients } from "@/api/hooks";
 import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority } from "@/api/types";
 import { PRIORITIES } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
@@ -16,7 +16,7 @@ import { AttachButton, PendingFiles, reportFailedUploads, uploadAll, useFilePick
 import { RecipientPicker, type Recipient } from "@/components/pickers";
 import { Button, DrawerClose, Field, Segmented, cx, inputClass } from "@/components/ui";
 import { DateInput } from "@/components/DateInput";
-import { canSendType, canSetPrivateIn, creatableTypes, isSuper } from "./rules";
+import { canSendType, canSetPrivateIn, canTargetWholeBranch, creatableTypes, isSuper } from "./rules";
 import { describeReminders, formatDateTime, fromLocalInput, toLocalInput } from "@/lib/dates";
 import { errorMessage, modeTitle, priorityLabel, typeLabel, typePitch, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
@@ -121,6 +121,19 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const branch = options.find((o) => o.id === createBranch);
   const groups = useGroups(createBranch ?? undefined);
   const kinds = creatableTypes(viewer, createBranch);
+  // School-wide: super admins and holders of issue.target_other_branches.
+  const canGoSchoolWide = superAdmin || creatableTypes(viewer, null).length > 0;
+  const crossPeople = useRecipients(createBranch === null && canGoSchoolWide);
+  // Whole branches: every branch for school-wide items (members know the
+  // other branches from their people), or this one for a branch item.
+  const wholeBranches =
+    createBranch === null
+      ? superAdmin
+        ? options.map((o) => ({ id: o.id, name: o.name }))
+        : [...new Map((crossPeople.data ?? []).map((p) => [p.branch_id, { id: p.branch_id, name: p.branch_name }])).values()]
+      : d.type && canTargetWholeBranch(viewer, createBranch, d.type)
+        ? options.filter((o) => o.id === createBranch).map((o) => ({ id: o.id, name: o.name }))
+        : undefined;
   const canSend = d.type ? canSendType(viewer, createBranch, d.type) : false;
   const hasWork = d.type === "action" || d.type === "report";
   const groupGoing = d.recipients.some((r) => r.kind !== "user");
@@ -154,7 +167,15 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         description: d.description.trim() || null,
         priority: d.priority,
         is_private: d.isPrivate || undefined,
-        targets: d.recipients.map((r) => (r.kind === "user" ? { user_id: r.id } : r.kind === "group" ? { group_id: r.id } : { branch_id: r.id })),
+        targets: d.recipients.map((r) =>
+          r.kind === "user"
+            ? createBranch === null
+              ? { user_id: r.id, branch_id: r.branchId }
+              : { user_id: r.id }
+            : r.kind === "group"
+              ? { group_id: r.id }
+              : { branch_id: r.id },
+        ),
       };
       if (hasWork) {
         body.completion_mode = groupGoing ? d.mode : "per_member";
@@ -202,8 +223,8 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   else if (!d.title.trim()) problems.push(t("Give it a title."));
   else if (d.type === "event" && !d.allDay && d.ends <= d.starts) problems.push(t("The end must be after the start."));
   else if (d.type === "action" && canSend && !d.recipients.length) problems.push(t("Choose who it's for."));
-  else if (createBranch === null && d.recipients.length === 0) problems.push(t("Add at least one branch, or choose a single branch above."));
-  else if (createBranch === null && d.recipients.some((r) => r.kind !== "branch")) problems.push(t("School-wide items go to whole branches."));
+  else if (createBranch === null && d.recipients.length === 0)
+    problems.push(t("Add at least one branch, or choose a single branch above."));
 
   const dueText = hasWork && d.recipients.length ? t(", due {when}", { when: formatDateTime(fromLocalInput(d.due, zone), zone) }) : "";
   const summary = !d.type
@@ -214,7 +235,9 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         : t("You file this report yourself.")
       : d.type === "action"
         ? createBranch === null
-          ? tn(d.recipients.length, "Goes to {n} branch{due}. Super admins approve.", "Goes to {n} branches{due}. Super admins approve.", { due: dueText })
+          ? d.recipients.every((r) => r.kind === "branch")
+            ? tn(d.recipients.length, "Goes to {n} branch{due}. You approve the work.", "Goes to {n} branches{due}. You approve the work.", { due: dueText })
+            : tn(pieces, "{n} task{due}. You approve it.", "{n} tasks{due}. You approve them.", { due: dueText })
           : pieces
             ? tn(pieces, "{n} task{due}. Each comes back to you to approve.", "{n} tasks{due}. Each comes back to you to approve.", { due: dueText })
             : t("No tasks{due}. Each comes back to you to approve.", { due: dueText })
@@ -227,7 +250,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               ? t("{n} invited, reminded {when} before.", { n: headcount, when: describeReminders(d.reminders) })
               : t("{n} invited.", { n: headcount })
             : createBranch === null
-              ? t("School-wide events need at least one branch invited.")
+              ? t("School-wide events need someone invited.")
               : t("Just on your calendar until you invite someone.");
 
   const sendLabel =
@@ -248,7 +271,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
             : t("Send");
 
   const branchPeople = createBranch ? people.inBranch(createBranch) : [];
-  const showBranchPicker = options.length > 1 || superAdmin;
+  const showBranchPicker = options.length > 1 || canGoSchoolWide;
 
   return (
     <>
@@ -261,7 +284,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
             className="h-8 rounded-full border border-border bg-surface-2 px-3 text-[14px] text-text-2"
             aria-label={t("Create in")}
           >
-            {superAdmin && <option value="school">{t("School-wide (several branches)")}</option>}
+            {canGoSchoolWide && <option value="school">{t("School-wide (several branches)")}</option>}
             {options
               .filter((o) => superAdmin || creatableTypes(viewer, o.id).length > 0)
               .map((o) => (
@@ -357,12 +380,19 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   onChange={(recipients) => set({ recipients })}
                   people={branchPeople.filter((p) => p.id !== viewer.me.user.id || d.type === "event")}
                   groups={groups.data ?? []}
-                  branches={createBranch === null ? options.map((o) => ({ id: o.id, name: o.name })) : undefined}
+                  branches={wholeBranches}
+                  crossPeople={createBranch === null ? (crossPeople.data ?? []).filter((p) => p.user_id !== viewer.me.user.id || d.type === "event") : undefined}
                   branchId={createBranch}
-                  placeholder={createBranch === null ? t("Add a branch") : t("Add a person or group")}
+                  placeholder={createBranch === null ? t("Add a branch or a person") : t("Add a person or group")}
                 />
                 <p className={cx("text-[13px]", error?.field === "recipients" ? "text-danger" : "text-text-3")}>
-                  {error?.field === "recipients" ? error.text : d.type === "ticket" ? t("Leave it empty to ask the branch admins.") : createBranch === null ? t("School-wide items go to whole branches.") : ""}
+                  {error?.field === "recipients"
+                    ? error.text
+                    : createBranch === null
+                      ? t("Send it to whole branches, or to chosen people in any branch.")
+                      : d.type === "ticket"
+                        ? t("Leave it empty to ask the branch admins.")
+                        : ""}
                 </p>
               </div>
             )}

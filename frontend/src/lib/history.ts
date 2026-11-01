@@ -75,6 +75,7 @@ export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: His
       switch (h.entity_type) {
         case "issue": {
           if (h.action === "cancel") return t("{actor} cancelled this", { actor });
+          if (h.action === "pass") return t("{actor} passed the question to {who}", { actor, who: l.person(nv?.user_id as string) });
           if (h.action === "close") return t("{actor} closed this", { actor });
           if (!nv) return t("{actor} changed the details", { actor });
           const parts = Object.keys(nv)
@@ -120,7 +121,12 @@ export function historyLines(entries: HistoryEntry[], issue: IssueDetail, l: His
                 ? t("{actor} sent {what} for approval", { actor, what: part(h.entity_id, assignee) })
                 : t("{actor} sent their part for approval", { actor });
             case "approve":
-              return t("{actor} approved {what}", { actor, what: part(h.entity_id, assignee) });
+              // Approved one level up a chain: it went on to the next reviewer.
+              return nv?.status === "pending_approval"
+                ? t("{actor} approved {what} and passed it up", { actor, what: part(h.entity_id, ov?.assignee_id ?? assignee) })
+                : t("{actor} approved {what}", { actor, what: part(h.entity_id, assignee) });
+            case "pass":
+              return t("{actor} passed {what} to {who}", { actor, what: thePart(), who: l.person(nv?.assignee_id as string) });
             case "reject":
               return t("{actor} sent {what} back", { actor, what: part(h.entity_id, assignee) }) + note;
             case "cancel":

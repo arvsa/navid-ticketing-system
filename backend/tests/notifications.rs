@@ -398,3 +398,79 @@ async fn cleanup_removes_old_read_notifications_and_dead_sessions(pool: PgPool) 
     );
     assert_eq!(app.req(Method::GET, "/api/me").cookie(&live).send().await.status, StatusCode::OK);
 }
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn a_question_can_be_passed_to_someone_else(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let asker = as_user(&app, "plain_a@example.com").await;
+    let manager = as_user(&app, "manager_a@example.com").await;
+    let ticket = create(
+        &app,
+        &asker,
+        json!({ "branch_id": org.branch_a, "type": "ticket", "title": "Where is the projector?",
+                "targets": [{ "user_id": org.manager_a }] }),
+    )
+    .await;
+    let id = ticket["id"].as_str().unwrap();
+    let pass = format!("/api/issues/{id}/pass");
+
+    // Only someone it was asked to.
+    let multi = as_user(&app, "multi@example.com").await;
+    let res = call(&app, &multi, Method::POST, &pass, Some(json!({ "user_id": org.boss_like_a }))).await;
+    assert_status(&res, StatusCode::FORBIDDEN, None);
+
+    let res = call(&app, &manager, Method::POST, &pass, Some(json!({ "user_id": org.multi }))).await;
+    assert_status(&res, StatusCode::OK, None);
+    let targets: Vec<&str> = res.body["targets"].as_array().unwrap().iter().filter_map(|t| t["user_id"].as_str()).collect();
+    assert_eq!(targets, [org.multi.to_string().as_str()]);
+    assert_eq!(notifications_of(&app.db, org.multi, "ticket_created").await, 1);
+    // The new person may pass it on in turn; the old one no longer can.
+    let res = call(&app, &manager, Method::POST, &pass, Some(json!({ "user_id": org.boss_like_a }))).await;
+    assert_eq!(res.status, StatusCode::FORBIDDEN, "{}", res.body);
+    let history = call(&app, &asker, Method::GET, &format!("/api/issues/{id}/history"), None).await;
+    assert!(history.body["items"].as_array().unwrap().iter().any(|h| h["action"] == "pass"));
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn muting_an_item_stops_its_updates_but_not_what_needs_you(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let admin = as_user(&app, "admin_a@example.com").await;
+    let plain = as_user(&app, "plain_a@example.com").await;
+    let issue = create(
+        &app,
+        &admin,
+        json!({ "branch_id": org.branch_a, "type": "action", "title": "Fix the door", "targets": [{ "user_id": org.plain_a }] }),
+    )
+    .await;
+    let id = issue["id"].as_str().unwrap();
+    let comment = |text: &str| json!({ "body": text });
+
+    call(&app, &plain, Method::POST, &format!("/api/issues/{id}/comments"), Some(comment("On it"))).await;
+    assert_eq!(notifications_of(&app.db, org.admin_a, "commented").await, 1);
+
+    let res = call(&app, &admin, Method::PUT, &format!("/api/issues/{id}/mute"), None).await;
+    assert_status(&res, StatusCode::NO_CONTENT, None);
+    let seen = call(&app, &admin, Method::GET, &format!("/api/issues/{id}"), None).await;
+    assert_eq!(seen.body["muted"], true);
+    call(&app, &plain, Method::POST, &format!("/api/issues/{id}/comments"), Some(comment("Still on it"))).await;
+    assert_eq!(notifications_of(&app.db, org.admin_a, "commented").await, 1, "muted: no new comment notice");
+
+    // A hand-in still asks for them.
+    let work = &issue["work_items"][0];
+    let res = call(
+        &app,
+        &plain,
+        Method::POST,
+        &format!("/api/work-items/{}/submit", work["id"].as_str().unwrap()),
+        Some(json!({ "version": work["version"] })),
+    )
+    .await;
+    assert_status(&res, StatusCode::OK, None);
+    assert_eq!(notifications_of(&app.db, org.admin_a, "submitted_for_approval").await, 1);
+
+    call(&app, &admin, Method::DELETE, &format!("/api/issues/{id}/mute"), None).await;
+    call(&app, &plain, Method::POST, &format!("/api/issues/{id}/comments"), Some(comment("Done"))).await;
+    assert_eq!(notifications_of(&app.db, org.admin_a, "commented").await, 2);
+}

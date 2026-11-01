@@ -30,7 +30,7 @@ const ISSUE_EVENTS = [
   "target_added",
   "target_removed",
 ];
-const ORG_EVENTS = ["permissions_changed", "member_changed", "member_removed", "group_changed", "branch_changed"];
+const ORG_EVENTS = ["permissions_changed", "member_changed", "member_removed", "group_changed", "branch_changed", "settings_changed"];
 const TOAST_KINDS = new Set([
   "assigned",
   "mentioned",
@@ -71,6 +71,7 @@ function flush(qc: QueryClient, p: Pending, onNotifications: () => void) {
   if (p.org) {
     qc.invalidateQueries({ queryKey: keys.me });
     qc.invalidateQueries({ queryKey: keys.branches });
+    qc.invalidateQueries({ queryKey: keys.settings });
     qc.invalidateQueries({ queryKey: keys.people });
     qc.invalidateQueries({ queryKey: ["my-groups"] });
     qc.invalidateQueries({ queryKey: ["groups"] });

@@ -69,11 +69,6 @@ pub struct IssueDetail {
     #[serde(with = "time::serde::rfc3339::option")]
     pub closed_at: Option<OffsetDateTime>,
     pub closed_by: Option<Uuid>,
-    /// A super admin created the issue (always true for school-wide issues),
-    /// so only super admins may edit, close, cancel, retarget, change privacy,
-    /// or approve and cancel its work. Applies to every type: on tickets and
-    /// events it still controls the editing rules. Fixed at creation.
-    pub requires_super_admin_approval: bool,
     pub created_by: Uuid,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
@@ -86,6 +81,8 @@ pub struct IssueDetail {
     /// Files on the issue itself; comment and report files come with those.
     pub attachments: Vec<AttachmentMeta>,
     pub watching: bool,
+    /// The viewer muted its updates (comments, changes). What needs them still reaches them.
+    pub muted: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_read_at: Option<OffsetDateTime>,
 }
@@ -130,9 +127,10 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.description,
                i.priority AS "priority: Priority", i.is_private, i.completion_mode AS "completion_mode: CompletionMode",
-               i.state AS "state: IssueState", i.closed_at, i.closed_by, i.requires_super_admin_approval,
+               i.state AS "state: IssueState", i.closed_at, i.closed_by,
                i.created_by, i.version, i.created_at, i.updated_at,
                EXISTS (SELECT 1 FROM issue_watcher w WHERE w.issue_id = i.id AND w.user_id = $2) AS "watching!",
+               EXISTS (SELECT 1 FROM issue_mute m WHERE m.issue_id = i.id AND m.user_id = $2) AS "muted!",
                (SELECT r.last_read_at FROM issue_read r WHERE r.issue_id = i.id AND r.user_id = $2) AS last_read_at
         FROM issue i JOIN issue_type ty ON ty.id = i.type_id
         WHERE i.id = $1
@@ -169,7 +167,6 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         state: r.state,
         closed_at: r.closed_at,
         closed_by: r.closed_by,
-        requires_super_admin_approval: r.requires_super_admin_approval,
         created_by: r.created_by,
         version: r.version,
         created_at: r.created_at,
@@ -179,6 +176,7 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         work_items,
         attachments,
         watching: r.watching,
+        muted: r.muted,
         last_read_at: r.last_read_at,
     })
 }
@@ -243,8 +241,13 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         JOIN issue_type ty ON ty.id = i.type_id
         LEFT JOIN issue_read r ON r.issue_id = i.id AND r.user_id = $2
         WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
-          AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND EXISTS (
-                SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $3 AND t.removed_at IS NULL)))
+          -- A school-wide item shows in the branches it reaches, and in yours
+          -- when you sent it or its work passes through you.
+          AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND (
+                EXISTS (SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $3 AND t.removed_at IS NULL)
+                OR i.created_by = $2
+                OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id
+                             AND (w.assignee_id = $2 OR $2 = ANY(w.handoff_chain))))))
           AND ($4::text IS NULL OR ty.code = $4)
           AND ($5::issue_state IS NULL OR i.state = $5)
           AND (NOT $6 OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id AND w.assignee_id = $2))
@@ -303,7 +306,8 @@ fn like_pattern(term: &str) -> String {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct NewIssue {
-    /// `null` = cross-branch (super admins, whole-branch targets only).
+    /// `null` = cross-branch: whole branches (super admins) or people in any
+    /// branch (super admins and holders of `issue.target_other_branches`).
     pub branch_id: Option<Uuid>,
     #[serde(rename = "type")]
     pub issue_type: String,
@@ -363,7 +367,7 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         }
     }
     if input.branch_id.is_none() && resolved.is_empty() {
-        return Err(AppError::validation("invalid_target", "a cross-branch issue needs at least one branch target"));
+        return Err(AppError::validation("invalid_target", "a cross-branch issue needs at least one target"));
     }
     let whole_branch = resolved.iter().any(|t| t.kind == TargetKind::Branch);
     let reminders = match &input.event {
@@ -382,7 +386,6 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         issue_type,
         is_private: input.is_private,
         created_by: actor.user_id,
-        requires_super_admin_approval: actor.is_super_admin,
         target_branch_ids: resolved.iter().map(|t| t.branch_id).collect(),
         actor_targeted: false,
     };
@@ -398,9 +401,8 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
 
     let issue_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO issue (branch_id, type_id, title, description, priority, is_private, completion_mode,
-                           requires_super_admin_approval, created_by)
-        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO issue (branch_id, type_id, title, description, priority, is_private, completion_mode, created_by)
+        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7, $8)
         RETURNING id
         "#,
         input.branch_id,
@@ -410,7 +412,6 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         input.priority as Priority,
         input.is_private,
         input.completion_mode as CompletionMode,
-        actor.is_super_admin,
         actor.user_id,
     )
     .fetch_one(&mut *tx)
@@ -441,7 +442,6 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
             new_value: Some(json!({
                 "type": issue_type.code(), "title": title, "description": description, "priority": input.priority,
                 "is_private": input.is_private, "completion_mode": input.completion_mode, "event": input.event,
-                "requires_super_admin_approval": actor.is_super_admin,
             })),
         },
     )
@@ -824,6 +824,58 @@ pub async fn remove_target(db: &PgPool, actor: &Actor, issue_id: Uuid, target_id
     detail(db, actor, issue_id).await
 }
 
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct PassTicket {
+    /// Someone in the same branch who should answer instead.
+    pub user_id: Uuid,
+}
+
+/// POST /issues/{id}/pass: a question asked to you goes to someone else in
+/// your branch instead. Your target is removed and theirs added (they're
+/// told, as for a new question); the history records the hand-off.
+pub async fn pass_ticket(db: &PgPool, actor: &Actor, issue_id: Uuid, input: PassTicket) -> AppResult<IssueDetail> {
+    let facts = readable(db, actor, issue_id).await?;
+    authorize(actor, Action::PassTicket { issue: &facts })?;
+    let mine = sqlx::query!(
+        r#"SELECT id, branch_id FROM issue_target
+           WHERE issue_id = $1 AND kind = 'user' AND user_id = $2 AND removed_at IS NULL"#,
+        issue_id,
+        actor.user_id
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::conflict("not_yours", "only a question asked to you can be passed on"))?;
+    if input.user_id == actor.user_id {
+        return Err(AppError::validation("invalid_target", "pass it to someone else"));
+    }
+    let target = targets::resolve(
+        &TargetInput { user_id: Some(input.user_id), group_id: None, branch_id: Some(mine.branch_id) },
+        facts.branch_id,
+    )?;
+
+    let mut tx = db.begin().await?;
+    let issue = lock_ctx(&mut tx, issue_id).await?;
+    targets::remove(&mut tx, actor, issue_id, mine.id).await?;
+    targets::add(&mut tx, actor, issue, target, None).await?;
+    audit::record(
+        &mut tx,
+        AuditEntry {
+            entity_type: "issue",
+            entity_id: issue_id.to_string(),
+            branch_id: Some(mine.branch_id),
+            actor_id: Some(actor.user_id),
+            action: "pass",
+            old_value: Some(json!({ "user_id": actor.user_id })),
+            new_value: Some(json!({ "user_id": input.user_id })),
+        },
+    )
+    .await?;
+    touch(&mut tx, issue_id).await?;
+    emit(&mut tx, "issue_updated", issue_id).await?;
+    tx.commit().await?;
+    detail(db, actor, issue_id).await
+}
+
 /// Locks an open issue for target changes.
 async fn lock_ctx(tx: &mut Tx, issue_id: Uuid) -> AppResult<IssueCtx> {
     let r = sqlx::query!(
@@ -900,6 +952,25 @@ pub async fn set_watching(db: &PgPool, actor: &Actor, issue_id: Uuid, watching: 
         .await?;
     } else {
         sqlx::query!("DELETE FROM issue_watcher WHERE issue_id = $1 AND user_id = $2", issue_id, actor.user_id)
+            .execute(db)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Mutes (or unmutes) the item's updates for the actor.
+pub async fn set_muted(db: &PgPool, actor: &Actor, issue_id: Uuid, muted: bool) -> AppResult<()> {
+    readable(db, actor, issue_id).await?;
+    if muted {
+        sqlx::query!(
+            "INSERT INTO issue_mute (issue_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            issue_id,
+            actor.user_id
+        )
+        .execute(db)
+        .await?;
+    } else {
+        sqlx::query!("DELETE FROM issue_mute WHERE issue_id = $1 AND user_id = $2", issue_id, actor.user_id)
             .execute(db)
             .await?;
     }

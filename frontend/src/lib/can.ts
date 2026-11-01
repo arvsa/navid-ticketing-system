@@ -59,33 +59,45 @@ function grantApplies(v: Viewer, issue: IssueDetail, perm: Permission, branchId 
   );
 }
 
-/** Branch admins can't edit, close, approve or cancel work on school-wide items. */
-function adminCanManage(v: Viewer, issue: IssueDetail, branchId = issue.branch_id) {
-  if (isSuper(v)) return true;
-  return isAdminOf(v, branchId) && !issue.requires_super_admin_approval;
+function adminCanManage(v: Viewer, branchId?: string | null) {
+  return isSuper(v) || isAdminOf(v, branchId);
 }
 
 const isOpen = (issue: IssueDetail) => issue.state === "open";
 
+/** A school-wide item (sent to other branches): run by its sender. */
+const sentAcross = (issue: IssueDetail) => !issue.branch_id;
+
+/** Edit, close or hide the item itself. A school-wide item sent below super
+ * admin belongs to its sender, under the rules of the sender's own branches;
+ * the receiving branches' admins don't manage it. */
+function itemRule(v: Viewer, issue: IssueDetail, perm: Permission) {
+  if (!sentAcross(issue)) return adminCanManage(v, issue.branch_id) || grantApplies(v, issue, perm);
+  if (isSuper(v)) return true;
+  if (issue.created_by !== v.me.user.id) return false;
+  return v.me.memberships.some((m) => m.is_admin || grantApplies(v, issue, perm, m.branch.id));
+}
+
 export function canEdit(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return adminCanManage(v, issue) || grantApplies(v, issue, "issue.edit");
+  return itemRule(v, issue, "issue.edit");
 }
 
 export function canClose(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
   const ownerClose = issue.created_by === v.me.user.id && issue.type !== "action";
-  return ownerClose || adminCanManage(v, issue) || grantApplies(v, issue, "issue.close");
+  return ownerClose || itemRule(v, issue, "issue.close");
 }
 
 export function canSetPrivate(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return adminCanManage(v, issue) || grantApplies(v, issue, "issue.set_private");
+  return itemRule(v, issue, "issue.set_private");
 }
 
 export function canTarget(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return adminCanManage(v, issue) || grantApplies(v, issue, "issue.target");
+  if (sentAcross(issue)) return isSuper(v) || (issue.created_by === v.me.user.id && canSendAcross(v, issue.type));
+  return adminCanManage(v, issue.branch_id) || grantApplies(v, issue, "issue.target");
 }
 
 /** The branch the viewer acts in for this item. School-wide items have no
@@ -116,8 +128,21 @@ export function canModerate(v: Viewer, issue: IssueDetail) {
 export function canApprove(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.status !== "pending_approval") return false;
   if (w.assignee_id === v.me.user.id) return false;
-  if (issue.requires_super_admin_approval) return isSuper(v);
+  if (isSuper(v)) return true;
+  // Passed along: reviewed one level up the chain first (or by the branch's admins).
+  if (w.reviewer_id) return w.reviewer_id === v.me.user.id || isAdminOf(v, w.branch_id);
+  // The sender approves what they sent, and so do the branch's approvers.
+  if (issue.created_by === v.me.user.id) return true;
   return isAdminOf(v, w.branch_id) || grantApplies(v, issue, "work_item.approve", w.branch_id);
+}
+
+/** Approvable work shown while in a branch: the branch's own, plus what
+ *  waits for you personally from elsewhere (items you sent, school-wide
+ *  items, work passed on by you). `branchId` null: everything. */
+export function waitsHere(v: Viewer, issue: IssueDetail, w: WorkItem, branchId: string | null | undefined) {
+  if (!canApprove(v, issue, w)) return false;
+  if (!branchId) return true;
+  return w.branch_id === branchId || issue.branch_id === branchId || !issue.branch_id || issue.created_by === v.me.user.id || w.reviewer_id === v.me.user.id;
 }
 
 /** Approve without the item loaded (approvals queue), used before the issue arrives. */
@@ -132,7 +157,7 @@ export function canAssign(v: Viewer, issue: IssueDetail, w: WorkItem) {
 
 export function canCancelWork(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.status === "approved" || w.status === "cancelled" || !isOpen(issue)) return false;
-  return adminCanManage(v, issue, w.branch_id);
+  return adminCanManage(v, w.branch_id) || issue.created_by === v.me.user.id;
 }
 
 export function canClaim(v: Viewer, issue: IssueDetail, w: WorkItem) {
@@ -143,19 +168,56 @@ export function canClaim(v: Viewer, issue: IssueDetail, w: WorkItem) {
   return groups ? groups.includes(target.group_id ?? "") : false;
 }
 
+/** Pass work you hold on to someone else in its branch. */
+export function canPass(v: Viewer, issue: IssueDetail, w: WorkItem) {
+  return isOpen(issue) && w.assignee_id === v.me.user.id && ["open", "in_progress", "blocked"].includes(w.status);
+}
+
+/** Pass a question you were asked on to someone else. */
+export function canPassTicket(v: Viewer, issue: IssueDetail) {
+  return isOpen(issue) && issue.type === "ticket" && issue.targets.some((t) => t.kind === "user" && t.user_id === v.me.user.id);
+}
+
 export function isMine(v: Viewer, w: WorkItem) {
   return w.assignee_id === v.me.user.id;
 }
 
-/** Kinds the viewer may create in a branch ("" = school-wide, super admins only). */
+/** Kinds the viewer may create in a branch (`null` = school-wide). */
 export function creatableTypes(v: Viewer, branchId: string | null): IssueType[] {
   const all: IssueType[] = ["ticket", "action", "report", "event"];
-  if (isSuper(v) || branchId === null) return isSuper(v) ? all : [];
+  if (isSuper(v)) return all;
+  if (branchId === null) return all.filter((t) => canSendAcross(v, t));
   return all.filter((t) => hasGrant(v, branchId, "issue.create", t));
 }
 
 /** May send this kind to other people (staff can send their own tickets and events). */
 export function canSendType(v: Viewer, branchId: string | null, type: IssueType) {
+  if (branchId === null) return canSendAcross(v, type);
   if (isSuper(v) || isAdminOf(v, branchId)) return true;
   return hasGrant(v, branchId, "issue.target", type);
+}
+
+type Membership = MeResponse["memberships"][number];
+const holdsForType = (m: Membership, perm: Permission, type: IssueType) =>
+  m.grants.some((g) => g.permission === perm && g.scope === "branch" && (!g.issue_type || g.issue_type === type));
+
+/** May send to other branches or to whole branches from this membership:
+ * branch admins always; others with `issue.target_other_branches`. */
+function sendsAcrossFrom(m: Membership, type: IssueType) {
+  return m.is_admin || holdsForType(m, "issue.target_other_branches", type);
+}
+
+/** May send a school-wide item of this kind, to people or whole branches
+ * anywhere. Mirrors the server: the cross-branch permission plus the right to
+ * create the kind, both in one branch. */
+export function canSendAcross(v: Viewer, type: IssueType) {
+  if (isSuper(v)) return true;
+  return v.me.memberships.some((m) => sendsAcrossFrom(m, type) && (m.is_admin || holdsForType(m, "issue.create", type)));
+}
+
+/** May send an item of this kind to the whole of this branch. */
+export function canTargetWholeBranch(v: Viewer, branchId: string, type: IssueType) {
+  if (isSuper(v)) return true;
+  const m = membership(v, branchId);
+  return !!m && sendsAcrossFrom(m, type);
 }

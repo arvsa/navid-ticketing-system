@@ -19,18 +19,16 @@ struct NewIssue<'a> {
     ty: &'a str,
     private: bool,
     by: Uuid,
-    super_issue: bool,
 }
 
 async fn issue(db: &PgPool, i: NewIssue<'_>) -> Uuid {
     sqlx::query_scalar!(
-        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by, requires_super_admin_approval)
-           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'T', $3, $4, $5) RETURNING id"#,
+        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by)
+           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'T', $3, $4) RETURNING id"#,
         i.branch,
         i.ty,
         i.private,
-        i.by,
-        i.super_issue
+        i.by
     )
     .fetch_one(db)
     .await
@@ -123,20 +121,17 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     for by in creators {
         for ty in ["ticket", "action", "report", "event"] {
             for private in [false, true] {
-                issue(db, NewIssue { branch: a, ty, private, by, super_issue: false }).await;
+                issue(db, NewIssue { branch: a, ty, private, by }).await;
             }
         }
     }
     // Private issues reaching someone through a target.
-    let to_user =
-        issue(db, NewIssue { branch: a, ty: "ticket", private: true, by: org.admin_a, super_issue: false }).await;
+    let to_user = issue(db, NewIssue { branch: a, ty: "ticket", private: true, by: org.admin_a }).await;
     target(db, to_user, org.branch_a, Some(org.plain_a), None).await;
-    let to_group =
-        issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a, super_issue: false }).await;
+    let to_group = issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a }).await;
     target(db, to_group, org.branch_a, None, Some(team)).await;
     // Private, reaching someone only as an assignee.
-    let assigned =
-        issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a, super_issue: false }).await;
+    let assigned = issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a }).await;
     let t = target(db, assigned, org.branch_a, None, Some(org.managers_group)).await;
     sqlx::query!(
         "INSERT INTO work_item (issue_id, target_id, branch_id, assignee_id) VALUES ($1, $2, $3, $4)",
@@ -149,17 +144,14 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     .await
     .unwrap();
     // Branch B issues.
-    issue(db, NewIssue { branch: b, ty: "ticket", private: false, by: org.admin_b, super_issue: false }).await;
-    issue(db, NewIssue { branch: b, ty: "ticket", private: true, by: org.admin_b, super_issue: false }).await;
+    issue(db, NewIssue { branch: b, ty: "ticket", private: false, by: org.admin_b }).await;
+    issue(db, NewIssue { branch: b, ty: "ticket", private: true, by: org.admin_b }).await;
     // Cross-branch super admin issues: one sent to branch B, one to a group in A.
-    let cross_b =
-        issue(db, NewIssue { branch: None, ty: "action", private: false, by: org.root, super_issue: true }).await;
+    let cross_b = issue(db, NewIssue { branch: None, ty: "action", private: false, by: org.root }).await;
     target(db, cross_b, org.branch_b, None, None).await;
-    let cross_a_group =
-        issue(db, NewIssue { branch: None, ty: "ticket", private: false, by: org.root, super_issue: true }).await;
+    let cross_a_group = issue(db, NewIssue { branch: None, ty: "ticket", private: false, by: org.root }).await;
     target(db, cross_a_group, org.branch_a, None, Some(team)).await;
-    let cross_private =
-        issue(db, NewIssue { branch: None, ty: "ticket", private: true, by: org.root, super_issue: true }).await;
+    let cross_private = issue(db, NewIssue { branch: None, ty: "ticket", private: true, by: org.root }).await;
     target(db, cross_private, org.branch_a, None, Some(team)).await;
 
     let actors = [

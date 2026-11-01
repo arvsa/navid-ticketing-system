@@ -8,7 +8,7 @@ import type { IssueState, IssueSummary, IssueType } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { useNewItem } from "@/app/newItemContext";
 import { PriorityText, ProgressBar, TypeBadge } from "@/components/badges";
-import { Button, Card, Chip, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx, inputClass } from "@/components/ui";
+import { Button, Card, Chip, Hint, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx, inputClass } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
 import { stateLabel, typeLabel, typePlural } from "@/lib/labels";
@@ -51,11 +51,11 @@ export function ItemsPage() {
       <PageHeader
         title={t("Items")}
         actions={
-          <Link to="/export">
-            <Button size="lg" icon={<Download className="size-5" />}>
-              {t("Export to Excel")}
-            </Button>
-          </Link>
+          <Hint label={t("Export to Excel")} align="end">
+            <Link to="/export" aria-label={t("Export to Excel")} className="inline-flex size-10 items-center justify-center rounded-full bg-sunken text-text hover:bg-border">
+              <Download className="size-4" />
+            </Link>
+          </Hint>
         }
       />
       <Tabs
