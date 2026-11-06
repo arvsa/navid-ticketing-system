@@ -1,5 +1,6 @@
 # Builds a GitHub release: static Linux binaries of the backend and the offline
-# bundles (instructions/offline-bundle.md) for amd64 and arm64. Push a tag like
+# bundles (instructions/offline-bundle.md) for amd64 and arm64, and the built
+# frontend (static files, the same for every platform). Push a tag like
 # `v0.0.1`, or run it by hand.
 name: Release
 
@@ -53,8 +54,37 @@ jobs:
           name: backend-linux-${{ matrix.arch }}
           path: backend-linux-${{ matrix.arch }}.tar.gz*
 
+  # Static files: build once, serve anywhere. Built as in frontend/Dockerfile.
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          docker run --rm -v "$PWD/frontend:/app" -w /app node:22-alpine sh -c '
+            corepack enable &&
+            pnpm install --frozen-lockfile &&
+            pnpm build'
+
+      # html/ is the site; nginx.conf is the one the image uses (it proxies
+      # /api to a host named "backend": point it at yours).
+      - name: Package
+        run: |
+          mkdir frontend-dist
+          sudo cp -r frontend/dist frontend-dist/html
+          cp frontend/nginx.conf frontend-dist/
+          sudo chown -R "$USER" frontend-dist
+          tar -czf frontend-dist.tar.gz frontend-dist
+          sha256sum frontend-dist.tar.gz > frontend-dist.tar.gz.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist.tar.gz*
+
   release:
-    needs: build
+    needs: [build, frontend]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -68,8 +98,8 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 \
-            || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "Backend binaries for Linux (amd64, arm64)."
-          gh release upload "$TAG" backend-linux-*.tar.gz* --clobber
+            || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "Backend binaries for Linux (amd64, arm64) and the built frontend."
+          gh release upload "$TAG" backend-linux-*.tar.gz* frontend-dist.tar.gz* --clobber
 
   # Runs the same script as a local build, on a runner of each architecture so
   # nothing is emulated. Needs the release created by the job above.
