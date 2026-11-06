@@ -21,7 +21,7 @@
   --st-wait: #8a5300; --st-wait-bg: #fff3d6;
   --st-ok: #1b7a43; --st-ok-bg: #e3f5ea;
   --st-cxl: #646a78; --st-cxl-bg: #f0f0f2;
-  --private: #3d4350; --private-bg: #ecedf1; --staff-bg: #fff8e6; --staff-edge: #d69e2e;
+  --staff-bg: #fff8e6; --staff-edge: #d69e2e;
   --sent-back-bg: #fdeadf; --sent-back-edge: #f3c3a6; --sent-back: #9a3412;
   --nav-bg: #111521; --nav-surface: #1b2030; --nav-border: #2a3042;
   --nav-text: #e7e9ef; --nav-text-2: #9ea4b5; --nav-active: #232a3d;
@@ -59,7 +59,7 @@
   --st-wait: #ecc274; --st-wait-bg: #4a3d24;
   --st-ok: #9fd08f; --st-ok-bg: #33402f;
   --st-cxl: #a59f95; --st-cxl-bg: #383633;
-  --private: #d4cdc1; --private-bg: #3d3b37; --staff-bg: #45391f; --staff-edge: #b08a45;
+  --staff-bg: #45391f; --staff-edge: #b08a45;
   --sent-back-bg: #4a3326; --sent-back-edge: #6e4b36; --sent-back: #f2b28e;
   --nav-bg: #2f2e2b; --nav-surface: #363532; --nav-border: #45433f;
   --nav-text: #e0d9cc; --nav-text-2: #bdb7ad; --nav-active: #3e3c38;

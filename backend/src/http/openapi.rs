@@ -50,7 +50,7 @@ impl Modify for SessionCookie {
         super::branches::grant_super_admin, super::branches::revoke_super_admin,
         super::members::list, super::members::add, super::members::update, super::members::remove,
         super::members::effective_permissions, super::members::reset_password, super::members::set_active,
-        super::members::recipients, super::members::import, super::members::import_template,
+        super::members::recipients, super::members::recipient_groups, super::members::import, super::members::import_template,
         super::groups::list, super::groups::create, super::groups::update, super::groups::remove,
         super::groups::add_member, super::groups::remove_member,
         super::groups::list_grants, super::groups::grant, super::groups::revoke,
@@ -68,7 +68,7 @@ impl Modify for SessionCookie {
         super::notifications::list, super::notifications::unread_count,
         super::notifications::read, super::notifications::read_all, super::notifications::stream,
         super::dashboard::show, super::dashboard::export, super::dashboard::export_people,
-        super::settings::show, super::settings::update, super::settings::analytics,
+        super::settings::show, super::settings::update,
     )
 )]
 pub struct ApiDoc;

@@ -39,7 +39,6 @@ pub struct IssueSummary {
     pub title: String,
     pub priority: Priority,
     pub state: IssueState,
-    pub is_private: bool,
     pub created_by: Uuid,
     pub work_item_count: i64,
     pub done_count: i64,
@@ -63,7 +62,6 @@ pub struct IssueDetail {
     pub title: String,
     pub description: Option<String>,
     pub priority: Priority,
-    pub is_private: bool,
     pub completion_mode: CompletionMode,
     pub state: IssueState,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -126,7 +124,7 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
     let r = sqlx::query!(
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.description,
-               i.priority AS "priority: Priority", i.is_private, i.completion_mode AS "completion_mode: CompletionMode",
+               i.priority AS "priority: Priority", i.completion_mode AS "completion_mode: CompletionMode",
                i.state AS "state: IssueState", i.closed_at, i.closed_by,
                i.created_by, i.version, i.created_at, i.updated_at,
                EXISTS (SELECT 1 FROM issue_watcher w WHERE w.issue_id = i.id AND w.user_id = $2) AS "watching!",
@@ -162,7 +160,6 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         title: r.title,
         description: r.description,
         priority: r.priority,
-        is_private: r.is_private,
         completion_mode: r.completion_mode,
         state: r.state,
         closed_at: r.closed_at,
@@ -217,7 +214,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
     let rows = sqlx::query!(
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.priority AS "priority: Priority",
-               i.state AS "state: IssueState", i.is_private, i.created_by, i.created_at,
+               i.state AS "state: IssueState", i.created_by, i.created_at,
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id) AS "work_item_count!",
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id
                   AND w.status IN ('approved', 'cancelled')) AS "done_count!",
@@ -240,7 +237,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         FROM issue i
         JOIN issue_type ty ON ty.id = i.type_id
         LEFT JOIN issue_read r ON r.issue_id = i.id AND r.user_id = $2
-        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
           -- A school-wide item shows in the branches it reaches, and in yours
           -- when you sent it or its work passes through you.
           AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND (
@@ -281,7 +278,6 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
             title: r.title,
             priority: r.priority,
             state: r.state,
-            is_private: r.is_private,
             created_by: r.created_by,
             work_item_count: r.work_item_count,
             done_count: r.done_count,
@@ -315,8 +311,6 @@ pub struct NewIssue {
     pub description: Option<String>,
     #[serde(default = "default_priority")]
     pub priority: Priority,
-    #[serde(default)]
-    pub is_private: bool,
     #[serde(default)]
     pub completion_mode: CompletionMode,
     #[serde(default)]
@@ -379,12 +373,11 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         actor,
         Action::CreateIssue { branch_id: input.branch_id, issue_type, targets_whole_branches: whole_branch },
     )?;
-    // Targeting and privacy at creation are checked as on an issue the actor owns.
+    // Targeting at creation is checked as on an issue the actor owns.
     let draft = IssueFacts {
         id: Uuid::nil(),
         branch_id: input.branch_id,
         issue_type,
-        is_private: input.is_private,
         created_by: actor.user_id,
         target_branch_ids: resolved.iter().map(|t| t.branch_id).collect(),
         actor_targeted: false,
@@ -392,17 +385,14 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
     if !resolved.is_empty() {
         authorize(actor, Action::TargetIssue { issue: &draft, whole_branch })?;
     }
-    if input.is_private {
-        authorize(actor, Action::SetIssuePrivate { issue: &draft })?;
-    }
 
     let mut tx = db.begin().await?;
     let sla_due_at = if has_work { Some(sla_or_default(&mut tx, issue_type, input.sla_due_at).await?) } else { None };
 
     let issue_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO issue (branch_id, type_id, title, description, priority, is_private, completion_mode, created_by)
-        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7, $8)
+        INSERT INTO issue (branch_id, type_id, title, description, priority, completion_mode, created_by)
+        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7)
         RETURNING id
         "#,
         input.branch_id,
@@ -410,7 +400,6 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         title,
         description,
         input.priority as Priority,
-        input.is_private,
         input.completion_mode as CompletionMode,
         actor.user_id,
     )
@@ -441,7 +430,7 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
             old_value: None,
             new_value: Some(json!({
                 "type": issue_type.code(), "title": title, "description": description, "priority": input.priority,
-                "is_private": input.is_private, "completion_mode": input.completion_mode, "event": input.event,
+                "completion_mode": input.completion_mode, "event": input.event,
             })),
         },
     )
@@ -514,7 +503,6 @@ pub struct IssuePatch {
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
     pub priority: Option<Priority>,
-    pub is_private: Option<bool>,
     pub event: Option<EventPatch>,
 }
 
@@ -538,9 +526,6 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
     if edits_content {
         authorize(actor, Action::EditIssue { issue: &facts })?;
     }
-    if patch.is_private.is_some_and(|p| p != facts.is_private) {
-        authorize(actor, Action::SetIssuePrivate { issue: &facts })?;
-    }
     if patch.event.is_some() && facts.issue_type != IssueType::Event {
         return Err(AppError::validation("invalid_event", "only events have event details"));
     }
@@ -557,17 +542,15 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
         None => old.description.clone(),
     };
     let new_priority = patch.priority.unwrap_or(old.priority);
-    let new_private = patch.is_private.unwrap_or(old.is_private);
 
     sqlx::query!(
-        r#"UPDATE issue SET title = $3, description = $4, priority = $5, is_private = $6, version = version + 1
+        r#"UPDATE issue SET title = $3, description = $4, priority = $5, version = version + 1
            WHERE id = $1 AND version = $2"#,
         issue_id,
         patch.version,
         new_title,
         new_description,
         new_priority as Priority,
-        new_private,
     )
     .execute(&mut *tx)
     .await?;
@@ -583,7 +566,6 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
     diff("title", json!(old.title), json!(new_title));
     diff("description", json!(old.description), json!(new_description));
     diff("priority", json!(old.priority), json!(new_priority));
-    diff("is_private", json!(old.is_private), json!(new_private));
 
     if let Some(ev) = patch.event {
         let cur = sqlx::query_as!(
@@ -711,13 +693,12 @@ struct OpenIssue {
     title: String,
     description: Option<String>,
     priority: Priority,
-    is_private: bool,
 }
 
 /// Locks the issue, checks the client's version and that it is still open.
 async fn lock_open(tx: &mut Tx, issue_id: Uuid, version: i32) -> AppResult<OpenIssue> {
     let row = sqlx::query!(
-        r#"SELECT title, description, priority AS "priority: Priority", is_private, state AS "state: IssueState", version
+        r#"SELECT title, description, priority AS "priority: Priority", state AS "state: IssueState", version
            FROM issue WHERE id = $1 FOR UPDATE"#,
         issue_id
     )
@@ -729,7 +710,7 @@ async fn lock_open(tx: &mut Tx, issue_id: Uuid, version: i32) -> AppResult<OpenI
     if row.state != IssueState::Open {
         return Err(AppError::conflict("issue_not_open", "the issue is closed or cancelled"));
     }
-    Ok(OpenIssue { title: row.title, description: row.description, priority: row.priority, is_private: row.is_private })
+    Ok(OpenIssue { title: row.title, description: row.description, priority: row.priority })
 }
 
 /// Edits and closes by someone other than the creator notify the creator.

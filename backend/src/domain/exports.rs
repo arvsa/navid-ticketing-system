@@ -93,7 +93,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             JOIN issue_type ty ON ty.id = i.type_id AND ty.code = 'ticket'
             LEFT JOIN branch b ON b.id = i.branch_id
             JOIN app_user u ON u.id = i.created_by
-            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (
                     SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))
               AND ($3::timestamptz IS NULL OR i.created_at >= $3)
@@ -126,7 +126,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             JOIN branch b ON b.id = w.branch_id
             LEFT JOIN app_user a ON a.id = w.assignee_id
             LEFT JOIN app_user d ON d.id = w.decided_by
-            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND w.branch_id = ANY($2)
               AND ($3::timestamptz IS NULL OR i.created_at >= $3)
               AND ($4::timestamptz IS NULL OR i.created_at < $4)
@@ -158,7 +158,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             LEFT JOIN branch b ON b.id = coalesce(w.branch_id, i.branch_id)
             JOIN app_user u ON u.id = r.author_id
             WHERE r.submitted_at IS NOT NULL
-              AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+              AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND coalesce(w.branch_id, i.branch_id) = ANY($2)
               AND ($3::timestamptz IS NULL OR r.submitted_at >= $3)
               AND ($4::timestamptz IS NULL OR r.submitted_at < $4)
@@ -194,7 +194,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             JOIN issue i ON i.id = e.issue_id
             LEFT JOIN branch b ON b.id = i.branch_id
             LEFT JOIN event_rsvp r ON r.issue_id = i.id
-            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (
                     SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))
               AND ($3::timestamptz IS NULL OR e.starts_at >= $3)

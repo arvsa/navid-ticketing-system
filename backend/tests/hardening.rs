@@ -33,10 +33,10 @@ async fn the_openapi_document_describes_the_api(pool: PgPool) {
         ("/api/exports", "get"),
         ("/api/branches/{id}/members/{user_id}/effective-permissions", "get"),
         ("/api/recipients", "get"),
+        ("/api/recipient-groups", "get"),
         ("/api/issues/{id}/mute", "put"),
         ("/api/issues/{id}/pass", "post"),
         ("/api/settings", "patch"),
-        ("/api/analytics", "get"),
         ("/api/branches/{id}/members/import", "post"),
         ("/api/members/import-template", "get"),
     ] {

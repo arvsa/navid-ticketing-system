@@ -45,8 +45,6 @@ pub enum Action<'a> {
     SetSuperAdmin,
     /// Change the app's settings (the school's name).
     EditSettings,
-    /// The whole-school analytics.
-    ViewAnalytics,
     /// Everyone's names and emails, for chosen branches or all.
     ExportPeople,
     ViewBranch {
@@ -123,9 +121,6 @@ pub enum Action<'a> {
     CloseIssue {
         issue: &'a IssueFacts,
     },
-    SetIssuePrivate {
-        issue: &'a IssueFacts,
-    },
     /// Add or remove a target. Whole-branch targets are super admin only.
     TargetIssue {
         issue: &'a IssueFacts,
@@ -188,7 +183,6 @@ impl Action<'_> {
             ReadIssue { issue }
             | EditIssue { issue }
             | CloseIssue { issue }
-            | SetIssuePrivate { issue }
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
@@ -214,7 +208,6 @@ impl Action<'_> {
             | SetSuperAdmin
             | ManageSchoolGroups
             | EditSettings
-            | ViewAnalytics
             | ExportPeople => true,
             Export { branch_ids } => branch_ids.len() != 1,
             // A super admin's account is only ever touched by super admins.
@@ -249,7 +242,6 @@ impl Action<'_> {
             | ManageSchoolGroups
             | FindPeopleInOtherBranches
             | EditSettings
-            | ViewAnalytics
             | ExportPeople => vec![],
             EditBranch { branch_id }
             | SetBranchAdmin { branch_id }
@@ -275,7 +267,6 @@ impl Action<'_> {
             ReadIssue { issue }
             | EditIssue { issue }
             | CloseIssue { issue }
-            | SetIssuePrivate { issue }
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
@@ -359,7 +350,7 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
                 | Action::CancelWorkItem { .. }
         );
         if issue_level && issue.branch_id.is_none() {
-            if matches!(action, Action::EditIssue { .. } | Action::CloseIssue { .. } | Action::SetIssuePrivate { .. }) {
+            if matches!(action, Action::EditIssue { .. } | Action::CloseIssue { .. }) {
                 ids.clear();
             }
             if issue.created_by == actor.user_id {
@@ -445,10 +436,7 @@ pub fn can_read(actor: &Actor, issue: &IssueFacts) -> bool {
     }
     issue.branches().into_iter().any(|b| {
         let Some(access) = actor.branch(b) else { return false };
-        access.is_admin
-            || has_grant(access, Permission::IssueReadPrivate, Some(issue.issue_type), |_| true)
-            || (!issue.is_private
-                && has_grant(access, Permission::IssueRead, Some(issue.issue_type), |s| s == Scope::Branch))
+        access.is_admin || has_grant(access, Permission::IssueRead, Some(issue.issue_type), |s| s == Scope::Branch)
     })
 }
 
@@ -477,7 +465,6 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
             (issue.created_by == me && issue.issue_type != IssueType::Action)
                 || has_issue_grant(access, P::IssueClose, issue, me)
         }
-        SetIssuePrivate { issue } => has_issue_grant(access, P::IssueSetPrivate, issue, me),
         TargetIssue { issue, .. } => has_issue_grant(access, P::IssueTarget, issue, me),
         CommentOnIssue { issue } => has_grant(access, P::CommentCreate, None, |s| match s {
             Scope::Branch => true,
@@ -503,7 +490,6 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         | SetBranchAdmin { .. }
         | SetSuperAdmin
         | EditSettings
-        | ViewAnalytics
         | ExportPeople
         | ManageGroups { .. }
         | ManageSchoolGroups
@@ -642,7 +628,6 @@ mod tests {
             id: Uuid::from_u128(0x99),
             branch_id: Some(A),
             issue_type: ty,
-            is_private: false,
             created_by,
             target_branch_ids: vec![A],
             actor_targeted: false,
@@ -851,27 +836,23 @@ mod tests {
     // ---- issues (6.1 and 6.4) ---------------------------------------------------
 
     #[test]
-    fn private_issues_are_hidden_from_uninvolved_members() {
-        let mut private = issue(uid(9), IssueType::Ticket);
-        private.is_private = true;
-        let m = member(1);
-        denied(&m, Action::ReadIssue { issue: &private }, NotFound);
+    fn issues_are_hidden_from_members_without_branch_read() {
+        let theirs = issue(uid(9), IssueType::Ticket);
+        // In the branch, but without issue.read at branch scope.
+        let m = actor(1, &[(A, false, vec![grant(Permission::CommentCreate, None, Scope::Branch)])]);
+        denied(&m, Action::ReadIssue { issue: &theirs }, NotFound);
         // Every action on an unreadable issue is 404, not 403.
-        denied(&m, Action::CommentOnIssue { issue: &private }, NotFound);
-        denied(&m, Action::EditIssue { issue: &private }, NotFound);
+        denied(&m, Action::CommentOnIssue { issue: &theirs }, NotFound);
+        denied(&m, Action::EditIssue { issue: &theirs }, NotFound);
 
-        ok(&admin(2), Action::ReadIssue { issue: &private });
-        ok(&super_admin(), Action::ReadIssue { issue: &private });
-        let reader = actor(3, &[(A, false, vec![grant(Permission::IssueReadPrivate, None, Scope::Branch)])]);
-        ok(&reader, Action::ReadIssue { issue: &private });
-        let typed_reader =
-            actor(4, &[(A, false, vec![grant(Permission::IssueReadPrivate, Some(IssueType::Action), Scope::Branch)])]);
-        denied(&typed_reader, Action::ReadIssue { issue: &private }, NotFound);
+        ok(&member(2), Action::ReadIssue { issue: &theirs });
+        ok(&admin(3), Action::ReadIssue { issue: &theirs });
+        ok(&super_admin(), Action::ReadIssue { issue: &theirs });
 
-        let mut targeted = private.clone();
+        let mut targeted = theirs.clone();
         targeted.actor_targeted = true;
         ok(&m, Action::ReadIssue { issue: &targeted });
-        let own = IssueFacts { created_by: m.user_id, ..private.clone() };
+        let own = IssueFacts { created_by: m.user_id, ..theirs.clone() };
         ok(&m, Action::ReadIssue { issue: &own });
         // Own issues in a branch you've left: gone.
         let left = IssueFacts { branch_id: Some(B), ..own };
@@ -918,7 +899,6 @@ mod tests {
         // Whole-branch targets need the cross-branch permission (admins have it).
         denied(&m, Action::TargetIssue { issue: &my_ticket, whole_branch: true }, Forbidden);
         ok(&admin(5), Action::TargetIssue { issue: &my_ticket, whole_branch: true });
-        denied(&m, Action::SetIssuePrivate { issue: &my_ticket }, Forbidden);
     }
 
     #[test]

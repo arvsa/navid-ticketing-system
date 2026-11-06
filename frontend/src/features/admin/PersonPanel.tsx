@@ -93,7 +93,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
 
   const byGroup = new Map<string, { name: string; items: string[] }>();
   for (const g of eff.data?.grants ?? []) {
-    const entry = byGroup.get(g.group.id) ?? { name: g.group.name, items: [] };
+    const entry = byGroup.get(g.group.id) ?? { name: g.group.everyone ? t("Everyone") : g.group.name, items: [] };
     entry.items.push(`${permissionInfo[g.permission]?.title ?? g.permission}${g.issue_type ? ` (${typePlural[g.issue_type]})` : ""}`);
     byGroup.set(g.group.id, entry);
   }

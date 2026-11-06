@@ -184,16 +184,8 @@ async fn invitees_answer_and_others_cannot(pool: PgPool) {
     // Not an event, or not readable: 404.
     let ticket = create(&app, &plain, json!({ "branch_id": org.branch_a, "type": "ticket", "title": "T" })).await;
     assert_status(&rsvp(&app, &plain, ticket["id"].as_str().unwrap(), "going").await, StatusCode::NOT_FOUND, None);
-    let private = create(
-        &app,
-        &organizer,
-        json!({
-            "branch_id": org.branch_a, "type": "event", "title": "Secret", "is_private": true,
-            "event": { "starts_at": fmt(in_days(2)), "ends_at": fmt(in_days(2)) }
-        }),
-    )
-    .await;
-    assert_status(&rsvp(&app, &multi, private["id"].as_str().unwrap(), "going").await, StatusCode::NOT_FOUND, None);
+    let outsider = as_user(&app, "admin_b@example.com").await;
+    assert_status(&rsvp(&app, &outsider, &id, "going").await, StatusCode::NOT_FOUND, None);
 
     // Cancelled events take no more answers.
     call(&app, &organizer, Method::POST, &format!("/api/issues/{id}/cancel"), Some(json!({ "version": 1 }))).await;
@@ -366,15 +358,6 @@ async fn calendar_shows_readable_events_in_the_window_with_my_rsvp(pool: PgPool)
 
     let soon = create(&app, &organizer, event_body(org.branch_a, "Soon", 2, json!([{ "user_id": org.plain_a }]))).await;
     create(&app, &organizer, event_body(org.branch_a, "Later", 20, json!([]))).await;
-    create(
-        &app,
-        &organizer,
-        json!({
-            "branch_id": org.branch_a, "type": "event", "title": "Board meeting", "is_private": true,
-            "event": { "starts_at": fmt(in_days(3)), "ends_at": fmt(in_days(3) + Duration::hours(1)) }
-        }),
-    )
-    .await;
     // Spans into the window from before it.
     create(
         &app,
@@ -397,14 +380,14 @@ async fn calendar_shows_readable_events_in_the_window_with_my_rsvp(pool: PgPool)
 
     let res = call(&app, &plain, Method::GET, &next_week, None).await;
     assert_status(&res, StatusCode::OK, None);
-    assert_eq!(titles(&res), ["Exhibition", "Soon"], "earliest first; the private one is hidden; Later is outside");
+    assert_eq!(titles(&res), ["Exhibition", "Soon"], "earliest first; Later is outside");
     assert_eq!(res.body["items"][1]["my_rsvp"], "going");
     assert!(res.body["items"][0]["my_rsvp"].is_null());
     assert_eq!(res.body["items"][0]["all_day"], true);
 
     let admin = as_user(&app, "admin_a@example.com").await;
     let res = call(&app, &admin, Method::GET, &next_week, None).await;
-    assert_eq!(titles(&res), ["Exhibition", "Soon", "Board meeting"]);
+    assert_eq!(titles(&res), ["Exhibition", "Soon"]);
 
     // Other branches' events aren't there; the branch filter narrows further.
     assert!(titles(&call(&app, &admin_b, Method::GET, &next_week, None).await).is_empty());

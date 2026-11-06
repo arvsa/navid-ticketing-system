@@ -200,7 +200,7 @@ pub async fn list(db: &PgPool, actor: &Actor, unread_only: bool, page: &PagePara
         LEFT JOIN issue i ON i.id = n.issue_id
         WHERE n.recipient_id = $1
           AND (NOT $2 OR n.read_at IS NULL)
-          AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $3))
+          AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $3))
           AND ($4::bigint IS NULL OR n.id < $4)
         ORDER BY n.id DESC
         LIMIT $5
@@ -223,7 +223,7 @@ pub async fn unread_count(db: &PgPool, actor: &Actor) -> AppResult<i64> {
         SELECT count(*) AS "n!" FROM notification n
         LEFT JOIN issue i ON i.id = n.issue_id
         WHERE n.recipient_id = $1 AND n.read_at IS NULL
-          AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $2))
+          AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $2))
         "#,
         actor.user_id,
         filter

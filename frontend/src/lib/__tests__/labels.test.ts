@@ -12,7 +12,7 @@ describe("labels", () => {
     for (const v of PRIORITIES) expect(priorityLabel[v]).toBeTruthy();
     for (const v of RSVP_RESPONSES) expect(rsvpLabel[v]).toBeTruthy();
     for (const v of SCOPES) expect(scopeLabel[v]).toBeTruthy();
-    expect(Object.keys(permissionInfo)).toHaveLength(18);
+    expect(Object.keys(permissionInfo)).toHaveLength(16);
   });
 });
 
@@ -26,7 +26,7 @@ const work = (patch: Partial<WorkItem>): WorkItem => ({
 });
 const issue = (patch: Partial<IssueDetail>): IssueDetail => ({
   id: "i", key: "ISS-1", number: 1, branch_id: "br", type: "action", title: "T", priority: "medium",
-  is_private: false, completion_mode: "per_member", state: "open",
+  completion_mode: "per_member", state: "open",
   created_by: "boss", version: 1, created_at: "", updated_at: "", targets: [], work_items: [], attachments: [],
   watching: false, muted: false, ...patch,
 });

@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,\n               CASE WHEN g.is_default AND g.branch_id IS NULL\n                    THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m\n                          JOIN app_user u ON u.id = m.user_id\n                          WHERE m.left_at IS NULL AND u.is_active)\n                    ELSE (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id\n                          WHERE c.id = g.id OR c.template_id = g.id) END AS \"member_count!\"\n        FROM user_group g WHERE g.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "template_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "template_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_default",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "is_default"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "archived_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "archived_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "member_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "b2534a45be9d919f4a3872a06593245b6d15f820e1812396c2550b0bd7248065"
+}

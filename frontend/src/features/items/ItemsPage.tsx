@@ -2,7 +2,7 @@
 // to me" and title search only (gap G-6), so those are the filters offered.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Download, Lock } from "lucide-react";
+import { Download } from "lucide-react";
 import { useIssueList, type IssueFilters } from "@/api/hooks";
 import type { IssueState, IssueSummary, IssueType } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
@@ -181,11 +181,6 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
               {item.key}
               {branchName && <span className="font-sans">· {branchName}</span>}
               {item.unread && <span className="font-sans">{t("· unread")}</span>}
-              {item.is_private && (
-                <span className="inline-flex items-center gap-1 font-sans">
-                  · <Lock className="size-3.5" aria-hidden />{" "}{t("Private")}
-                </span>
-              )}
             </span>
           </span>
         </div>

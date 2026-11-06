@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT g.id, g.name, b.id AS branch_id, b.name AS branch_name,\n               (SELECT count(*) FROM group_member gm WHERE gm.group_id = g.id) AS \"member_count!\"\n        FROM user_group g\n        JOIN branch b ON b.id = g.branch_id\n        WHERE g.archived_at IS NULL AND NOT g.is_default AND b.is_active\n        ORDER BY b.name, g.name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "member_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "3b9a34beccac20cf98a0de280260a7324ce76a71c9b360772032badadfe20ec0"
+}

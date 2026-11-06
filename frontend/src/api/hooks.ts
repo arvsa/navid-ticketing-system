@@ -10,8 +10,8 @@ import {
 import { api, getAll } from "./client";
 import { keys } from "./keys";
 import type {
-  Analytics,
   Branch,
+  BranchGroup,
   BranchPerson,
   CalendarEntry,
   CatalogEntry,
@@ -37,15 +37,11 @@ import type {
   WorkStatus,
 } from "./types";
 
-// ---------- settings and analytics ----------
+// ---------- settings ----------
 
 /** App settings (the school's name). Readable before signing in. */
 export function useSettings() {
   return useQuery({ queryKey: keys.settings, queryFn: () => api.get<Settings>("/settings"), staleTime: 10 * 60_000 });
-}
-
-export function useAnalytics(weeks: number, enabled = true) {
-  return useQuery({ queryKey: keys.analytics(weeks), queryFn: () => api.get<Analytics>("/analytics", { weeks }), enabled });
 }
 
 // ---------- branches, people, groups ----------
@@ -151,6 +147,16 @@ export function useRecipients(enabled: boolean) {
   return useQuery({
     queryKey: keys.recipients,
     queryFn: () => api.get<BranchPerson[]>("/recipients"),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Groups in every branch (not All members), for school-wide items. */
+export function useRecipientGroups(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.recipientGroups,
+    queryFn: () => api.get<BranchGroup[]>("/recipient-groups"),
     enabled,
     staleTime: 5 * 60_000,
   });

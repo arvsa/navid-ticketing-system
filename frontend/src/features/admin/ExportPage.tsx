@@ -176,7 +176,7 @@ export function ExportPage() {
         <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">
           {people
             ? t("One row per person per branch. The first three columns match the import template. This export is recorded in the history.")
-            : t("Private items are included only if you can see them. This export is recorded in the history.")}
+            : t("Only items you can see are included. This export is recorded in the history.")}
         </p>
         <Button
           variant="primary"

@@ -1,6 +1,5 @@
 // Status visual language (UX_SPEC §6): every badge is a word, never colour alone.
 import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
 import type { IssueType, Priority, RsvpResponse, WorkStatus } from "@/api/types";
 import { priorityLabel, rsvpLabel, typeLabel, workStatusLabel } from "@/lib/labels";
 import { initials } from "@/people/usePeople";
@@ -57,15 +56,6 @@ export function PriorityText({ priority, hideNormal }: { priority: Priority; hid
   return (
     <span className={cx(priority === "high" || priority === "critical" ? "font-semibold" : "")} style={{ color }}>
       {priorityLabel[priority]}
-    </span>
-  );
-}
-
-export function PrivateTag() {
-  return (
-    <span className="inline-flex items-center gap-1 text-text-2">
-      <Lock className="size-3.5" aria-hidden />
-      {t("Private")}
     </span>
   );
 }

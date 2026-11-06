@@ -64,22 +64,17 @@ transactions after 60 s.
 - `PUT` / `DELETE /api/issues/{id}/mute`: no more comments or changes from an
   item; what needs you (work, a hand-in to review, a mention) still arrives.
 
-## Settings and analytics
+## Settings
 
 - `GET /api/settings` (no sign-in needed) and `PATCH /api/settings`
   `{school_name}` (super admins): the school's name, shown in the header and
   on the sign-in page. Changing it sends `settings_changed` to everyone.
-- `GET /api/analytics?weeks=12` (super admins, 1 to 52 weeks): per branch,
-  items created and work finished week by week, average hours from work
-  given out to its approval, and the share of finished work with a due date
-  that was handed in on time; per person (the 15 busiest), open, overdue and
-  handed-in work.
 
 ## Real-time updates
 
 `GET /api/stream` is a Server-Sent Events stream for the signed-in user.
 Events carry IDs only (`{"kind", "issue_id", "branch_ids"}`), never content,
-so nothing private can leak through the stream: the client refetches through
+so nothing you can't read leaks through the stream: the client refetches through
 the normal API, which applies permissions.
 
 | Event | Meaning |
@@ -164,6 +159,7 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `invalid_current_password` | The current password is wrong. |
 | 422 | `invalid_email` | Not a valid email. |
 | 422 | `invalid_name` | A name is empty or too long. |
+| 422 | `reserved_group_name` | A school-wide group can't be called "All members": every branch already has one. |
 | 422 | `invalid_timezone` | Not an IANA timezone name. |
 | 422 | `invalid_branch_code` | Branch codes are 2 to 10 uppercase letters or digits. |
 | 422 | `invalid_admin` | The first admin must be an active user. |

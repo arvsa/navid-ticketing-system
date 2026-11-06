@@ -244,6 +244,20 @@ pub async fn add_member(db: &PgPool, branch_id: Uuid, user_id: Uuid) {
         .unwrap();
 }
 
+/// Takes `issue.read` away from the branch's "All members" group: its plain
+/// members then see only the issues they created or are targeted by.
+pub async fn hide_branch_issues(db: &PgPool, branch_id: Uuid) {
+    sqlx::query!(
+        r#"DELETE FROM group_permission
+           WHERE permission_key = 'issue.read'
+             AND group_id = (SELECT id FROM user_group WHERE branch_id = $1 AND is_default)"#,
+        branch_id
+    )
+    .execute(db)
+    .await
+    .unwrap();
+}
+
 /// Creates a group in the branch with the given grants and members.
 pub async fn create_group(
     db: &PgPool,
@@ -287,11 +301,9 @@ pub async fn create_group(
 /// Every grantable permission at branch scope: an "admin-like" group.
 pub const EVERYTHING: &[(&str, Option<&str>, &str)] = &[
     ("issue.read", None, "branch"),
-    ("issue.read_private", None, "branch"),
     ("issue.create", None, "branch"),
     ("issue.edit", None, "branch"),
     ("issue.close", None, "branch"),
-    ("issue.set_private", None, "branch"),
     ("issue.target", None, "branch"),
     ("work_item.update", None, "branch"),
     ("work_item.assign", None, "branch"),

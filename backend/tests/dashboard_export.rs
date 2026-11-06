@@ -103,8 +103,7 @@ impl Ctx {
 async fn seed(pool: PgPool) -> Ctx {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
-    // A member who may export and read public issues, but not private ones
-    // or internal comments.
+    // A member who may export and read issues, but not internal comments.
     let exporter = create_user(&app.db, NewUser::member("exporter@example.com", PW)).await;
     add_member(&app.db, org.branch_a, exporter).await;
     create_group(
@@ -125,9 +124,8 @@ async fn seed(pool: PgPool) -> Ctx {
     let (a, b) = (c.org.branch_a, c.org.branch_b);
     let now = OffsetDateTime::now_utc();
 
-    // Tickets: public and private, one closed, with public and internal comments.
+    // Tickets: one closed, with public and internal comments.
     let t1 = c.issue("plain_a", json!({ "branch_id": a, "type": "ticket", "title": "Printer" })).await;
-    c.issue("boss_like_a", json!({ "branch_id": a, "type": "ticket", "title": "HR", "is_private": true })).await;
     let t3 = c.issue("manager_a", json!({ "branch_id": a, "type": "ticket", "title": "Old" })).await;
     c.post("manager_a", &format!("/api/issues/{}/close", t3["id"].as_str().unwrap()), json!({ "version": 1 })).await;
     c.issue("admin_b", json!({ "branch_id": b, "type": "ticket", "title": "In B" })).await;
@@ -140,24 +138,23 @@ async fn seed(pool: PgPool) -> Ctx {
     )
     .await;
 
-    // Actions: overdue, due within the week, far out, pending approval, approved, private.
+    // Actions: overdue, due within the week, far out, pending approval, approved.
     let due = |h: i64| fmt(now + Duration::hours(h));
-    let mk = |title: &str, sla: String, targets: Value, private: bool| json!({ "branch_id": a, "type": "action", "title": title, "sla_due_at": sla, "targets": targets, "is_private": private });
-    let overdue = c.issue("admin_a", mk("Overdue", due(-5), json!([{ "user_id": c.org.plain_a }]), false)).await;
+    let mk = |title: &str, sla: String, targets: Value| json!({ "branch_id": a, "type": "action", "title": title, "sla_due_at": sla, "targets": targets });
+    let overdue = c.issue("admin_a", mk("Overdue", due(-5), json!([{ "user_id": c.org.plain_a }]))).await;
     c.issue(
         "admin_a",
-        mk("This week", due(50), json!([{ "user_id": c.org.multi }, { "user_id": c.org.manager_a }]), false),
+        mk("This week", due(50), json!([{ "user_id": c.org.multi }, { "user_id": c.org.manager_a }])),
     )
     .await;
-    c.issue("admin_a", mk("Later", due(24 * 30), json!([{ "user_id": c.org.plain_a }]), false)).await;
+    c.issue("admin_a", mk("Later", due(24 * 30), json!([{ "user_id": c.org.plain_a }]))).await;
     let pending = c
         .issue(
             "admin_a",
-            mk("To approve", due(10), json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.boss_like_a }]), false),
+            mk("To approve", due(10), json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.boss_like_a }])),
         )
         .await;
-    let approved = c.issue("admin_a", mk("Approved", due(10), json!([{ "user_id": c.org.multi }]), false)).await;
-    c.issue("boss_like_a", mk("Secret job", due(30), json!([{ "user_id": c.org.manager_a }]), true)).await;
+    let approved = c.issue("admin_a", mk("Approved", due(10), json!([{ "user_id": c.org.multi }]))).await;
     c.transition("plain_a", &overdue["work_items"][0], "start", json!({})).await;
     for item in pending["work_items"].as_array().unwrap() {
         let who = if item["assignee_id"] == c.org.plain_a.to_string() { "plain_a" } else { "boss_like_a" };
@@ -208,16 +205,16 @@ async fn seed(pool: PgPool) -> Ctx {
         .await;
     c.post("manager_a", &format!("/api/reports/{}/submit", r["id"].as_str().unwrap()), json!({ "version": 1 })).await;
 
-    // Events: soon (with RSVPs), next month, private, cancelled.
-    let ev = |title: &str, days: i64, private: bool, targets: Value| {
+    // Events: soon (with RSVPs), next month, cancelled.
+    let ev = |title: &str, days: i64, targets: Value| {
         let start = now + Duration::days(days);
-        json!({ "branch_id": a, "type": "event", "title": title, "is_private": private, "targets": targets,
+        json!({ "branch_id": a, "type": "event", "title": title, "targets": targets,
                 "event": { "starts_at": fmt(start), "ends_at": fmt(start + Duration::hours(2)), "location": "Hall" } })
     };
     let soon = c
         .issue(
             "boss_like_a",
-            ev("Assembly", 3, false, json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }])),
+            ev("Assembly", 3, json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }])),
         )
         .await;
     let soon_id = soon["id"].as_str().unwrap();
@@ -229,9 +226,8 @@ async fn seed(pool: PgPool) -> Ctx {
         Some(json!({ "response": "going" })),
     )
     .await;
-    c.issue("boss_like_a", ev("Next month", 40, false, json!([]))).await;
-    c.issue("boss_like_a", ev("Board", 5, true, json!([]))).await;
-    let cancelled = c.issue("plain_a", ev("Cancelled", 6, false, json!([]))).await;
+    c.issue("boss_like_a", ev("Next month", 40, json!([]))).await;
+    let cancelled = c.issue("plain_a", ev("Cancelled", 6, json!([]))).await;
     c.post("plain_a", &format!("/api/issues/{}/cancel", cancelled["id"].as_str().unwrap()), json!({ "version": 1 }))
         .await;
     c
@@ -257,8 +253,8 @@ async fn dashboard_numbers_match_the_filtered_lists_for_every_actor(pool: PgPool
         for b in dash["branches"].as_array().unwrap() {
             let branch: Uuid = b["branch_id"].as_str().unwrap().parse().unwrap();
             let open = c.all(who, &format!("/api/issues?branch_id={branch}&state=open")).await;
-            let tickets = open.iter().filter(|i| i["type"] == "ticket" && i["is_private"] == false).count();
-            assert_eq!(b["open_public_tickets"], tickets, "{who}: public tickets in {}", b["code"]);
+            let tickets = open.iter().filter(|i| i["type"] == "ticket").count();
+            assert_eq!(b["open_tickets"], tickets, "{who}: tickets in {}", b["code"]);
 
             let wide = authorize(&actor, Action::ViewBranchDashboard { branch_id: branch }).is_ok();
             assert_eq!(b["scope"], if wide { "branch" } else { "personal" }, "{who}");
@@ -436,9 +432,6 @@ async fn exported_sheets_match_the_filtered_data(pool: PgPool) {
         let printer = book.rows("Tickets").into_iter().find(|r| text(&r[2]) == "Printer").unwrap();
         let expected_comments = if who == "exporter" { 1.0 } else { 2.0 };
         assert_eq!(printer[8], Data::Float(expected_comments), "{who}: comment count");
-        // Private issues only for those who can read them.
-        let titles: Vec<String> = book.rows("Tickets").iter().map(|r| text(&r[2])).collect();
-        assert_eq!(titles.contains(&"HR".to_owned()), who != "exporter", "{who}");
     }
     assert_eq!(audit_count(&c.app.db, "export", "export").await, 3);
 }

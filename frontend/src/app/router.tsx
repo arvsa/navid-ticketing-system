@@ -176,17 +176,11 @@ const newItem = createRoute({
   },
 });
 
-const analytics = createRoute({
-  getParentRoute: () => shell,
-  path: "/analytics",
-  component: lazyRouteComponent(() => import("@/features/admin/AnalyticsPage"), "AnalyticsPage"),
-});
-
 const tree = root.addChildren([
   signIn,
   changePassword,
   authed.addChildren([
-    shell.addChildren([home, myWork, items, item, myAssignment, approvals, calendar, inbox, people, branches, exportPage, analytics, profile, newItem]),
+    shell.addChildren([home, myWork, items, item, myAssignment, approvals, calendar, inbox, people, branches, exportPage, profile, newItem]),
   ]),
 ]);
 

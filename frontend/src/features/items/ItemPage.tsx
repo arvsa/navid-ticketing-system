@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCircle2, Forward, Info, Lock, MoreHorizontal, Pencil, Unlock, X } from "lucide-react";
+import { Bell, BellOff, CheckCircle2, Forward, Info, Lock, MoreHorizontal, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { setIssue, useComments, useHistory, useIssue, useIssueByNumber, useTransition } from "@/api/hooks";
@@ -11,7 +11,7 @@ import { useBranch } from "@/app/BranchContext";
 import { Pill, PriorityText, TypeBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
 import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
-import { canClose, canEdit, canPassTicket, canSetPrivate, canTarget, isAdminOf } from "@/lib/can";
+import { canClose, canEdit, canPassTicket, canTarget, isAdminOf } from "@/lib/can";
 import { formatDateTime, formatDay, timeAgo, zoneSuffix } from "@/lib/dates";
 import { historyLines } from "@/lib/history";
 import { isDone, numberOf, primaryAction, targetName, useGroupDirectory, useItemLabels } from "@/lib/items";
@@ -94,11 +94,6 @@ function ItemView({ issue }: { issue: IssueDetail }) {
     onSuccess: () => (qc.invalidateQueries({ queryKey: keys.issue(issue.id) }), toast.success(issue.muted ? t("You'll get updates again") : t("Muted. You'll still be told when something needs you."))),
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const setPrivate = useMutation({
-    mutationFn: () => api.patch<IssueDetail>(`/issues/${issue.id}`, { version: issue.version, is_private: !issue.is_private }),
-    onSuccess: (u) => (setIssue(qc, u), toast.success(u.is_private ? t("Now private") : t("Now visible to the branch"))),
-    onError: (e) => toast.error(errorMessage(e)),
-  });
   const removeTarget = useMutation({
     mutationFn: (target: Target) => api.del<IssueDetail>(`/issues/${issue.id}/targets/${target.id}`),
     onSuccess: (u) => (setIssue(qc, u), toast.success(t("Removed"))),
@@ -136,12 +131,6 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         </Button>
       }
     >
-      {canSetPrivate(viewer, issue) && (
-        <MenuItem onSelect={() => setPrivate.mutate()}>
-          {issue.is_private ? <Unlock className="size-4" /> : <Lock className="size-4" />}
-          {issue.is_private ? t("Make it visible to the branch") : t("Make it private")}
-        </MenuItem>
-      )}
       {canTarget(viewer, issue) && <MenuItem onSelect={() => setDialog("send")}>{t("Send to more people")}</MenuItem>}
       {canPassTicket(viewer, issue) && (
         <MenuItem onSelect={() => setDialog("pass")}>
@@ -239,11 +228,6 @@ function ItemView({ issue }: { issue: IssueDetail }) {
                   {stateLabel[issue.state]}
                 </Pill>
                 {(issue.priority === "high" || issue.priority === "critical") && <PriorityText priority={issue.priority} />}
-                {issue.is_private && (
-                  <span className="inline-flex items-center gap-1 text-text-2">
-                    <Lock className="size-4" />{" "}{t("Private")}
-                  </span>
-                )}
                 {!issue.branch_id && hasWork && (
                   <span className="inline-flex items-center gap-1 text-text-2">
                     <Lock className="size-4" />{" "}{t("The sender approves this")}

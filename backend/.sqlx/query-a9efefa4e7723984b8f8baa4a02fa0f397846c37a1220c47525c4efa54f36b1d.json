@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ty.code AS issue_type, count(*) AS \"n!\"\n            FROM issue i JOIN issue_type ty ON ty.id = i.type_id\n            WHERE i.state = 'open'\n              AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND (i.branch_id = $2 OR (i.branch_id IS NULL AND EXISTS (\n                    SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $2 AND t.removed_at IS NULL)))\n            GROUP BY ty.code\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "a9efefa4e7723984b8f8baa4a02fa0f397846c37a1220c47525c4efa54f36b1d"
+}

@@ -31,7 +31,7 @@ async fn init_migration_seeds_catalogs(pool: PgPool) {
     assert_eq!(types, ["action", "event", "report", "ticket"]);
 
     let permissions = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM permission"#).fetch_one(&pool).await.unwrap();
-    assert_eq!(permissions, 18);
+    assert_eq!(permissions, 16);
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]

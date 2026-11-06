@@ -50,15 +50,24 @@ impl Actor {
         // Grants via groups, active groups only. group_member rows are removed
         // by trigger when a membership ends, so these are current branches.
         // (School-wide groups are templates with no members; their copies
-        // are ordinary branch groups.)
+        // are ordinary branch groups.) Plus the grants of "Everyone", the
+        // school-wide default group, in every current branch.
         let grants = sqlx::query!(
             r#"
-            SELECT gm.branch_id, gp.permission_key, t.code AS "issue_type?", gp.scope AS "scope: Scope"
+            SELECT gm.branch_id AS "branch_id!", gp.permission_key AS "permission_key!",
+                   t.code AS "issue_type?", gp.scope AS "scope!: Scope"
             FROM group_member gm
             JOIN user_group g        ON g.id = gm.group_id AND g.archived_at IS NULL
             JOIN group_permission gp ON gp.group_id = g.id
             LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
             WHERE gm.user_id = $1
+            UNION ALL
+            SELECT m.branch_id, gp.permission_key, t.code, gp.scope
+            FROM branch_membership m
+            JOIN user_group g        ON g.branch_id IS NULL AND g.is_default
+            JOIN group_permission gp ON gp.group_id = g.id
+            LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
+            WHERE m.user_id = $1 AND m.left_at IS NULL
             "#,
             user_id
         )

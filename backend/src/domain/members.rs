@@ -524,6 +524,35 @@ pub struct Recipient {
     pub branch_name: String,
 }
 
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct RecipientGroup {
+    pub id: Uuid,
+    pub name: String,
+    pub branch_id: Uuid,
+    pub branch_name: String,
+    pub member_count: i64,
+}
+
+/// Every active group in every active branch, for the same people as
+/// [`recipients`]. Not the "All members" groups: send to the whole branch
+/// instead.
+pub async fn recipient_groups(db: &PgPool, actor: &Actor) -> AppResult<Vec<RecipientGroup>> {
+    authorize(actor, Action::FindPeopleInOtherBranches)?;
+    Ok(sqlx::query_as!(
+        RecipientGroup,
+        r#"
+        SELECT g.id, g.name, b.id AS branch_id, b.name AS branch_name,
+               (SELECT count(*) FROM group_member gm WHERE gm.group_id = g.id) AS "member_count!"
+        FROM user_group g
+        JOIN branch b ON b.id = g.branch_id
+        WHERE g.archived_at IS NULL AND NOT g.is_default AND b.is_active
+        ORDER BY b.name, g.name
+        "#
+    )
+    .fetch_all(db)
+    .await?)
+}
+
 /// Everyone in every active branch, for super admins and holders of
 /// `issue.target_other_branches`. Someone in two branches appears twice.
 pub async fn recipients(db: &PgPool, actor: &Actor) -> AppResult<Vec<Recipient>> {

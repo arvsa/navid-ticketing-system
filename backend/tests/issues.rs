@@ -80,11 +80,6 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
     )
     .await;
     assert_status(&targeted_report, StatusCode::FORBIDDEN, None);
-    // Privacy needs issue.set_private.
-    let private =
-        post_issue(&app, &plain, json!({ "branch_id": a, "type": "ticket", "title": "Secret", "is_private": true }))
-            .await;
-    assert_status(&private, StatusCode::FORBIDDEN, None);
     // Not their branch.
     let elsewhere =
         post_issue(&app, &plain, json!({ "branch_id": org.branch_b, "type": "ticket", "title": "X" })).await;
@@ -360,16 +355,17 @@ async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn private_issues_are_404_for_outsiders_by_id_and_number(pool: PgPool) {
+async fn unreadable_issues_are_404_by_id_and_number(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
+    hide_branch_issues(&app.db, org.branch_a).await;
     let boss_like = as_user(&app, "boss_like_a@example.com").await;
     let plain = as_user(&app, "plain_a@example.com").await;
 
     let res = post_issue(
         &app,
         &boss_like,
-        json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter", "is_private": true }),
+        json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter" }),
     )
     .await;
     assert_status(&res, StatusCode::CREATED, None);
@@ -532,18 +528,8 @@ async fn editing_other_peoples_issues_needs_branch_scope_and_notifies_the_owner(
     // issue.edit @own doesn't reach other people's issues.
     let res = call(&app, &manager, Method::PATCH, &uri, Some(json!({ "version": 1, "title": "Theirs" }))).await;
     assert_status(&res, StatusCode::FORBIDDEN, None);
-    // The owner can't make it private without issue.set_private.
-    let res = call(&app, &plain, Method::PATCH, &uri, Some(json!({ "version": 1, "is_private": true }))).await;
-    assert_status(&res, StatusCode::FORBIDDEN, None);
 
-    let res = call(
-        &app,
-        &boss_like,
-        Method::PATCH,
-        &uri,
-        Some(json!({ "version": 1, "title": "Edited", "is_private": true })),
-    )
-    .await;
+    let res = call(&app, &boss_like, Method::PATCH, &uri, Some(json!({ "version": 1, "title": "Edited" }))).await;
     assert_status(&res, StatusCode::OK, None);
     assert_eq!(notifications_of(&app.db, org.plain_a, "changed_by_admin").await, 1);
     // Editing your own issue notifies nobody.
@@ -845,4 +831,41 @@ async fn migration_0006_rewrites_list_dates_as_rfc3339(pool: PgPool) {
     assert_eq!(rows[2].1, json!({ "sla_due_at": "2026-10-21T13:43:00Z" }));
     // The log is append-only again.
     assert!(sqlx::query("UPDATE audit_log SET action = 'x'").execute(&pool).await.is_err());
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn school_wide_items_go_to_a_group_in_another_branch(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let it = create_group(&app.db, org.branch_b, "IT", &[], &[org.multi]).await;
+    let admin = as_user(&app, "admin_a@example.com").await;
+
+    // Every branch's groups, for those who may send across (not All members).
+    let groups = call(&app, &admin, Method::GET, "/api/recipient-groups", None).await;
+    assert_status(&groups, StatusCode::OK, None);
+    let groups = groups.body.as_array().unwrap();
+    assert!(groups.iter().any(|g| g["id"] == it.to_string() && g["branch_id"] == org.branch_b.to_string() && g["member_count"] == 1));
+    assert!(!groups.iter().any(|g| g["name"] == "All members"));
+    let plain = as_user(&app, "plain_a@example.com").await;
+    assert_status(&call(&app, &plain, Method::GET, "/api/recipient-groups", None).await, StatusCode::FORBIDDEN, None);
+    let root = as_root(&app).await;
+    let as_root_groups = call(&app, &root, Method::GET, "/api/recipient-groups", None).await;
+    assert_status(&as_root_groups, StatusCode::OK, None);
+    assert!(as_root_groups.body.as_array().unwrap().iter().any(|g| g["id"] == it.to_string()), "super admins too");
+
+    // A ticket for B's IT group, sent from A.
+    let body = json!({ "branch_id": null, "type": "ticket", "title": "Projector",
+                       "targets": [{ "group_id": it, "branch_id": org.branch_b }] });
+    let res = post_issue(&app, &admin, body).await;
+    assert_status(&res, StatusCode::CREATED, None);
+    assert!(res.body["branch_id"].is_null());
+    assert_eq!(res.body["targets"][0]["group_id"], it.to_string());
+    let multi = as_user(&app, "multi@example.com").await;
+    assert_status(&call(&app, &multi, Method::GET, &format!("/api/issues/{}", id_of(&res)), None).await, StatusCode::OK, None);
+
+    // The group must be in the branch named, and the branch named at all.
+    for target in [json!({ "group_id": it, "branch_id": org.branch_a }), json!({ "group_id": it })] {
+        let body = json!({ "branch_id": null, "type": "ticket", "title": "X", "targets": [target] });
+        assert_status(&post_issue(&app, &admin, body).await, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_target"));
+    }
 }

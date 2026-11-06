@@ -1,21 +1,4 @@
 export interface paths {
-    "/api/analytics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** GET /api/analytics?weeks=12: the whole school, for super admins. */
-        get: operations["get__api_analytics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/attachments/{id}": {
         parameters: {
             query?: never;
@@ -158,7 +141,9 @@ export interface paths {
         put?: never;
         /**
          * POST /api/branches/{id}/members/import, `multipart/form-data` with a `file`
-         *     part (xlsx, xls, ods or csv) and an optional `dry_run` field (`true`).
+         *     part (xlsx, xls, ods or csv) and optional `dry_run` and `skip_errors`
+         *     fields (`true`): check only, or import the good rows and leave out the
+         *     ones with a problem.
          */
         post: operations["post__api_branches_id_members_import"];
         delete?: never;
@@ -288,6 +273,23 @@ export interface paths {
         };
         /** GET /api/exports?branch_ids=&types=ticket,report,event,action&from=&to= */
         get: operations["get__api_exports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exports/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/exports/people?branch_ids= (super admins) */
+        get: operations["get__api_exports_people"];
         put?: never;
         post?: never;
         delete?: never;
@@ -996,17 +998,6 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
-        Analytics: {
-            branches: components["schemas"]["BranchAnalytics"][];
-            /**
-             * Format: date-time
-             * @description Monday of the first week shown.
-             */
-            since: string;
-            /** Format: int32 */
-            weeks: number;
-            workload: components["schemas"]["Workload"][];
-        };
         AttachmentMeta: {
             checksum_sha256: string;
             /** Format: uuid */
@@ -1039,34 +1030,6 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        BranchAnalytics: {
-            /** @description One per week, oldest first. */
-            activity: components["schemas"]["WeekActivity"][];
-            /**
-             * Format: double
-             * @description Average hours from work given out to its approval; `null` with nothing finished.
-             */
-            avg_hours_to_finish?: number | null;
-            /** Format: uuid */
-            branch_id: string;
-            code: string;
-            /**
-             * Format: int64
-             * @description Work finished (approved) in the period.
-             */
-            finished: number;
-            /**
-             * Format: int64
-             * @description Finished work that had a due date.
-             */
-            finished_with_due_date: number;
-            name: string;
-            /**
-             * Format: double
-             * @description Of those, the share handed in on time (0 to 1); `null` with none.
-             */
-            on_time_rate?: number | null;
-        };
         BranchNumbers: {
             /** Format: uuid */
             branch_id: string;
@@ -1081,9 +1044,9 @@ export interface components {
             open_issues_by_type?: components["schemas"]["TypeCounts"] | null;
             /**
              * Format: int64
-             * @description Open, non-private tickets the actor can see. Always present.
+             * @description Open tickets the actor can see. Always present.
              */
-            open_public_tickets: number;
+            open_tickets: number;
             /** Format: int64 */
             overdue_work_items?: number | null;
             scope: components["schemas"]["NumbersScope"];
@@ -1109,7 +1072,6 @@ export interface components {
             branch_id?: string | null;
             /** Format: date-time */
             ends_at: string;
-            is_private: boolean;
             /** Format: uuid */
             issue_id: string;
             key: string;
@@ -1283,6 +1245,8 @@ export interface components {
             name?: string | null;
         };
         GroupRef: {
+            /** @description The school-wide "Everyone" group, which every user is in. */
+            everyone: boolean;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1337,7 +1301,10 @@ export interface components {
         /** @enum {string} */
         ImportOutcome: "create" | "add" | "reactivate" | "skip" | "error";
         ImportReport: {
-            /** @description False for a dry run, or when any row has an error (nothing was written). */
+            /**
+             * @description False for a dry run, or when any row has an error and they weren't
+             *     skipped (nothing was written).
+             */
             imported: boolean;
             rows: components["schemas"]["ImportRow"][];
         };
@@ -1378,7 +1345,6 @@ export interface components {
             event?: components["schemas"]["EventView"] | null;
             /** Format: uuid */
             id: string;
-            is_private: boolean;
             key: string;
             /** Format: date-time */
             last_read_at?: string | null;
@@ -1401,7 +1367,6 @@ export interface components {
         IssuePatch: {
             description?: string | null;
             event?: components["schemas"]["EventPatch"] | null;
-            is_private?: boolean | null;
             priority?: components["schemas"]["Priority"] | null;
             title?: string | null;
             /**
@@ -1424,7 +1389,6 @@ export interface components {
             /** Format: uuid */
             id: string;
             is_overdue: boolean;
-            is_private: boolean;
             /** @description Display form, `ISS-<number>`. */
             key: string;
             /** Format: date-time */
@@ -1489,8 +1453,11 @@ export interface components {
         NewBranch: {
             code: string;
             email?: string | null;
-            /** Format: uuid */
-            first_admin_user_id: string;
+            /**
+             * Format: uuid
+             * @description Optional: a new branch can get its admin later, once its people are in.
+             */
+            first_admin_user_id?: string | null;
             name: string;
             timezone: string;
         };
@@ -1522,7 +1489,6 @@ export interface components {
             completion_mode?: components["schemas"]["CompletionMode"];
             description?: string | null;
             event?: components["schemas"]["EventInput"] | null;
-            is_private?: boolean;
             priority?: components["schemas"]["Priority"];
             /**
              * Format: date-time
@@ -1604,7 +1570,6 @@ export interface components {
                 branch_id?: string | null;
                 /** Format: date-time */
                 ends_at: string;
-                is_private: boolean;
                 /** Format: uuid */
                 issue_id: string;
                 key: string;
@@ -1740,7 +1705,6 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 is_overdue: boolean;
-                is_private: boolean;
                 /** @description Display form, `ISS-<number>`. */
                 key: string;
                 /** Format: date-time */
@@ -1900,7 +1864,7 @@ export interface components {
             temporary_password: string;
         };
         /** @enum {string} */
-        Permission: "issue.read" | "issue.read_private" | "issue.create" | "issue.edit" | "issue.close" | "issue.set_private" | "issue.target" | "issue.target_other_branches" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
+        Permission: "issue.read" | "issue.create" | "issue.edit" | "issue.close" | "issue.target" | "issue.target_other_branches" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         ProfilePatch: {
@@ -1920,6 +1884,16 @@ export interface components {
             last_name: string;
             /** Format: uuid */
             user_id: string;
+        };
+        RecipientGroup: {
+            /** Format: uuid */
+            branch_id: string;
+            branch_name: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            member_count: number;
+            name: string;
         };
         Report: {
             attachments: components["schemas"]["AttachmentMeta"][];
@@ -2097,20 +2071,6 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
-        WeekActivity: {
-            /**
-             * Format: int64
-             * @description Items created in the branch, or sent to it from elsewhere.
-             */
-            created: number;
-            /**
-             * Format: int64
-             * @description Work in the branch approved that week.
-             */
-            finished: number;
-            /** Format: date-time */
-            week_start: string;
-        };
         WorkItem: {
             /**
              * Format: uuid
@@ -2156,29 +2116,6 @@ export interface components {
         };
         /** @enum {string} */
         WorkStatus: "open" | "in_progress" | "blocked" | "pending_approval" | "approved" | "cancelled";
-        Workload: {
-            /** Format: uuid */
-            branch_id: string;
-            first_name: string;
-            /**
-             * Format: int64
-             * @description Handed in and waiting for review.
-             */
-            handed_in: number;
-            last_name: string;
-            /**
-             * Format: int64
-             * @description Not started, in progress or blocked.
-             */
-            open: number;
-            /**
-             * Format: int64
-             * @description Of `open`, past its due date.
-             */
-            overdue: number;
-            /** Format: uuid */
-            user_id: string;
-        };
     };
     responses: never;
     parameters: never;
@@ -2188,37 +2125,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get__api_analytics: {
-        parameters: {
-            query?: {
-                /** @description 1 to 52; default 12. */
-                weeks?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Analytics"];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     get__api_attachments_id_: {
         parameters: {
             query?: never;
@@ -2655,7 +2561,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description A `file` part (max 2 MB, at most 500 people) and an optional `dry_run` field */
+        /** @description A `file` part (max 2 MB, at most 500 people) and optional `dry_run` and `skip_errors` fields */
         requestBody?: {
             content: {
                 "multipart/form-data": unknown;
@@ -2988,6 +2894,38 @@ export interface operations {
                 types?: string;
                 from?: string;
                 to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An Excel workbook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_exports_people: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated; leave out for every branch. */
+                branch_ids?: string;
             };
             header?: never;
             path?: never;

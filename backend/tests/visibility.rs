@@ -17,17 +17,15 @@ use uuid::Uuid;
 struct NewIssue<'a> {
     branch: Option<Uuid>,
     ty: &'a str,
-    private: bool,
     by: Uuid,
 }
 
 async fn issue(db: &PgPool, i: NewIssue<'_>) -> Uuid {
     sqlx::query_scalar!(
-        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by)
-           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'T', $3, $4) RETURNING id"#,
+        r#"INSERT INTO issue (branch_id, type_id, title, created_by)
+           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'T', $3) RETURNING id"#,
         i.branch,
         i.ty,
-        i.private,
         i.by
     )
     .fetch_one(db)
@@ -64,7 +62,7 @@ async fn load_actor(db: &PgPool, user: Uuid) -> Actor {
 async fn visible_by_filter(db: &PgPool, actor: &Actor) -> BTreeSet<Uuid> {
     let filter = IssueFilter::for_actor(actor).into_json();
     sqlx::query_scalar!(
-        "SELECT i.id FROM issue i WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)",
+        "SELECT i.id FROM issue i WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)",
         filter
     )
     .fetch_all(db)
@@ -91,23 +89,20 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     let db = &pool;
     let org = Org::seed(db).await;
 
-    // Extra actors: a private reader, a reader limited to actions, a member
+    // Extra actors without the baseline: a reader limited to actions, a member
     // with no read grant at all, and a group member targeted via the group.
-    let private_reader = create_user(db, NewUser::member("private_reader@example.com", PW)).await;
     let action_reader = create_user(db, NewUser::member("action_reader@example.com", PW)).await;
     let blind = create_user(db, NewUser::member("blind@example.com", PW)).await;
     let grouped = create_user(db, NewUser::member("grouped@example.com", PW)).await;
-    for u in [private_reader, action_reader, blind, grouped] {
+    for u in [action_reader, blind, grouped] {
         add_member(db, org.branch_a, u).await;
     }
-    create_group(db, org.branch_a, "Private readers", &[("issue.read_private", None, "branch")], &[private_reader])
-        .await;
     let team = create_group(db, org.branch_a, "Team", &[], &[grouped]).await;
     // Remove the baseline from the restricted users: drop them from "All members".
     sqlx::query!(
         "DELETE FROM group_member gm USING user_group g
          WHERE g.id = gm.group_id AND g.is_default AND gm.user_id = ANY($1)",
-        &[action_reader, blind][..]
+        &[action_reader, blind, grouped][..]
     )
     .execute(db)
     .await
@@ -120,18 +115,16 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     let creators = [org.admin_a, org.plain_a, org.boss_like_a, org.manager_a];
     for by in creators {
         for ty in ["ticket", "action", "report", "event"] {
-            for private in [false, true] {
-                issue(db, NewIssue { branch: a, ty, private, by }).await;
-            }
+            issue(db, NewIssue { branch: a, ty, by }).await;
         }
     }
-    // Private issues reaching someone through a target.
-    let to_user = issue(db, NewIssue { branch: a, ty: "ticket", private: true, by: org.admin_a }).await;
-    target(db, to_user, org.branch_a, Some(org.plain_a), None).await;
-    let to_group = issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a }).await;
+    // Issues reaching someone without a read grant through a target.
+    let to_user = issue(db, NewIssue { branch: a, ty: "ticket", by: org.admin_a }).await;
+    target(db, to_user, org.branch_a, Some(action_reader), None).await;
+    let to_group = issue(db, NewIssue { branch: a, ty: "action", by: org.admin_a }).await;
     target(db, to_group, org.branch_a, None, Some(team)).await;
-    // Private, reaching someone only as an assignee.
-    let assigned = issue(db, NewIssue { branch: a, ty: "action", private: true, by: org.admin_a }).await;
+    // Reaching someone only as an assignee.
+    let assigned = issue(db, NewIssue { branch: a, ty: "action", by: org.admin_a }).await;
     let t = target(db, assigned, org.branch_a, None, Some(org.managers_group)).await;
     sqlx::query!(
         "INSERT INTO work_item (issue_id, target_id, branch_id, assignee_id) VALUES ($1, $2, $3, $4)",
@@ -144,15 +137,12 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     .await
     .unwrap();
     // Branch B issues.
-    issue(db, NewIssue { branch: b, ty: "ticket", private: false, by: org.admin_b }).await;
-    issue(db, NewIssue { branch: b, ty: "ticket", private: true, by: org.admin_b }).await;
+    issue(db, NewIssue { branch: b, ty: "ticket", by: org.admin_b }).await;
     // Cross-branch super admin issues: one sent to branch B, one to a group in A.
-    let cross_b = issue(db, NewIssue { branch: None, ty: "action", private: false, by: org.root }).await;
+    let cross_b = issue(db, NewIssue { branch: None, ty: "action", by: org.root }).await;
     target(db, cross_b, org.branch_b, None, None).await;
-    let cross_a_group = issue(db, NewIssue { branch: None, ty: "ticket", private: false, by: org.root }).await;
+    let cross_a_group = issue(db, NewIssue { branch: None, ty: "ticket", by: org.root }).await;
     target(db, cross_a_group, org.branch_a, None, Some(team)).await;
-    let cross_private = issue(db, NewIssue { branch: None, ty: "ticket", private: true, by: org.root }).await;
-    target(db, cross_private, org.branch_a, None, Some(team)).await;
 
     let actors = [
         org.root,
@@ -162,7 +152,6 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
         org.boss_like_a,
         org.plain_a,
         org.multi,
-        private_reader,
         action_reader,
         blind,
         grouped,
@@ -179,16 +168,16 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     let seen = |u: Uuid| async move { visible_by_filter(db, &load_actor(db, u).await).await };
     assert_eq!(seen(org.root).await.len(), total);
     let plain = seen(org.plain_a).await;
-    assert!(plain.contains(&to_user), "a targeted user sees the private issue");
-    assert!(!plain.contains(&to_group));
+    let action_only = seen(action_reader).await;
+    assert!(action_only.contains(&to_user), "a targeted user sees a ticket they can't otherwise read");
+    assert!(!seen(blind).await.contains(&to_group));
     assert!(seen(grouped).await.contains(&to_group), "group targets reach current members");
-    assert!(seen(grouped).await.contains(&cross_private), "targeted members see private cross-branch issues");
+    assert!(seen(grouped).await.contains(&cross_a_group), "targeted members see cross-branch issues");
     assert!(seen(blind).await.contains(&assigned), "assignees see the issue");
     assert!(!seen(blind).await.contains(&to_user));
     assert!(seen(org.multi).await.contains(&cross_b), "branch targets reach every member");
     assert!(!seen(org.admin_a).await.contains(&cross_b), "admin of A doesn't see an issue sent only to B");
-    assert!(seen(org.admin_a).await.contains(&cross_private), "admins of a targeted branch see it");
-    let action_only = seen(action_reader).await;
+    assert!(seen(org.admin_a).await.contains(&cross_a_group), "admins of a targeted branch see it");
     assert!(!action_only.is_empty());
     assert!(!plain.is_empty() && plain.len() < total);
 }

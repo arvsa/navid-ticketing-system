@@ -149,13 +149,14 @@ async fn people_and_groups_a_ticket_is_aimed_at_hear_about_it_once(pool: PgPool)
 async fn notifications_about_issues_you_can_no_longer_read_are_hidden(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
+    hide_branch_issues(&app.db, org.branch_a).await;
     let boss_like = as_user(&app, "boss_like_a@example.com").await;
     let plain = as_user(&app, "plain_a@example.com").await;
     let issue = create(
         &app,
         &boss_like,
         json!({
-            "branch_id": org.branch_a, "type": "action", "title": "Private job", "is_private": true,
+            "branch_id": org.branch_a, "type": "action", "title": "Job",
             "targets": [{ "user_id": org.plain_a }]
         }),
     )

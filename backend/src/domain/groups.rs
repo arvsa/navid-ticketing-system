@@ -125,11 +125,14 @@ pub async fn list_school(db: &PgPool, actor: &Actor, query: &GroupQuery) -> AppR
         Group,
         r#"
         SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
-               (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id
-                WHERE c.id = g.id OR c.template_id = g.id) AS "member_count!"
+               CASE WHEN g.is_default THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m
+                                             JOIN app_user u ON u.id = m.user_id
+                                             WHERE m.left_at IS NULL AND u.is_active)
+                    ELSE (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id
+                          WHERE c.id = g.id OR c.template_id = g.id) END AS "member_count!"
         FROM user_group g
         WHERE g.branch_id IS NULL AND ($1 OR g.archived_at IS NULL)
-        ORDER BY lower(g.name), g.id
+        ORDER BY g.is_default DESC, lower(g.name), g.id
         "#,
         query.include_archived,
     )
@@ -142,8 +145,12 @@ async fn fetch(tx: &mut Tx, group_id: Uuid) -> AppResult<Group> {
         Group,
         r#"
         SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
-               (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id
-                WHERE c.id = g.id OR c.template_id = g.id) AS "member_count!"
+               CASE WHEN g.is_default AND g.branch_id IS NULL
+                    THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m
+                          JOIN app_user u ON u.id = m.user_id
+                          WHERE m.left_at IS NULL AND u.is_active)
+                    ELSE (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id
+                          WHERE c.id = g.id OR c.template_id = g.id) END AS "member_count!"
         FROM user_group g WHERE g.id = $1
         "#,
         group_id
@@ -236,10 +243,10 @@ pub async fn update(db: &PgPool, actor: &Actor, group_id: Uuid, patch: GroupPatc
     }
     if group.is_default {
         if name.as_ref().is_some_and(|n| *n != group.name) {
-            return Err(AppError::conflict("default_group", "the All members group can't be renamed"));
+            return Err(AppError::conflict("default_group", "a built-in group can't be renamed"));
         }
         if patch.archived == Some(true) {
-            return Err(AppError::conflict("default_group", "the All members group can't be archived"));
+            return Err(AppError::conflict("default_group", "a built-in group can't be archived"));
         }
     }
 
@@ -355,7 +362,7 @@ pub struct DeleteOutcome {
 pub async fn delete(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<DeleteOutcome> {
     let group = load_managed(db, actor, group_id).await?;
     if group.is_default {
-        return Err(AppError::conflict("default_group", "the All members group can't be deleted"));
+        return Err(AppError::conflict("default_group", "a built-in group can't be deleted"));
     }
     if group.template_id.is_some() {
         return Err(managed_by_template());
@@ -843,6 +850,8 @@ pub struct SourcedGrant {
 pub struct GroupRef {
     pub id: Uuid,
     pub name: String,
+    /// The school-wide "Everyone" group, which every user is in.
+    pub everyone: bool,
 }
 
 pub async fn effective_permissions(
@@ -861,16 +870,23 @@ pub async fn effective_permissions(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    // Same sources as Actor::load: active groups only.
+    // Same sources as Actor::load: active groups only, plus Everyone.
     let rows = sqlx::query!(
         r#"
-        SELECT gp.permission_key, t.code AS "issue_type?", gp.scope AS "scope: Scope", g.id AS group_id, g.name
+        SELECT gp.permission_key AS "permission_key!", t.code AS "issue_type?", gp.scope AS "scope!: Scope",
+               g.id AS "group_id!", g.name AS "name!", false AS "everyone!"
         FROM group_member gm
         JOIN user_group g        ON g.id = gm.group_id AND g.archived_at IS NULL
         JOIN group_permission gp ON gp.group_id = g.id
         LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
         WHERE gm.user_id = $1 AND gm.branch_id = $2
-        ORDER BY gp.permission_key, t.code NULLS FIRST, gp.scope, g.name
+        UNION ALL
+        SELECT gp.permission_key, t.code, gp.scope, g.id, g.name, true
+        FROM user_group g
+        JOIN group_permission gp ON gp.group_id = g.id
+        LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
+        WHERE g.branch_id IS NULL AND g.is_default
+        ORDER BY 1, 2 NULLS FIRST, 3, 5
         "#,
         user_id,
         branch_id
@@ -888,7 +904,7 @@ pub async fn effective_permissions(
                 permission: r.permission_key,
                 issue_type: r.issue_type,
                 scope: r.scope,
-                group: GroupRef { id: r.group_id, name: r.name },
+                group: GroupRef { id: r.group_id, name: r.name, everyone: r.everyone },
             })
             .collect(),
     })
@@ -898,9 +914,9 @@ pub async fn effective_permissions(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// After a group's grants changed: a branch group tells its branch; a
-/// school-wide group passes its grants on to every copy, and each branch is
-/// told about its own copy.
+/// After a group's grants changed: a branch group tells its branch;
+/// Everyone refreshes every user; any other school-wide group passes its
+/// grants on to every copy, and each branch is told about its own copy.
 async fn grants_changed(
     tx: &mut Tx,
     actor: &Actor,
@@ -910,6 +926,11 @@ async fn grants_changed(
 ) -> AppResult<()> {
     if group.branch_id.is_some() {
         return permissions_changed(tx, actor, group.branch_id, group_id, payload).await;
+    }
+    if group.is_default {
+        // Everyone: every signed-in user's streams refresh.
+        let everyone = sqlx::query_scalar!("SELECT id FROM app_user WHERE is_active").fetch_all(&mut **tx).await?;
+        return emit_group_event(tx, "permissions_changed", None, everyone).await;
     }
     let copies =
         sqlx::query!(r#"SELECT id, branch_id AS "branch_id!" FROM user_group WHERE template_id = $1"#, group_id)
@@ -1023,10 +1044,11 @@ async fn audit_group(
     .await
 }
 
-/// Copies sit next to each branch's "All members" group, so they can't share its name.
+/// Copies sit next to each branch's "All members" group, so they can't share
+/// its name; "Everyone" is the school-wide default group.
 fn validate_template_name(name: &str) -> AppResult<()> {
-    if name.eq_ignore_ascii_case("all members") {
-        return Err(AppError::validation("invalid_name", "\"All members\" is taken by every branch's default group"));
+    if name.eq_ignore_ascii_case("all members") || name.eq_ignore_ascii_case("everyone") {
+        return Err(AppError::validation("reserved_group_name", "\"All members\" and \"Everyone\" are built-in groups"));
     }
     Ok(())
 }

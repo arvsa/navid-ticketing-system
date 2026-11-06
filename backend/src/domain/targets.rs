@@ -26,9 +26,9 @@ use crate::{
 
 /// A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
 /// branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
-/// issue a person also names their branch: `{"user_id": "...", "branch_id":
-/// "..."}`. Anything else is `422 invalid_target`. Send one target per
-/// recipient.
+/// issue a person or group also names their branch: `{"user_id": "...",
+/// "branch_id": "..."}`, `{"group_id": "...", "branch_id": "..."}`. Anything
+/// else is `422 invalid_target`. Send one target per recipient.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TargetInput {
     pub user_id: Option<Uuid>,
@@ -86,8 +86,14 @@ pub fn resolve(input: &TargetInput, issue_branch: Option<Uuid>) -> AppResult<Res
             };
             ResolvedTarget { kind: TargetKind::User, branch_id: branch, user_id: Some(user), group_id: None }
         }
-        (None, Some(group), None) => {
-            let branch = issue_branch.ok_or_else(|| invalid("cross-branch issues can't target groups"))?;
+        (None, Some(group), branch) => {
+            let branch = match (issue_branch, branch) {
+                (Some(issue_branch), None) => issue_branch,
+                (Some(issue_branch), Some(b)) if b == issue_branch => b,
+                (Some(_), Some(_)) => return Err(invalid("targets must be in the issue's branch")),
+                (None, Some(b)) => b,
+                (None, None) => return Err(invalid("on a cross-branch issue a group needs its branch_id")),
+            };
             ResolvedTarget { kind: TargetKind::Group, branch_id: branch, user_id: None, group_id: Some(group) }
         }
         (None, None, Some(branch)) => {

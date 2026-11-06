@@ -136,7 +136,7 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={t("Search permissions, e.g. approve, export, private")}
+          placeholder={t("Search permissions, e.g. approve, export")}
           aria-label={t("Search permissions")}
           className={cx(inputClass, "h-11 rounded-full ps-10")}
         />
@@ -271,7 +271,6 @@ export function summarizeGrants(grants: GroupGrant[] | undefined) {
   const words: Record<string, string> = {
     "work_item.approve": t("approve"),
     "member.manage": t("manage members"),
-    "issue.read_private": t("see private items"),
     "issue.close": t("close items"),
     "export.run": t("export"),
     "work_item.assign": t("assign work"),

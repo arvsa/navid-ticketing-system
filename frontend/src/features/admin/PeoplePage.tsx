@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Copy, FileSpreadsheet, Globe, Lock, Pencil, Plus, Shield, UserPlus, X } from "lucide-react";
+import { Archive, ArchiveRestore, Building2, ChevronDown, ChevronRight, Copy, FileSpreadsheet, Globe, Lock, Pencil, Plus, Shield, ShieldCheck, Trash2, UserPlus, UserRound, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useEffectivePermissions, useGroupGrants, useGroups, useMembers, useSchoolGroupCopies, useSchoolGroups } from "@/api/hooks";
@@ -11,7 +11,7 @@ import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
-import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, PageHeader, Segmented, Tabs, cx, inputClass } from "@/components/ui";
+import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
@@ -30,7 +30,7 @@ export function PeoplePage() {
   const viewer = useViewer();
   const search = useSearch({ from: "/authed/shell/people" });
   const navigate = useNavigate({ from: "/people" });
-  const { branchId, branch, picker, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch);
+  const { branchId, branch, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch);
   const openPerson = (id: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, person: id }) });
   const ctx = useBranch();
   // From a school-wide group to its copy in one branch, and back.
@@ -47,74 +47,156 @@ export function PeoplePage() {
   const schoolGroups = useSchoolGroups(superAdmin);
   const tab = search.tab === "school" && !superAdmin ? "groups" : (search.tab ?? "groups");
   if (!branchId) return <EmptyState title={t("You don't manage a branch.")} />;
-  // Super admins pick "All branches" here for school-wide groups: one group
-  // (say Teachers) whose permissions apply in every branch of its members.
-  const scopePicker = superAdmin ? (
-    <select
-      value={tab === "school" ? "school" : branchId}
-      onChange={(e) => {
-        const v = e.target.value;
-        guard(() => {
-          if (v === "school") navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: undefined }) });
-          else {
-            pick(v);
-            if (tab === "school") navigate({ search: (s: PeopleSearch) => ({ ...s, tab: undefined, group: undefined }) });
-          }
-        });
-      }}
-      className={cx(inputClass, "h-11 w-auto")}
-      aria-label={t("Branch")}
-    >
-      <option value="school">
-        {t("All branches (school-wide groups)")} {schoolGroups.data ? `· ${num(schoolGroups.data.filter((g) => !g.archived_at).length)}` : ""}
-      </option>
-      {choices.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.name}
-        </option>
-      ))}
-    </select>
-  ) : (
-    picker
-  );
+  const activeGroups = groups.data?.filter((g) => !g.archived_at).length;
+  const openBranch = (id: string) =>
+    guard(() => {
+      pick(id);
+      navigate({ search: (s: PeopleSearch) => ({ ...s, tab: tab === "school" ? undefined : s.tab, group: undefined }) });
+    });
+  const openTab = (v: "members" | "groups") =>
+    navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "groups" ? undefined : v, group: undefined }) });
   return (
     <div>
-      <PageHeader
-        title={t("People & groups")}
-        subtitle={tab === "school" ? t("School-wide groups · for every branch") : branch?.name}
-        actions={
-          <>
-            {scopePicker}
-            {tab !== "school" && (
-              <Segmented
-                label={t("Show")}
-                value={tab}
-                onChange={(v) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "groups" ? undefined : v, group: undefined }) })}
-                options={[
-                  { value: "members", label: `${t("Members")} ${num(members.data?.length ?? "")}` },
-                  { value: "groups", label: `${t("Groups")} ${num(groups.data?.filter((g) => !g.archived_at).length ?? "")}` },
-                ]}
-              />
-            )}
-          </>
-        }
-      />
-      {tab === "members" ? (
-        <MembersTab branchId={branchId} branchName={branch?.name ?? ""} onOpen={openPerson} />
-      ) : tab === "school" ? (
-        <SchoolGroupsTab selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} onOpenCopy={openCopy} />
-      ) : (
-        <GroupsTab
-          branchId={branchId}
-          branchName={branch?.name ?? ""}
-          selected={search.group}
-          onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })}
-          onOpen={openPerson}
-          onOpenTemplate={superAdmin ? openTemplate : undefined}
+      <PageHeader title={t("People & groups")} subtitle={tab === "school" ? t("School-wide groups · for every branch") : branch?.name} />
+      <div className="grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)]">
+        <PeopleNav
+          branches={choices.length ? choices : branch ? [branch] : []}
+          branchId={tab === "school" ? undefined : branchId}
+          tab={tab}
+          members={members.data?.length}
+          groups={activeGroups}
+          schoolGroups={superAdmin ? (schoolGroups.data?.filter((g) => !g.archived_at).length ?? null) : undefined}
+          everyone={superAdmin ? schoolGroups.data?.find((g) => g.is_default) : undefined}
+          selectedGroup={search.group}
+          onEveryone={(id) => guard(() => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: id }) }))}
+          onBranch={openBranch}
+          onTab={openTab}
+          onSchool={() => guard(() => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: undefined }) }))}
         />
-      )}
+        <div className="min-w-0">
+          {tab === "members" ? (
+            <MembersTab branchId={branchId} branchName={branch?.name ?? ""} onOpen={openPerson} />
+          ) : tab === "school" ? (
+            <SchoolGroupsTab selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} onOpenCopy={openCopy} />
+          ) : (
+            <GroupsTab
+              branchId={branchId}
+              branchName={branch?.name ?? ""}
+              selected={search.group}
+              onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })}
+              onOpen={openPerson}
+              onOpenTemplate={superAdmin ? openTemplate : undefined}
+            />
+          )}
+        </div>
+      </div>
       <PersonPanel userId={search.person} branchId={branchId} onClose={() => navigate({ search: (s: PeopleSearch) => ({ ...s, person: undefined }) })} />
     </div>
+  );
+}
+
+/** The page's own navigation: a floating card with the branches and, under
+ * the open one, its members and groups. Super admins also get the
+ * school-wide groups. */
+function PeopleNav({
+  branches,
+  branchId,
+  tab,
+  members,
+  groups,
+  schoolGroups,
+  everyone,
+  selectedGroup,
+  onBranch,
+  onTab,
+  onSchool,
+  onEveryone,
+}: {
+  branches: { id: string; name: string }[];
+  /** Unset while the school-wide groups are open. */
+  branchId?: string;
+  tab: string;
+  members?: number;
+  groups?: number;
+  /** `undefined` hides the entry (not a super admin); `null` while loading. */
+  schoolGroups?: number | null;
+  /** The school-wide "Everyone" group (super admins). */
+  everyone?: Group;
+  selectedGroup?: string;
+  onBranch: (id: string) => void;
+  onTab: (tab: "members" | "groups") => void;
+  onSchool: () => void;
+  onEveryone: (id: string) => void;
+}) {
+  const onEveryonePage = tab === "school" && !!everyone && selectedGroup === everyone.id;
+  const row = (active: boolean) =>
+    cx(
+      "flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-start transition-colors",
+      active ? "bg-selected font-semibold text-on-selected" : "text-text-2 hover:bg-sunken hover:text-text",
+    );
+  const count = (n?: number | null) => n != null && <span className="ms-auto text-[14px] tabular opacity-80">{num(n)}</span>;
+  return (
+    <aside className="lg:sticky lg:top-24 lg:self-start">
+      <Card className="p-2 shadow-2">
+        <nav aria-label={t("People & groups")} className="space-y-1">
+          {branches.length > 1 && <SectionLabel className="px-3 pt-2 pb-1">{t("Branches")}</SectionLabel>}
+          <ul className="space-y-1">
+            {branches.map((b) => {
+              const open = b.id === branchId;
+              return (
+                <li key={b.id}>
+                  {branches.length > 1 ? (
+                    <button onClick={() => !open && onBranch(b.id)} aria-expanded={open} className={cx(row(false), open && "font-semibold text-text")}>
+                      <Building2 className="size-[18px] shrink-0" aria-hidden />
+                      <span className="min-w-0 truncate">{b.name}</span>
+                      <ChevronDown className={cx("ms-auto size-4 shrink-0 transition-transform", !open && "rtl:rotate-90 ltr:-rotate-90")} aria-hidden />
+                    </button>
+                  ) : (
+                    <p className="flex items-center gap-2.5 px-3 py-2.5 font-semibold">
+                      <Building2 className="size-[18px] shrink-0 text-text-2" aria-hidden />
+                      <span className="min-w-0 truncate">{b.name}</span>
+                    </p>
+                  )}
+                  {open && (
+                    <ul className="mt-1 space-y-1 border-s-2 border-border ps-2 ms-5">
+                      <li>
+                        <button onClick={() => onTab("members")} aria-current={tab === "members" ? "page" : undefined} className={row(tab === "members")}>
+                          <UserRound className="size-[18px] shrink-0" aria-hidden />
+                          {t("Members")}
+                          {count(members)}
+                        </button>
+                      </li>
+                      <li>
+                        <button onClick={() => onTab("groups")} aria-current={tab === "groups" ? "page" : undefined} className={row(tab === "groups")}>
+                          <Users className="size-[18px] shrink-0" aria-hidden />
+                          {t("Groups")}
+                          {count(groups)}
+                        </button>
+                      </li>
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {schoolGroups !== undefined && (
+            <div className="mt-1 space-y-1 border-t border-border pt-2">
+              <button onClick={onSchool} aria-current={tab === "school" && !onEveryonePage ? "page" : undefined} className={row(tab === "school" && !onEveryonePage)}>
+                <Globe className="size-[18px] shrink-0" aria-hidden />
+                {t("School-wide groups")}
+                {count(schoolGroups)}
+              </button>
+              {everyone && (
+                <button onClick={() => onEveryone(everyone.id)} aria-current={onEveryonePage ? "page" : undefined} className={row(onEveryonePage)}>
+                  <ShieldCheck className="size-[18px] shrink-0" aria-hidden />
+                  {t("Permissions for everyone")}
+                </button>
+              )}
+            </div>
+          )}
+        </nav>
+      </Card>
+    </aside>
   );
 }
 
@@ -147,7 +229,7 @@ function GroupsTab({
   if (groups.isLoading) return <LoadingRows />;
   if (groups.error) return <ErrorPanel error={groups.error} />;
   return (
-    <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
       <div className="space-y-6">
         <Card className="p-2">
           {list.length > 5 && (
@@ -198,24 +280,26 @@ function SchoolGroupsTab({ selected, onSelect, onOpenCopy }: { selected?: string
   const [gq, setGq] = useState("");
   const list = groups.data ?? [];
   const term = gq.trim().toLowerCase();
-  const active = list.filter((g) => !g.archived_at && (!term || g.name.toLowerCase().includes(term))).sort((a, b) => a.name.localeCompare(b.name, localeTag));
+  const active = list
+    .filter((g) => !g.archived_at && (!term || groupName(g).toLowerCase().includes(term)))
+    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
   const archived = list.filter((g) => g.archived_at);
-  const current = list.find((g) => g.id === selected) ?? active[0];
+  const current = list.find((g) => g.id === selected) ?? active.find((g) => !g.is_default) ?? active[0];
   if (groups.isLoading) return <LoadingRows />;
   if (groups.error) return <ErrorPanel error={groups.error} />;
   return (
-    <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
       <div className="space-y-6">
         <Card className="p-2">
           <p className="flex gap-2 px-4 py-3 text-[14px] text-text-2">
             <Globe className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {t("Groups every branch has, like Teachers. Branch admins choose who's in them.")}
+            {t("Common groups between branches")}
           </p>
           {list.length > 5 && (
             <input type="search" value={gq} onChange={(e) => setGq(e.target.value)} placeholder={t("Find a group")} aria-label={t("Find a group")} className={cx(inputClass, "mb-1 h-10 rounded-full py-0")} />
           )}
           {term && active.length === 0 && <p className="px-4 py-3 text-text-2">{t("No group matches {q}.", { q: quote(gq) })}</p>}
-          {!list.length && <p className="px-4 py-3 text-text-2">{t("No school-wide groups yet.")}</p>}
+          {!list.some((g) => !g.is_default) && <p className="px-4 py-3 text-text-2">{t("No school-wide groups yet.")}</p>}
           <ul>
             {active.map((g) => (
               <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
@@ -242,6 +326,11 @@ function SchoolGroupsTab({ selected, onSelect, onOpenCopy }: { selected?: string
   );
 }
 
+/** Built-in groups: each branch's "All members", and the school-wide "Everyone". */
+function groupName(g: Group) {
+  return g.is_default ? (g.branch_id ? t("All members") : t("Everyone")) : g.name;
+}
+
 function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onClick: () => void }) {
   const grants = useGroupGrants(g.id);
   return (
@@ -250,11 +339,11 @@ function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onCl
         <span className="flex items-baseline justify-between gap-2">
           <span className="flex items-center gap-1.5 font-semibold">
             {g.template_id && <Globe className="size-3.5 shrink-0 text-text-3" aria-label={t("School-wide")} />}
-            {g.is_default ? t("All members") : g.name}
+            {groupName(g)}
           </span>
           <span className="text-text-2 tabular">{num(g.member_count)}</span>
         </span>
-        <span className="block text-[14px] text-text-2">{g.is_default ? t("Everyone's everyday permissions") : g.archived_at ? t("Archived") : summarizeGrants(grants.data)}</span>
+        <span className="block text-[14px] text-text-2">{g.is_default ? (g.branch_id ? t("Everyone's everyday permissions") : t("Every user, in every branch")) : g.archived_at ? t("Archived") : summarizeGrants(grants.data)}</span>
       </button>
     </li>
   );
@@ -280,10 +369,11 @@ function GroupDetail({
   onOpenCopy?: (branchId: string, groupId: string) => void;
   onOpenTemplate?: (id: string) => void;
 }) {
-  const [tab, setTab] = useState<"can" | "members" | "branches" | "settings">("can");
+  const [tab, setTab] = useState<"can" | "members" | "branches">("can");
   const [renaming, setRenaming] = useState(false);
-  const title = group.is_default ? t("All members") : group.name;
+  const title = groupName(group);
   const isCopy = !!group.template_id;
+  const isEveryone = group.is_default && !group.branch_id;
   // A copy's name, permissions and archiving come from the school-wide group.
   const shapeEditable = editable && !group.is_default && !isCopy;
   return (
@@ -296,14 +386,16 @@ function GroupDetail({
             {title}
           </h2>
           <p className="text-text-2">
-            {group.is_default ? t("Everyone in {name}", { name: branchName }) : group.description || t("No description")} ·{" "}
-            {!branchId ? tn(group.member_count, "{n} member across branches", "{n} members across branches") : tn(group.member_count, "{n} member", "{n} members")}
+            {isEveryone ? t("Every user, in every branch") : group.is_default ? t("Everyone in {name}", { name: branchName }) : group.description || t("No description")} ·{" "}
+            {isEveryone
+              ? tn(group.member_count, "{n} person", "{n} people")
+              : !branchId
+                ? tn(group.member_count, "{n} member across branches", "{n} members across branches")
+                : tn(group.member_count, "{n} member", "{n} members")}
             {group.archived_at && ` · ${t("Archived")}`}
           </p>
         </div>
-        {shapeEditable && (
-          <IconButton variant="ghost" label={t("Rename")} hintAlign="end" icon={<Pencil className="size-4" />} onClick={() => setRenaming(true)} />
-        )}
+        {shapeEditable && <GroupActions group={group} onRename={() => setRenaming(true)} />}
       </div>
       {isCopy && (
         <div className="mx-6 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[12px] bg-sunken px-4 py-3 text-text-2">
@@ -322,10 +414,13 @@ function GroupDetail({
         onChange={(v) => guard(() => setTab(v))}
         tabs={[
           { value: "can", label: t("What they can do") },
-          branchId
-            ? { value: "members" as const, label: t("Members"), count: group.member_count }
-            : { value: "branches" as const, label: t("Branches") },
-          ...(shapeEditable ? [{ value: "settings" as const, label: t("Settings") }] : []),
+          ...(isEveryone
+            ? []
+            : [
+                branchId
+                  ? { value: "members" as const, label: t("Members"), count: group.member_count }
+                  : { value: "branches" as const, label: t("Branches") },
+              ]),
         ]}
       />
       {tab === "can" && (shapeEditable || (editable && group.is_default) ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
@@ -333,7 +428,6 @@ function GroupDetail({
         <GroupMembers group={group} branchId={branchId} editable={editable && !group.is_default && !group.archived_at} onOpen={onOpen} />
       )}
       {tab === "branches" && <GroupCopies group={group} onOpenCopy={onOpenCopy} />}
-      {tab === "settings" && <GroupSettings group={group} />}
       <RenameDialog group={group} open={renaming} onOpenChange={setRenaming} />
     </Card>
   );
@@ -478,7 +572,8 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
   );
 }
 
-function GroupSettings({ group }: { group: Group }) {
+/** Rename, archive (or restore) and delete, as icons beside the group's name. */
+function GroupActions({ group, onRename }: { group: Group; onRename: () => void }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const refresh = () => (qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }), qc.invalidateQueries({ queryKey: keys.schoolGroups }));
@@ -492,19 +587,23 @@ function GroupSettings({ group }: { group: Group }) {
     onSuccess: (o) => (toast.success(o.deleted ? t("Group deleted") : t("It was sent work before, so it was archived instead.")), setConfirm(false), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const archiveLabel = group.archived_at
+    ? t("Restore group")
+    : group.branch_id
+      ? t("Archive group. It can't be sent new work; its history stays.")
+      : t("Archive group, and its copy in every branch");
   return (
-    <div className="space-y-4 px-6 py-5">
-      <div className="flex flex-wrap gap-3">
-        <Button loading={archive.isPending} onClick={() => archive.mutate()}>
-          {group.archived_at ? t("Restore group") : t("Archive group")}
-        </Button>
-        <Button variant="ghost-danger" onClick={() => setConfirm(true)}>
-          {t("Delete group")}
-        </Button>
-      </div>
-      <p className="text-text-2">
-        {group.branch_id ? t("Archived groups can't be sent new work. Their history stays.") : t("Archiving also archives the copy in every branch.")}
-      </p>
+    <div className="flex items-center gap-1">
+      <IconButton variant="ghost" label={t("Rename")} hintAlign="end" icon={<Pencil className="size-4" />} onClick={onRename} />
+      <IconButton
+        variant="ghost"
+        label={archiveLabel}
+        hintAlign="end"
+        loading={archive.isPending}
+        icon={group.archived_at ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+        onClick={() => archive.mutate()}
+      />
+      <IconButton variant="ghost-danger" label={t("Delete group")} hintAlign="end" icon={<Trash2 className="size-4" />} onClick={() => setConfirm(true)} />
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}

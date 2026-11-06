@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT gp.permission_key AS \"permission_key!\", t.code AS \"issue_type?\", gp.scope AS \"scope!: Scope\",\n               g.id AS \"group_id!\", g.name AS \"name!\", false AS \"everyone!\"\n        FROM group_member gm\n        JOIN user_group g        ON g.id = gm.group_id AND g.archived_at IS NULL\n        JOIN group_permission gp ON gp.group_id = g.id\n        LEFT JOIN issue_type t   ON t.id = gp.issue_type_id\n        WHERE gm.user_id = $1 AND gm.branch_id = $2\n        UNION ALL\n        SELECT gp.permission_key, t.code, gp.scope, g.id, g.name, true\n        FROM user_group g\n        JOIN group_permission gp ON gp.group_id = g.id\n        LEFT JOIN issue_type t   ON t.id = gp.issue_type_id\n        WHERE g.branch_id IS NULL AND g.is_default\n        ORDER BY 1, 2 NULLS FIRST, 3, 5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_key!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope!: Scope",
+        "type_info": {
+          "Custom": {
+            "name": "permission_scope",
+            "kind": {
+              "Enum": [
+                "own",
+                "targeted",
+                "branch"
+              ]
+            }
+          }
+        },
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "everyone!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3dd7fe83246ce5af3fbe132abe7b73b3b8964873dde5710e331cd95e4fc5c4d9"
+}

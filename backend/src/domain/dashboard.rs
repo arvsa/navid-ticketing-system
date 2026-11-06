@@ -1,10 +1,10 @@
 //! `GET /api/dashboard?branch_id=` (BACKEND_PLAN.md section 9).
 //!
 //! Per branch: with `dashboard.branch` (or admin) the branch-wide numbers;
-//! without it, only the public open-ticket count. Plus the actor's own
+//! without it, only the open-ticket count. Plus the actor's own
 //! numbers across the selected branches. Every count goes through the
-//! `issue_visible` filter, so nothing private is counted for someone who
-//! couldn't see it. Live queries, no caching.
+//! `issue_visible` filter, so nothing is counted for someone who couldn't
+//! see it. Live queries, no caching.
 
 use serde::Serialize;
 use sqlx::PgPool;
@@ -43,8 +43,8 @@ pub struct BranchNumbers {
     pub code: String,
     pub name: String,
     pub scope: NumbersScope,
-    /// Open, non-private tickets the actor can see. Always present.
-    pub open_public_tickets: i64,
+    /// Open tickets the actor can see. Always present.
+    pub open_tickets: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub open_issues_by_type: Option<TypeCounts>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -118,11 +118,10 @@ pub async fn get(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>) -> AppResu
         let wide = authorize(actor, Action::ViewBranchDashboard { branch_id: b.id }).is_ok();
         let open = sqlx::query!(
             r#"
-            SELECT ty.code AS issue_type, count(*) AS "n!",
-                   count(*) FILTER (WHERE NOT i.is_private) AS "public!"
+            SELECT ty.code AS issue_type, count(*) AS "n!"
             FROM issue i JOIN issue_type ty ON ty.id = i.type_id
             WHERE i.state = 'open'
-              AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+              AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND (i.branch_id = $2 OR (i.branch_id IS NULL AND EXISTS (
                     SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $2 AND t.removed_at IS NULL)))
             GROUP BY ty.code
@@ -132,14 +131,14 @@ pub async fn get(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>) -> AppResu
         )
         .fetch_all(db)
         .await?;
-        let open_public_tickets = open.iter().find(|r| r.issue_type == "ticket").map_or(0, |r| r.public);
+        let open_tickets = open.iter().find(|r| r.issue_type == "ticket").map_or(0, |r| r.n);
 
         let mut numbers = BranchNumbers {
             branch_id: b.id,
             code: b.code,
             name: b.name,
             scope: if wide { NumbersScope::Branch } else { NumbersScope::Personal },
-            open_public_tickets,
+            open_tickets,
             open_issues_by_type: None,
             work_items_by_status: None,
             overdue_work_items: None,
@@ -165,7 +164,7 @@ pub async fn get(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>) -> AppResu
                                                              AT TIME ZONE $4) AS "due_soon!"
                 FROM work_item_overview w JOIN issue i ON i.id = w.issue_id
                 WHERE w.branch_id = $2
-                  AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+                  AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
                 GROUP BY w.status
                 "#,
                 filter,
@@ -213,7 +212,7 @@ async fn mine(
         SELECT count(*) AS "n!" FROM work_item w JOIN issue i ON i.id = w.issue_id
         WHERE w.assignee_id = $2 AND w.status NOT IN ('approved', 'cancelled')
           AND ($3::uuid[] IS NULL OR w.branch_id = ANY($3))
-          AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+          AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
         "#,
         filter,
         actor.user_id,
@@ -229,7 +228,7 @@ async fn mine(
         SELECT w.id FROM work_item w JOIN issue i ON i.id = w.issue_id
         WHERE w.status = 'pending_approval' AND w.assignee_id IS DISTINCT FROM $2 AND i.state = 'open'
           AND ($3::uuid[] IS NULL OR w.branch_id = ANY($3))
-          AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+          AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
         "#,
         filter,
         actor.user_id,
@@ -255,7 +254,7 @@ async fn mine(
         WHERE e.starts_at >= $4 AND e.starts_at < $4 + make_interval(days => $5)
           AND ($3::uuid[] IS NULL OR i.branch_id = ANY($3) OR (i.branch_id IS NULL AND EXISTS (
                 SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($3) AND t.removed_at IS NULL)))
-          AND issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+          AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
         ORDER BY e.starts_at, i.id
         LIMIT $6
         "#,

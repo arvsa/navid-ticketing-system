@@ -129,15 +129,13 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         let admin = actor(db, b.admin).await?;
         let deputy = actor(db, b.deputy).await?;
 
-        // Tickets from members, some answered, some closed, a few private.
+        // Tickets from members, some answered, some closed.
         for n in 0..24 {
             let author = actor(db, b.members[n % b.members.len()]).await?;
-            let private = n % 8 == 0;
-            let who = if private { &deputy } else { &author };
             let issue = issues::create(
                 db,
-                who,
-                new_issue(b.id, "ticket", &format!("{} ({})", TICKETS[n % TICKETS.len()], b.code), private, vec![]),
+                &author,
+                new_issue(b.id, "ticket", &format!("{} ({})", TICKETS[n % TICKETS.len()], b.code), vec![]),
             )
             .await?;
             seeded.issues += 1;
@@ -149,7 +147,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 comments::create(db, &admin, issue.id, comment("Staff: needs a part ordered.", false)).await?;
             }
             if n % 3 == 0 {
-                issues::close(db, who, issue.id, issue.version, crate::domain::types::IssueState::Closed).await?;
+                issues::close(db, &author, issue.id, issue.version, crate::domain::types::IssueState::Closed).await?;
             }
         }
 
@@ -161,7 +159,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 _ => (vec![target_group(b.teachers)], CompletionMode::PerMember),
             };
             let mut input =
-                new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), false, targets);
+                new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), targets);
             input.completion_mode = mode;
             input.sla_due_at = Some(now + Duration::hours([-20, 6, 30, 72, 200][n % 5]));
             let issue = issues::create(db, &admin, input).await?;
@@ -195,7 +193,6 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 b.id,
                 "event",
                 &format!("{} ({})", EVENTS[n % EVENTS.len()], b.code),
-                false,
                 vec![target_group(b.teachers)],
             );
             input.event = Some(EventInput {
@@ -226,7 +223,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
             issues::create(
                 db,
                 &author,
-                new_issue(b.id, "report", &format!("Incident report {} ({})", n + 1, b.code), false, vec![]),
+                new_issue(b.id, "report", &format!("Incident report {} ({})", n + 1, b.code), vec![]),
             )
             .await?;
             seeded.issues += 1;
@@ -234,7 +231,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
     }
 
     // One announcement from head office to every branch.
-    let mut all = new_issue(Uuid::nil(), "action", "Confirm fire drill procedures", false, vec![]);
+    let mut all = new_issue(Uuid::nil(), "action", "Confirm fire drill procedures", vec![]);
     all.branch_id = None;
     all.targets =
         branches.iter().map(|b| TargetInput { user_id: None, group_id: None, branch_id: Some(b.id) }).collect();
@@ -293,14 +290,13 @@ async fn actor(db: &PgPool, user_id: Uuid) -> AppResult<Actor> {
     Actor::load(db, user_id, is_super).await
 }
 
-fn new_issue(branch: Uuid, ty: &str, title: &str, private: bool, targets: Vec<TargetInput>) -> NewIssue {
+fn new_issue(branch: Uuid, ty: &str, title: &str, targets: Vec<TargetInput>) -> NewIssue {
     NewIssue {
         branch_id: Some(branch),
         issue_type: ty.to_owned(),
         title: title.to_owned(),
         description: Some(format!("Demo {ty}.")),
         priority: Priority::Medium,
-        is_private: private,
         completion_mode: CompletionMode::Shared,
         targets,
         sla_due_at: None,

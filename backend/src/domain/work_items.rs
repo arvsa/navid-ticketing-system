@@ -140,7 +140,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &WorkItemQuery, page: &Page
                w.created_at AS "created_at!", w.updated_at AS "updated_at!"
         FROM work_item_overview w
         JOIN issue i ON i.id = w.issue_id
-        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
           AND (NOT $2 OR w.assignee_id = $3)
           AND ($4::work_status IS NULL OR w.status = $4)
           AND ($5::uuid IS NULL OR w.branch_id = $5)
@@ -509,7 +509,8 @@ fn invalid(t: Transition, from: WorkStatus) -> AppError {
 }
 
 /// Everyone who can approve work on the issue: its sender, the branch's
-/// admins and members holding `work_item.approve` for the type.
+/// admins and members holding `work_item.approve` for the type (through a
+/// group, or through Everyone).
 async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, sender: Uuid) -> AppResult<Vec<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
@@ -518,10 +519,12 @@ async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, sender: Uuid)
         SELECT m.user_id FROM branch_membership m JOIN app_user u ON u.id = m.user_id
         WHERE m.branch_id = $1 AND m.left_at IS NULL AND u.is_active
           AND (m.is_admin OR EXISTS (
-                SELECT 1 FROM group_member gm
-                JOIN user_group g ON g.id = gm.group_id AND g.archived_at IS NULL
+                SELECT 1 FROM user_group g
                 JOIN group_permission gp ON gp.group_id = g.id
-                WHERE gm.user_id = m.user_id AND gm.branch_id = $1
+                WHERE g.archived_at IS NULL
+                  AND ((g.branch_id IS NULL AND g.is_default)
+                       OR g.id IN (SELECT gm.group_id FROM group_member gm
+                                   WHERE gm.user_id = m.user_id AND gm.branch_id = $1))
                   AND gp.permission_key = 'work_item.approve' AND gp.scope = 'branch'
                   AND (gp.issue_type_id IS NULL OR gp.issue_type_id = (SELECT id FROM issue_type WHERE code = $2))))
         "#,

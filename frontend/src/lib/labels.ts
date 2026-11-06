@@ -101,12 +101,7 @@ export const permissionInfo: Record<
   Permission,
   { title: string; help: string; section: PermissionSection }
 > = {
-  "issue.read": { title: t("See items"), help: t("Items that aren't private. Everyone always sees what they created."), section: "seeing" },
-  "issue.read_private": {
-    title: t("See private items"),
-    help: t("Including ones not sent to them"),
-    section: "seeing",
-  },
+  "issue.read": { title: t("See items"), help: t("Everyone always sees what they created."), section: "seeing" },
   "comment.internal": {
     title: t("Read and write staff-only comments"),
     help: t("Hidden from everyone without this"),
@@ -129,7 +124,6 @@ export const permissionInfo: Record<
     help: t("Everyone can already close what they created"),
     section: "creating",
   },
-  "issue.set_private": { title: t("Mark items private or public"), help: t("Hide items from people they aren't sent to"), section: "creating" },
   "work_item.update": {
     title: t("Update progress"),
     help: t("Start, block and send work for approval"),
@@ -211,6 +205,7 @@ const errorCopy: Record<string, string> = {
   invalid_current_password: t("The current password isn't right."),
   invalid_email: t("Enter a valid email address."),
   invalid_name: t("Enter a name (it can't be empty)."),
+  reserved_group_name: t("Every branch already has an All members group, so pick another name. To change what everyone can do, edit All members in each branch."),
   invalid_timezone: t("Pick a time zone from the list."),
   invalid_branch_code: t("Use 2 to 10 capital letters or digits."),
   invalid_admin: t("The first admin must be an active person."),

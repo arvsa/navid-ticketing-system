@@ -296,7 +296,7 @@ async fn must_change_password_gates_everything_but_me_password_and_logout(pool: 
     // The gate is lifted for this session...
     let after = app.req(Method::GET, "/api/permissions").cookie(&cookie).send().await;
     assert_eq!(after.status, StatusCode::OK);
-    assert_eq!(after.body.as_array().unwrap().len(), 18);
+    assert_eq!(after.body.as_array().unwrap().len(), 16);
     // ...the other session was signed out...
     assert_eq!(app.req(Method::GET, "/api/me").cookie(&other_cookie).send().await.status, StatusCode::UNAUTHORIZED);
     // ...and only the new password works.

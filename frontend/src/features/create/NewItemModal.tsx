@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Lock, X } from "lucide-react";
+import { X } from "lucide-react";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { useGroups, useRecipients } from "@/api/hooks";
+import { useGroups, useRecipientGroups, useRecipients } from "@/api/hooks";
 import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority } from "@/api/types";
 import { PRIORITIES } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
@@ -16,7 +16,7 @@ import { AttachButton, PendingFiles, reportFailedUploads, uploadAll, useFilePick
 import { RecipientPicker, type Recipient } from "@/components/pickers";
 import { Button, DrawerClose, Field, Segmented, cx, inputClass } from "@/components/ui";
 import { DateInput } from "@/components/DateInput";
-import { canSendType, canSetPrivateIn, canTargetWholeBranch, creatableTypes, isSuper } from "./rules";
+import { canSendType, canTargetWholeBranch, creatableTypes, isSuper } from "./rules";
 import { describeReminders, formatDateTime, fromLocalInput, toLocalInput } from "@/lib/dates";
 import { errorMessage, modeTitle, priorityLabel, typeLabel, typePitch, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
@@ -35,7 +35,6 @@ type Draft = {
   title: string;
   description: string;
   priority: Priority;
-  isPrivate: boolean;
   mode: CompletionMode;
   due: string;
   starts: string;
@@ -87,7 +86,6 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
       title: "",
       description: "",
       priority: "medium",
-      isPrivate: false,
       mode: "per_member",
       due: defaultDue(type),
       starts: start,
@@ -123,7 +121,13 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const kinds = creatableTypes(viewer, createBranch);
   // School-wide: super admins and holders of issue.target_other_branches.
   const canGoSchoolWide = superAdmin || creatableTypes(viewer, null).length > 0;
-  const crossPeople = useRecipients(createBranch === null && canGoSchoolWide);
+  // People and groups of other branches, offered beside this branch's own
+  // when the sender may send this kind across.
+  const sendsAcross = canGoSchoolWide && (createBranch === null || (!!d.type && creatableTypes(viewer, null).includes(d.type)));
+  const crossPeople = useRecipients(sendsAcross);
+  const crossGroups = useRecipientGroups(sendsAcross);
+  // A branch item with someone from another branch is sent school-wide.
+  const issueBranch = createBranch !== null && d.recipients.every((r) => r.branchId === createBranch) ? createBranch : null;
   // Whole branches: every branch for school-wide items (members know the
   // other branches from their people), or this one for a branch item.
   const wholeBranches =
@@ -162,19 +166,20 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
     mutationFn: async () => {
       const body: NewIssue = {
         type: d.type!,
-        branch_id: createBranch,
+        branch_id: issueBranch,
         title: d.title.trim(),
         description: d.description.trim() || null,
         priority: d.priority,
-        is_private: d.isPrivate || undefined,
         targets: d.recipients.map((r) =>
-          r.kind === "user"
-            ? createBranch === null
-              ? { user_id: r.id, branch_id: r.branchId }
-              : { user_id: r.id }
-            : r.kind === "group"
-              ? { group_id: r.id }
-              : { branch_id: r.id },
+          r.kind === "branch"
+            ? { branch_id: r.id }
+            : r.kind === "user"
+              ? issueBranch === null
+                ? { user_id: r.id, branch_id: r.branchId }
+                : { user_id: r.id }
+              : issueBranch === null
+                ? { group_id: r.id, branch_id: r.branchId }
+                : { group_id: r.id },
         ),
       };
       if (hasWork) {
@@ -234,7 +239,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         ? tn(pieces, "{n} report to write{due}. Each comes back to you to approve.", "{n} reports to write{due}. Each comes back to you to approve.", { due: dueText })
         : t("You file this report yourself.")
       : d.type === "action"
-        ? createBranch === null
+        ? issueBranch === null
           ? d.recipients.every((r) => r.kind === "branch")
             ? tn(d.recipients.length, "Goes to {n} branch{due}. You approve the work.", "Goes to {n} branches{due}. You approve the work.", { due: dueText })
             : tn(pieces, "{n} task{due}. You approve it.", "{n} tasks{due}. You approve them.", { due: dueText })
@@ -381,16 +386,20 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   people={branchPeople.filter((p) => p.id !== viewer.me.user.id || d.type === "event")}
                   groups={groups.data ?? []}
                   branches={wholeBranches}
-                  crossPeople={createBranch === null ? (crossPeople.data ?? []).filter((p) => p.user_id !== viewer.me.user.id || d.type === "event") : undefined}
+                  crossPeople={sendsAcross ? (crossPeople.data ?? []).filter((p) => p.user_id !== viewer.me.user.id || d.type === "event") : undefined}
+                  crossGroups={sendsAcross ? crossGroups.data : undefined}
                   branchId={createBranch}
-                  placeholder={createBranch === null ? t("Add a branch or a person") : t("Add a person or group")}
+                  branchName={branch?.name}
+                  placeholder={createBranch === null ? t("Add a branch, group or person") : sendsAcross ? t("Add a person or group, in any branch") : t("Add a person or group")}
                 />
                 <p className={cx("text-[13px]", error?.field === "recipients" ? "text-danger" : "text-text-3")}>
                   {error?.field === "recipients"
                     ? error.text
                     : createBranch === null
-                      ? t("Send it to whole branches, or to chosen people in any branch.")
-                      : d.type === "ticket"
+                      ? t("Send it to whole branches, or to chosen groups and people in any branch.")
+                      : issueBranch === null
+                        ? t("It goes to more than one branch, so it's sent school-wide.")
+                        : d.type === "ticket"
                         ? t("Leave it empty to ask the branch admins.")
                         : ""}
                 </p>
@@ -426,12 +435,6 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   </select>
                 )}
               </Field>
-              {canSetPrivateIn(viewer, createBranch, d.type) && (
-                <label className="mb-2.5 inline-flex items-center gap-2" title={t("Only the people it's sent to and admins will see it.")}>
-                  <input type="checkbox" checked={d.isPrivate} onChange={(e) => set({ isPrivate: e.target.checked })} className="size-4" />
-                  <Lock className="size-4 text-text-2" />{" "}{t("Private")}
-                </label>
-              )}
             </div>
 
             {showMore || d.description || files.files.length || d.type === "event" ? (

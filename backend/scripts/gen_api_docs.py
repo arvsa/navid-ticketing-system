@@ -81,11 +81,11 @@ ENDPOINTS = {
     "POST /api/groups/{id}/permissions": ("Grant a permission to a group, optionally for one issue type, at a scope.", "Branch admins only."),
     "DELETE /api/group-permissions/{id}": ("Revoke a grant.", "Branch admins only."),
 
-    "GET /api/issues": ("Issues you can see, newest first. Filter by branch, type, state, `assignee=me`, or title search `q`.", "Anyone signed in; private issues only where you may read them."),
-    "POST /api/issues": ("Create a ticket, action, report or event, optionally sent to people or groups.", "Holders of `issue.create` for the type (members: tickets, reports, events). Targets need `issue.target`; `is_private` needs `issue.set_private`. School-wide (`branch_id: null`): whole branches are for super admins; people in any branch (`{\"user_id\", \"branch_id\"}`) also for holders of `issue.target_other_branches`."),
+    "GET /api/issues": ("Issues you can see, newest first. Filter by branch, type, state, `assignee=me`, or title search `q`.", "Anyone signed in; only issues you may read."),
+    "POST /api/issues": ("Create a ticket, action, report or event, optionally sent to people or groups.", "Holders of `issue.create` for the type (members: tickets, reports, events). Targets need `issue.target`. School-wide (`branch_id: null`): whole branches are for super admins; people in any branch (`{\"user_id\", \"branch_id\"}`) also for holders of `issue.target_other_branches`."),
     "GET /api/issues/{id}": ("One issue with its targets, work items, event details, files and your read state.", "Anyone who can read it (otherwise 404)."),
     "GET /api/issues/by-number/{n}": ("The same, looked up by number (`ISS-<n>`).", "Anyone who can read it (otherwise 404)."),
-    "PATCH /api/issues/{id}": ("Edit title, description, priority, privacy or event details. Send the `version` you last saw.", "Holders of `issue.edit` (your own issues by default); privacy needs `issue.set_private`."),
+    "PATCH /api/issues/{id}": ("Edit title, description, priority or event details. Send the `version` you last saw.", "Holders of `issue.edit` (your own issues by default)."),
     "POST /api/issues/{id}/close": ("Close the issue; any unfinished work is cancelled.", "Creators of tickets, reports and events; holders of `issue.close`; admins."),
     "POST /api/issues/{id}/cancel": ("Cancel the issue. For events, invitees who haven't declined are told.", "Same as closing."),
     "POST /api/issues/{id}/targets": ("Send the issue to another person, group or (super admins) whole branch. Creates work items and invitations.", "Holders of `issue.target`. School-wide items: super admins, or their sender while holding `issue.target_other_branches`."),
@@ -523,7 +523,7 @@ curl -b cookies.txt {{BASE}}/api/me</code></pre></div>
       <li><strong>IDs</strong> are UUIDs. Issues also have a number, shown as <code>ISS-42</code>.</li>
       <li><strong>Lists are paged:</strong> <code>?limit=50</code> (max 200). If the response has a <code>next_cursor</code>, pass it as <code>?after=...</code> for the next page.</li>
       <li><strong>Edits are versioned:</strong> send the <code>version</code> you last saw. If someone changed it meanwhile you get <code>409 version_conflict</code>; reload and retry.</li>
-      <li><strong>404 means "not found or not yours to see"</strong>; the API never reveals that a private issue exists.</li>
+      <li><strong>404 means "not found or not yours to see"</strong>; the API never reveals that an issue you can't read exists.</li>
       <li><strong>Errors</strong> always look like <code>{"error": {"code": "...", "message": "..."}}</code>. Branch on <code>code</code>.</li>
     </ul></div>
   </section>

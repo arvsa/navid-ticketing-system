@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT $3::uuid AS \"user_id!\"\n        UNION\n        SELECT m.user_id FROM branch_membership m JOIN app_user u ON u.id = m.user_id\n        WHERE m.branch_id = $1 AND m.left_at IS NULL AND u.is_active\n          AND (m.is_admin OR EXISTS (\n                SELECT 1 FROM user_group g\n                JOIN group_permission gp ON gp.group_id = g.id\n                WHERE g.archived_at IS NULL\n                  AND ((g.branch_id IS NULL AND g.is_default)\n                       OR g.id IN (SELECT gm.group_id FROM group_member gm\n                                   WHERE gm.user_id = m.user_id AND gm.branch_id = $1))\n                  AND gp.permission_key = 'work_item.approve' AND gp.scope = 'branch'\n                  AND (gp.issue_type_id IS NULL OR gp.issue_type_id = (SELECT id FROM issue_type WHERE code = $2))))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "44accc2e2e57720dd6d6b98218ca95315563e6faf29331bb79804488dcea8eab"
+}

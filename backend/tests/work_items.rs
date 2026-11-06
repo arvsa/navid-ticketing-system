@@ -405,11 +405,12 @@ async fn cancelling_is_admin_only_and_the_last_final_item_closes_the_issue(pool:
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn work_item_reads_follow_the_issue(pool: PgPool) {
     let c = setup(pool).await;
+    hide_branch_issues(&c.app.db, c.org.branch_a).await;
     let (_, items) = c
         .issue(
             &c.boss_like,
             json!({
-                "branch_id": c.org.branch_a, "type": "action", "title": "Private job", "is_private": true,
+                "branch_id": c.org.branch_a, "type": "action", "title": "Job",
                 "targets": [{ "user_id": c.org.multi }]
             }),
         )

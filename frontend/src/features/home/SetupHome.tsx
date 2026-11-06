@@ -4,7 +4,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2, ChartColumn, ChevronRight, Download, Globe, Pencil, School, Send, Users } from "lucide-react";
+import { Building2, ChevronRight, Download, Globe, Pencil, School, Send, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useBranches, useIssueList, useSchoolGroups } from "@/api/hooks";
@@ -44,7 +44,6 @@ export function SetupHome() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <SchoolCard />
-        <SetupCard link={<Link to="/analytics" className="absolute inset-0" aria-label={t("Analytics")} />} icon={<ChartColumn className="size-5" />} title={t("Analytics")} detail={t("Activity, speed, on-time rate and workload")} />
       </div>
 
       <section className="space-y-3">

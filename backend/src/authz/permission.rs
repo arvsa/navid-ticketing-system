@@ -59,11 +59,9 @@ impl IssueType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Permission {
     IssueRead,
-    IssueReadPrivate,
     IssueCreate,
     IssueEdit,
     IssueClose,
-    IssueSetPrivate,
     IssueTarget,
     /// Send school-wide items to people in other branches.
     IssueTargetOtherBranches,
@@ -81,13 +79,11 @@ pub enum Permission {
 }
 
 impl Permission {
-    pub const ALL: [Permission; 18] = [
+    pub const ALL: [Permission; 16] = [
         Self::IssueRead,
-        Self::IssueReadPrivate,
         Self::IssueCreate,
         Self::IssueEdit,
         Self::IssueClose,
-        Self::IssueSetPrivate,
         Self::IssueTarget,
         Self::IssueTargetOtherBranches,
         Self::WorkItemUpdate,
@@ -105,11 +101,9 @@ impl Permission {
     pub fn key(self) -> &'static str {
         match self {
             Self::IssueRead => "issue.read",
-            Self::IssueReadPrivate => "issue.read_private",
             Self::IssueCreate => "issue.create",
             Self::IssueEdit => "issue.edit",
             Self::IssueClose => "issue.close",
-            Self::IssueSetPrivate => "issue.set_private",
             Self::IssueTarget => "issue.target",
             Self::IssueTargetOtherBranches => "issue.target_other_branches",
             Self::WorkItemUpdate => "work_item.update",
@@ -135,11 +129,9 @@ impl Permission {
         matches!(
             self,
             IssueRead
-                | IssueReadPrivate
                 | IssueCreate
                 | IssueEdit
                 | IssueClose
-                | IssueSetPrivate
                 | IssueTarget
                 | IssueTargetOtherBranches
                 | WorkItemUpdate
@@ -153,10 +145,9 @@ impl Permission {
         use Scope::*;
         match self {
             IssueRead => &[Own, Targeted, Branch],
-            IssueEdit | IssueClose | IssueSetPrivate | IssueTarget => &[Own, Branch],
+            IssueEdit | IssueClose | IssueTarget => &[Own, Branch],
             WorkItemUpdate | WorkItemAssign | CommentCreate => &[Targeted, Branch],
-            IssueReadPrivate
-            | IssueCreate
+            IssueCreate
             | IssueTargetOtherBranches
             | WorkItemApprove
             | CommentInternal

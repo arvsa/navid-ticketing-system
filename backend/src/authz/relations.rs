@@ -66,7 +66,6 @@ pub struct IssueFacts {
     /// or a holder of `issue.target_other_branches` (or by a super admin).
     pub branch_id: Option<Uuid>,
     pub issue_type: IssueType,
-    pub is_private: bool,
     pub created_by: Uuid,
     /// Distinct branches of the issue's active targets.
     pub target_branch_ids: Vec<Uuid>,
@@ -91,7 +90,7 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
     let my_branches: Vec<Uuid> = actor.branches.keys().copied().collect();
     let row = sqlx::query!(
         r#"
-        SELECT i.id, i.branch_id, ty.code AS issue_type, i.is_private, i.created_by,
+        SELECT i.id, i.branch_id, ty.code AS issue_type, i.created_by,
                ARRAY(SELECT DISTINCT t.branch_id FROM issue_target t
                      WHERE t.issue_id = i.id AND t.removed_at IS NULL) AS "target_branch_ids!",
                (EXISTS (SELECT 1 FROM issue_target t
@@ -120,7 +119,6 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         id: r.id,
         branch_id: r.branch_id,
         issue_type,
-        is_private: r.is_private,
         created_by: r.created_by,
         target_branch_ids: r.target_branch_ids,
         actor_targeted: r.targeted,

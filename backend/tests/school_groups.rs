@@ -29,7 +29,7 @@ async fn school_wide_groups_are_copied_into_every_branch(pool: PgPool) {
     assert_status(
         &call(&app, &root, Method::POST, "/api/school-groups", Some(taken)).await,
         StatusCode::UNPROCESSABLE_ENTITY,
-        Some("invalid_name"),
+        Some("reserved_group_name"),
     );
     let res = call(&app, &root, Method::POST, "/api/school-groups", Some(new.clone())).await;
     assert_status(&res, StatusCode::CREATED, None);
@@ -179,4 +179,76 @@ async fn saving_several_grants_tells_admins_once(pool: PgPool) {
     // Someone else's grant id is not found.
     let other = json!({ "revoke": [uuid::Uuid::new_v4()] });
     assert_status(&call(&app, &root, Method::PUT, &url, Some(other)).await, StatusCode::NOT_FOUND, None);
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
+async fn everyone_grants_apply_to_every_user_in_every_branch(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let org = Org::seed(&app.db).await;
+    let root = as_root(&app).await;
+    let plain = as_user(&app, "plain_a@example.com").await;
+
+    let list = call(&app, &root, Method::GET, "/api/school-groups", None).await;
+    let everyone = &list.body.as_array().unwrap()[0];
+    assert_eq!(everyone["is_default"], true, "Everyone comes first");
+    assert_eq!(everyone["name"], "Everyone");
+    let id = everyone["id"].as_str().unwrap().to_owned();
+
+    // Plain members can't export until Everyone may.
+    let can_export = |me: &serde_json::Value, branch: uuid::Uuid| {
+        me["memberships"].as_array().unwrap().iter().find(|m| m["branch"]["id"] == branch.to_string()).unwrap()["grants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|g| g["permission"] == "export.run")
+    };
+    assert!(!can_export(&call(&app, &plain, Method::GET, "/api/me", None).await.body, org.branch_a));
+    let res = call(
+        &app,
+        &root,
+        Method::POST,
+        &format!("/api/groups/{id}/permissions"),
+        Some(json!({ "permission": "export.run", "scope": "branch" })),
+    )
+    .await;
+    assert_status(&res, StatusCode::CREATED, None);
+    assert!(can_export(&call(&app, &plain, Method::GET, "/api/me", None).await.body, org.branch_a));
+    let multi = as_user(&app, "multi@example.com").await;
+    let me = call(&app, &multi, Method::GET, "/api/me", None).await.body;
+    assert!(can_export(&me, org.branch_a) && can_export(&me, org.branch_b), "in every branch");
+    let why = call(
+        &app,
+        &root,
+        Method::GET,
+        &format!("/api/branches/{}/members/{}/effective-permissions", org.branch_b, org.multi),
+        None,
+    )
+    .await;
+    assert!(why.body["grants"].as_array().unwrap().iter().any(|g| g["group"]["name"] == "Everyone"));
+
+    // Branch admins can't touch it; it has no members, no copies, and stays put.
+    let admin = as_user(&app, "admin_a@example.com").await;
+    let grant = Some(json!({ "permission": "member.view", "scope": "branch" }));
+    assert_status(
+        &call(&app, &admin, Method::POST, &format!("/api/groups/{id}/permissions"), grant).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
+    let res = call(&app, &root, Method::PUT, &format!("/api/groups/{id}/members/{}", org.plain_a), None).await;
+    assert_status(&res, StatusCode::CONFLICT, Some("default_group"));
+    let res = call(&app, &root, Method::PATCH, &format!("/api/groups/{id}"), Some(json!({ "archived": true }))).await;
+    assert_status(&res, StatusCode::CONFLICT, Some("default_group"));
+    assert_status(&call(&app, &root, Method::DELETE, &format!("/api/groups/{id}"), None).await, StatusCode::CONFLICT, None);
+    let new_branch = create_branch(&app.db, "CCC", org.admin_a).await;
+    let copies = call(&app, &root, Method::GET, &format!("/api/school-groups/{id}/copies"), None).await;
+    assert!(copies.body.as_array().unwrap().is_empty());
+    let names = call(&app, &root, Method::GET, &format!("/api/branches/{new_branch}/groups"), None).await;
+    assert!(!names.body["items"].as_array().unwrap().iter().any(|g| g["name"] == "Everyone"));
+
+    let taken = json!({ "name": "everyone" });
+    assert_status(
+        &call(&app, &root, Method::POST, "/api/school-groups", Some(taken)).await,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Some("reserved_group_name"),
+    );
 }

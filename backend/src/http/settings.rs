@@ -1,18 +1,15 @@
 use axum::{extract::State, routing::get, Json, Router};
 
-use super::json::{ApiJson, ApiQuery};
+use super::json::ApiJson;
 use crate::{
     authz::Actor,
-    domain::{
-        analytics::{self, Analytics, AnalyticsQuery},
-        settings::{self, Settings, SettingsPatch},
-    },
+    domain::settings::{self, Settings, SettingsPatch},
     error::AppResult,
     AppState,
 };
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/settings", get(show).patch(update)).route("/analytics", get(analytics))
+    Router::new().route("/settings", get(show).patch(update))
 }
 
 /// GET /api/settings: no sign-in needed (the sign-in page shows the school's name).
@@ -29,14 +26,4 @@ async fn update(
     ApiJson(patch): ApiJson<SettingsPatch>,
 ) -> AppResult<Json<Settings>> {
     Ok(Json(settings::update(&s.db, &actor, patch).await?))
-}
-
-/// GET /api/analytics?weeks=12: the whole school, for super admins.
-#[utoipa::path(get, path = "/api/analytics", operation_id = "getAnalytics", tag = "settings", params(AnalyticsQuery), responses((status = 200, body = Analytics), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
-async fn analytics(
-    State(s): State<AppState>,
-    actor: Actor,
-    ApiQuery(q): ApiQuery<AnalyticsQuery>,
-) -> AppResult<Json<Analytics>> {
-    Ok(Json(analytics::get(&s.db, &actor, &q).await?))
 }

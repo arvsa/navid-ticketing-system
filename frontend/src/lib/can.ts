@@ -89,11 +89,6 @@ export function canClose(v: Viewer, issue: IssueDetail) {
   return ownerClose || itemRule(v, issue, "issue.close");
 }
 
-export function canSetPrivate(v: Viewer, issue: IssueDetail) {
-  if (!isOpen(issue)) return false;
-  return itemRule(v, issue, "issue.set_private");
-}
-
 export function canTarget(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
   if (sentAcross(issue)) return isSuper(v) || (issue.created_by === v.me.user.id && canSendAcross(v, issue.type));

@@ -1,4 +1,3 @@
-pub mod analytics;
 pub mod attachments;
 pub mod audit;
 pub mod branches;

@@ -3,7 +3,7 @@
 //! Fixture: a super admin; branches A and B, each with an admin, a plain
 //! member and a member of an admin-like group; a member who is admin in A
 //! and plain in B; single-grant actors for every row of the 6.1 table; and
-//! issues of every type, private and public, created by each role,
+//! issues of every type created by each role,
 //! including a cross-branch super admin issue.
 //!
 //! 1. `matrix`: a table of (actor, action, resource, expected) rows run
@@ -37,16 +37,12 @@ const GRANTEES: &[(&str, &str, Option<&str>, &str)] = &[
     ("g_read_ticket", "issue.read", Some("ticket"), "branch"),
     ("g_read_own", "issue.read", None, "own"),
     ("g_read_targeted", "issue.read", None, "targeted"),
-    ("g_read_private", "issue.read_private", None, "branch"),
-    ("g_read_private_action", "issue.read_private", Some("action"), "branch"),
     ("g_create_action", "issue.create", Some("action"), "branch"),
     ("g_edit_own", "issue.edit", None, "own"),
     ("g_edit_branch", "issue.edit", None, "branch"),
     ("g_edit_ticket", "issue.edit", Some("ticket"), "branch"),
     ("g_close_own", "issue.close", None, "own"),
     ("g_close_branch", "issue.close", None, "branch"),
-    ("g_private_own", "issue.set_private", None, "own"),
-    ("g_private_branch", "issue.set_private", None, "branch"),
     ("g_target_own", "issue.target", None, "own"),
     ("g_target_branch", "issue.target", None, "branch"),
     ("g_update_targeted", "work_item.update", None, "targeted"),
@@ -92,13 +88,12 @@ impl Fixture {
     }
 }
 
-async fn insert_issue(db: &PgPool, branch: Option<Uuid>, ty: &str, private: bool, by: Uuid) -> Uuid {
+async fn insert_issue(db: &PgPool, branch: Option<Uuid>, ty: &str, by: Uuid) -> Uuid {
     sqlx::query_scalar!(
-        r#"INSERT INTO issue (branch_id, type_id, title, is_private, created_by)
-           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'Matrix', $3, $4) RETURNING id"#,
+        r#"INSERT INTO issue (branch_id, type_id, title, created_by)
+           VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), 'Matrix', $3) RETURNING id"#,
         branch,
         ty,
-        private,
         by
     )
     .fetch_one(db)
@@ -193,33 +188,30 @@ async fn seed(db: &PgPool) -> Fixture {
     )
     .await;
 
-    // Issues of every type, private and public, created by each role.
+    // Issues of every type, created by each role.
     let mut issues = HashMap::new();
     for creator in ["admin_a", "plain_a", "deputy_a", "admin_b", "plain_b", "deputy_b"] {
         let branch = if creator.ends_with("_a") { a } else { b };
         for ty in TYPES {
-            for private in [false, true] {
-                let vis = if private { "priv" } else { "pub" };
-                let id = insert_issue(db, Some(branch), ty, private, u(&users, creator)).await;
-                issues.insert(format!("{vis}_{ty}_{creator}"), id);
-            }
+            let id = insert_issue(db, Some(branch), ty, u(&users, creator)).await;
+            issues.insert(format!("{ty}_{creator}"), id);
         }
     }
     // Issues owned by the own-scope grantees.
-    for name in ["g_read_own", "g_edit_own", "g_close_own", "g_private_own", "g_target_own"] {
-        let id = insert_issue(db, Some(a), "action", true, u(&users, name)).await;
+    for name in ["g_read_own", "g_edit_own", "g_close_own", "g_target_own"] {
+        let id = insert_issue(db, Some(a), "action", u(&users, name)).await;
         issues.insert(format!("own_{name}"), id);
     }
 
     let mut items = HashMap::new();
-    // Private action for plain_a: targeted through a user target / assignee.
-    let id = insert_issue(db, Some(a), "action", true, u(&users, "admin_a")).await;
+    // An action for plain_a: targeted through a user target / assignee.
+    let id = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_plain_a", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
-    issues.insert("priv_action_for_plain_a".to_owned(), id);
+    issues.insert("action_for_plain_a".to_owned(), id);
     // Shared group work, unassigned and claimable by Team members.
-    let id = insert_issue(db, Some(a), "action", false, u(&users, "admin_a")).await;
+    let id = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_shared", target_with_item(db, id, a, None, Some(team)).await);
-    issues.insert("pub_action_team".to_owned(), id);
+    issues.insert("action_team".to_owned(), id);
     // Work assigned to the targeted-scope grantees, and to approvers themselves.
     for (key, who) in [
         ("wi_g_update_targeted", "g_update_targeted"),
@@ -227,13 +219,13 @@ async fn seed(db: &PgPool) -> Fixture {
         ("wi_admin_a", "admin_a"),
         ("wi_deputy_a", "deputy_a"),
     ] {
-        let id = insert_issue(db, Some(a), "action", false, u(&users, "plain_a")).await;
+        let id = insert_issue(db, Some(a), "action", u(&users, "plain_a")).await;
         items.insert(key, target_with_item(db, id, a, Some(u(&users, who)), None).await);
     }
-    let report = insert_issue(db, Some(a), "report", false, u(&users, "admin_a")).await;
+    let report = insert_issue(db, Some(a), "report", u(&users, "admin_a")).await;
     items.insert("wi_report", target_with_item(db, report, a, Some(u(&users, "plain_a")), None).await);
     // A ticket addressed to the targeted-comment grantee.
-    let id = insert_issue(db, Some(a), "ticket", false, u(&users, "admin_a")).await;
+    let id = insert_issue(db, Some(a), "ticket", u(&users, "admin_a")).await;
     sqlx::query!(
         "INSERT INTO issue_target (issue_id, branch_id, kind, user_id) VALUES ($1, $2, 'user', $3)",
         id,
@@ -245,17 +237,17 @@ async fn seed(db: &PgPool) -> Fixture {
     .unwrap();
     issues.insert("ticket_to_g_comment_targeted".to_owned(), id);
     // An item a super admin sent in A, with work for plain_a: an ordinary item now.
-    let id = insert_issue(db, Some(a), "action", false, u(&users, "root")).await;
+    let id = insert_issue(db, Some(a), "action", u(&users, "root")).await;
     items.insert("wi_sa", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
     issues.insert("sa_action_a".to_owned(), id);
-    // A cross-branch super admin issue sent to both branches, and a private one to B only.
-    let id = insert_issue(db, None, "action", false, u(&users, "root")).await;
+    // A cross-branch super admin issue sent to both branches, and one to B only.
+    let id = insert_issue(db, None, "action", u(&users, "root")).await;
     items.insert("wi_cross_a", target_with_item(db, id, a, None, None).await);
     items.insert("wi_cross_b", target_with_item(db, id, b, None, None).await);
     issues.insert("cross".to_owned(), id);
-    let id = insert_issue(db, None, "ticket", true, u(&users, "root")).await;
+    let id = insert_issue(db, None, "ticket", u(&users, "root")).await;
     target_with_item(db, id, b, None, None).await;
-    issues.insert("cross_private_b".to_owned(), id);
+    issues.insert("cross_b".to_owned(), id);
 
     let mut branches = HashMap::new();
     branches.insert("A", a);
@@ -307,7 +299,6 @@ async fn check(f: &Fixture, who: &str, act: &str, res: &str) -> Result<(), Authz
             "read" => Action::ReadIssue { issue },
             "edit" => Action::EditIssue { issue },
             "close" => Action::CloseIssue { issue },
-            "private" => Action::SetIssuePrivate { issue },
             "target" => Action::TargetIssue { issue, whole_branch: false },
             "target_branch" => Action::TargetIssue { issue, whole_branch: true },
             "comment" => Action::CommentOnIssue { issue },
@@ -358,24 +349,17 @@ async fn matrix(pool: PgPool) {
 
     #[rustfmt::skip]
     let rows: &[(&str, &str, &str, Expect)] = &[
-        // ---- 6.1 issue.read: own, targeted, branch; private excluded at branch scope ----
-        ("g_read_branch", "read", "pub_ticket_plain_a", Allow),
-        ("g_read_branch", "read", "pub_action_admin_a", Allow),
-        ("g_read_branch", "read", "priv_ticket_plain_a", NotFound),
-        ("g_read_branch", "read", "pub_ticket_plain_b", NotFound),
-        ("g_read_ticket", "read", "pub_ticket_admin_a", Allow),
-        ("g_read_ticket", "read", "pub_report_admin_a", NotFound),
+        // ---- 6.1 issue.read: own, targeted, branch ----
+        ("g_read_branch", "read", "ticket_plain_a", Allow),
+        ("g_read_branch", "read", "action_admin_a", Allow),
+        ("g_read_branch", "read", "ticket_plain_b", NotFound),
+        ("g_read_ticket", "read", "ticket_admin_a", Allow),
+        ("g_read_ticket", "read", "report_admin_a", NotFound),
         ("g_read_own", "read", "own_g_read_own", Allow),
-        ("g_read_own", "read", "pub_ticket_plain_a", NotFound),
-        ("g_read_targeted", "read", "pub_ticket_plain_a", NotFound),
-        ("plain_a", "read", "priv_action_for_plain_a", Allow),
-        ("plain_a", "read", "pub_action_team", Allow),
-        // ---- issue.read_private ----
-        ("g_read_private", "read", "priv_ticket_plain_a", Allow),
-        ("g_read_private", "read", "priv_event_deputy_a", Allow),
-        ("g_read_private", "read", "priv_ticket_plain_b", NotFound),
-        ("g_read_private_action", "read", "priv_action_admin_a", Allow),
-        ("g_read_private_action", "read", "priv_report_admin_a", NotFound),
+        ("g_read_own", "read", "ticket_plain_a", NotFound),
+        ("g_read_targeted", "read", "ticket_plain_a", NotFound),
+        ("plain_a", "read", "action_for_plain_a", Allow),
+        ("plain_a", "read", "action_team", Allow),
         // ---- issue.create (per type, branch scope) ----
         ("g_create_action", "create:action", "A", Allow),
         ("g_create_action", "create:ticket", "A", Forbidden),
@@ -387,34 +371,28 @@ async fn matrix(pool: PgPool) {
         ("deputy_a", "create:action", "A", Allow),
         // ---- issue.edit: own, branch, per type ----
         ("g_edit_own", "edit", "own_g_edit_own", Allow),
-        ("g_edit_own", "edit", "pub_action_plain_a", Forbidden),
-        ("g_edit_branch", "edit", "pub_action_plain_a", Allow),
-        ("g_edit_branch", "edit", "priv_action_plain_a", NotFound),
-        ("g_edit_ticket", "edit", "pub_ticket_plain_a", Allow),
-        ("g_edit_ticket", "edit", "pub_event_plain_a", Forbidden),
-        ("plain_a", "edit", "pub_report_plain_a", Allow),
-        ("plain_a", "edit", "pub_report_deputy_a", Forbidden),
+        ("g_edit_own", "edit", "action_plain_a", Forbidden),
+        ("g_edit_branch", "edit", "action_plain_a", Allow),
+        ("g_edit_ticket", "edit", "ticket_plain_a", Allow),
+        ("g_edit_ticket", "edit", "event_plain_a", Forbidden),
+        ("plain_a", "edit", "report_plain_a", Allow),
+        ("plain_a", "edit", "report_deputy_a", Forbidden),
         // ---- issue.close: own, branch (+ creators always close tickets/reports/events) ----
         ("g_close_own", "close", "own_g_close_own", Allow),
-        ("g_close_own", "close", "pub_action_plain_a", Forbidden),
-        ("g_close_branch", "close", "pub_action_plain_a", Allow),
-        ("g_read_branch", "close", "pub_action_plain_a", Forbidden),
-        ("plain_a", "close", "pub_event_plain_a", Allow),
-        ("plain_a", "close", "pub_event_admin_a", Forbidden),
-        // ---- issue.set_private: own, branch ----
-        ("g_private_own", "private", "own_g_private_own", Allow),
-        ("g_private_own", "private", "pub_ticket_plain_a", Forbidden),
-        ("g_private_branch", "private", "pub_ticket_plain_a", Allow),
-        ("plain_a", "private", "pub_ticket_plain_a", Forbidden),
+        ("g_close_own", "close", "action_plain_a", Forbidden),
+        ("g_close_branch", "close", "action_plain_a", Allow),
+        ("g_read_branch", "close", "action_plain_a", Forbidden),
+        ("plain_a", "close", "event_plain_a", Allow),
+        ("plain_a", "close", "event_admin_a", Forbidden),
         // ---- issue.target: own, branch ----
         ("g_target_own", "target", "own_g_target_own", Allow),
-        ("g_target_own", "target", "pub_ticket_plain_a", Forbidden),
-        ("g_target_branch", "target", "pub_report_plain_a", Allow),
-        ("plain_a", "target", "pub_ticket_plain_a", Allow),
-        ("plain_a", "target", "pub_report_plain_a", Forbidden),
+        ("g_target_own", "target", "ticket_plain_a", Forbidden),
+        ("g_target_branch", "target", "report_plain_a", Allow),
+        ("plain_a", "target", "ticket_plain_a", Allow),
+        ("plain_a", "target", "report_plain_a", Forbidden),
         // ---- work_item.update: targeted (assignee / member of unassigned target), branch ----
         ("g_update_targeted", "update", "wi_g_update_targeted", Allow),
-        ("g_update_targeted", "update", "wi_plain_a", NotFound),
+        ("g_update_targeted", "update", "wi_plain_a", Forbidden),
         ("g_update_targeted", "update", "wi_shared", Allow),
         ("g_update_branch", "update", "wi_g_approve", Allow),
         ("plain_a", "update", "wi_plain_a", Allow),
@@ -433,15 +411,15 @@ async fn matrix(pool: PgPool) {
         ("plain_a", "approve", "wi_report", Forbidden),
         // ---- comment.create: targeted (created or targeted), branch ----
         ("g_comment_targeted", "comment", "ticket_to_g_comment_targeted", Allow),
-        ("g_comment_targeted", "comment", "pub_ticket_plain_a", Forbidden),
-        ("g_comment_branch", "comment", "pub_ticket_plain_a", Allow),
-        ("g_read_branch", "comment", "pub_ticket_plain_a", Forbidden),
+        ("g_comment_targeted", "comment", "ticket_plain_a", Forbidden),
+        ("g_comment_branch", "comment", "ticket_plain_a", Allow),
+        ("g_read_branch", "comment", "ticket_plain_a", Forbidden),
         // ---- comment.internal, comment.moderate ----
-        ("g_internal", "internal", "pub_ticket_plain_a", Allow),
-        ("plain_a", "internal", "pub_ticket_plain_a", Forbidden),
-        ("g_moderate", "moderate", "pub_ticket_plain_a", Allow),
-        ("deputy_a", "moderate", "pub_ticket_plain_a", Allow),
-        ("plain_a", "moderate", "pub_ticket_plain_a", Forbidden),
+        ("g_internal", "internal", "ticket_plain_a", Allow),
+        ("plain_a", "internal", "ticket_plain_a", Forbidden),
+        ("g_moderate", "moderate", "ticket_plain_a", Allow),
+        ("deputy_a", "moderate", "ticket_plain_a", Allow),
+        ("plain_a", "moderate", "ticket_plain_a", Forbidden),
         // ---- member.view, member.manage, dashboard.branch, export.run ----
         ("g_member_view", "view_members", "A", Allow),
         ("g_read_branch", "view_members", "A", Forbidden),
@@ -477,11 +455,10 @@ async fn matrix(pool: PgPool) {
         ("admin_a", "edit", "sa_action_a", Allow),
         ("admin_a", "close", "sa_action_a", Allow),
         ("admin_a", "target", "sa_action_a", Allow),
-        ("admin_a", "private", "sa_action_a", Allow),
         ("deputy_a", "edit", "sa_action_a", Allow),
         ("root", "close", "sa_action_a", Allow),
-        ("admin_a", "target_branch", "pub_ticket_plain_a", Allow),
-        ("plain_a", "target_branch", "pub_ticket_plain_a", Forbidden),
+        ("admin_a", "target_branch", "ticket_plain_a", Allow),
+        ("plain_a", "target_branch", "ticket_plain_a", Forbidden),
         // ---- super admin only, continued ----
         ("admin_a", "export", "A+B", Forbidden),
         ("multi", "export", "A+B", Forbidden),
@@ -504,20 +481,18 @@ async fn matrix(pool: PgPool) {
 
         // ---- 6.4 decision procedure ----
         // 1. super admins: everything, every branch.
-        ("root", "read", "priv_ticket_plain_b", Allow),
+        ("root", "read", "ticket_plain_b", Allow),
         ("root", "manage_groups", "B", Allow),
         // 3/4. Admin of the resource's branch; nothing elsewhere.
-        ("admin_a", "read", "priv_ticket_plain_a", Allow),
-        ("admin_a", "edit", "priv_ticket_plain_a", Allow),
-        ("admin_a", "read", "priv_ticket_plain_b", NotFound),
-        ("admin_a", "read", "pub_ticket_plain_b", NotFound),
+        ("admin_a", "read", "ticket_plain_a", Allow),
+        ("admin_a", "edit", "ticket_plain_a", Allow),
+        ("admin_a", "read", "ticket_plain_b", NotFound),
         // The multi-branch member: admin in A, plain in B; nothing carries over.
-        ("multi", "edit", "priv_report_deputy_a", Allow),
+        ("multi", "edit", "report_deputy_a", Allow),
         ("multi", "manage_groups", "A", Allow),
         ("multi", "manage_groups", "B", Forbidden),
-        ("multi", "read", "pub_ticket_plain_b", Allow),
-        ("multi", "read", "priv_ticket_plain_b", NotFound),
-        ("multi", "edit", "pub_ticket_plain_b", Forbidden),
+        ("multi", "read", "ticket_plain_b", Allow),
+        ("multi", "edit", "ticket_plain_b", Forbidden),
         // 4. On super admin issues, admins read, comment, assign and update.
         ("admin_a", "read", "sa_action_a", Allow),
         ("admin_a", "comment", "sa_action_a", Allow),
@@ -527,14 +502,14 @@ async fn matrix(pool: PgPool) {
         ("admin_b", "read", "cross", Allow),
         ("plain_b", "read", "cross", Allow),
         ("deputy_a", "comment", "cross", Allow),
-        ("admin_a", "read", "cross_private_b", NotFound),
-        ("plain_b", "read", "cross_private_b", Allow),
+        ("admin_a", "read", "cross_b", NotFound),
+        ("plain_b", "read", "cross_b", Allow),
         ("admin_b", "edit", "cross", Forbidden),
         ("admin_b", "assign", "wi_cross_b", Allow),
         ("admin_a", "assign", "wi_cross_b", Forbidden),
         // 6. Admin-like groups: everything grantable, nothing reserved.
-        ("deputy_a", "read", "priv_ticket_plain_a", Allow),
-        ("deputy_a", "edit", "priv_ticket_plain_a", Allow),
+        ("deputy_a", "read", "ticket_plain_a", Allow),
+        ("deputy_a", "edit", "ticket_plain_a", Allow),
         ("deputy_a", "approve", "wi_plain_a", Allow),
         ("deputy_a", "export", "A", Allow),
         ("deputy_a", "export", "B", NotFound),
@@ -543,13 +518,12 @@ async fn matrix(pool: PgPool) {
         ("deputy_a", "approve", "wi_deputy_a", Forbidden),
         ("g_approve", "approve", "wi_g_approve", Forbidden),
         // Extra: read precedes everything (404, not 403).
-        ("plain_a", "edit", "priv_ticket_deputy_a", NotFound),
-        ("plain_a", "comment", "priv_ticket_deputy_a", NotFound),
+        ("g_read_own", "edit", "ticket_plain_a", NotFound),
+        ("plain_a", "edit", "ticket_plain_b", NotFound),
+        ("plain_a", "comment", "ticket_plain_b", NotFound),
         ("plain_b", "update", "wi_plain_a", NotFound),
-        // Extra: private issues readable by creator, targeted, admins, read_private, super admins.
-        ("plain_a", "read", "priv_ticket_plain_a", Allow),
-        ("plain_a", "read", "priv_ticket_admin_a", NotFound),
-        ("deputy_b", "read", "priv_ticket_plain_a", NotFound),
+        // Extra: nothing reaches into another branch.
+        ("deputy_b", "read", "ticket_plain_a", NotFound),
         // Extra: member.manage never reaches admins, super admins or other branches.
         ("g_member_manage", "edit_member", "admin_a", Forbidden),
         ("g_member_manage", "edit_member", "multi", Forbidden),
@@ -594,7 +568,7 @@ async fn list_matches_read_decisions(pool: PgPool) {
     let f = seed(&pool).await;
     let app = TestApp::new(pool);
     let all = sqlx::query_scalar!("SELECT id FROM issue").fetch_all(&f.db).await.unwrap();
-    assert!(all.len() > 60, "the fixture should be substantial, has {}", all.len());
+    assert!(all.len() > 30, "the fixture should be substantial, has {}", all.len());
 
     let mut names: Vec<String> = f.users.keys().cloned().collect();
     names.sort();
@@ -618,35 +592,28 @@ async fn list_matches_read_decisions(pool: PgPool) {
 async fn revocation_is_instant(pool: PgPool) {
     let f = seed(&pool).await;
     let app = TestApp::new(pool);
-    let deputy = app.session("deputy_a@example.com", PW).await;
+    let reader = app.session("g_read_branch@example.com", PW).await;
     let admin = app.session("admin_a@example.com", PW).await;
-    let private = f.issue("priv_ticket_plain_a");
-    let uri = format!("/api/issues/{private}");
+    let ticket = f.issue("ticket_plain_a");
+    let uri = format!("/api/issues/{ticket}");
 
-    // Through the admin-like group, deputy_a can read and edit plain_a's private ticket.
-    assert_status(&call(&app, &deputy, Method::GET, &uri, None).await, StatusCode::OK, None);
+    // Through its only group, g_read_branch can read plain_a's ticket.
+    assert_status(&call(&app, &reader, Method::GET, &uri, None).await, StatusCode::OK, None);
     let group = sqlx::query_scalar!(
-        "SELECT g.id FROM user_group g WHERE g.branch_id = $1 AND g.name = 'Deputies'",
+        "SELECT g.id FROM user_group g WHERE g.branch_id = $1 AND g.name = 'only g_read_branch'",
         f.branches["A"]
     )
     .fetch_one(&f.db)
     .await
     .unwrap();
-    let res =
-        call(&app, &admin, Method::DELETE, &format!("/api/groups/{group}/members/{}", f.user("deputy_a")), None).await;
+    let res = call(&app, &admin, Method::DELETE, &format!("/api/groups/{group}/members/{}", f.user("g_read_branch")), None)
+        .await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
     // Same session, next request: gone, and 404 rather than 403.
-    assert_status(&call(&app, &deputy, Method::GET, &uri, None).await, StatusCode::NOT_FOUND, None);
-    let res = call(&app, &deputy, Method::PATCH, &uri, Some(json!({ "version": 1, "title": "x" }))).await;
+    assert_status(&call(&app, &reader, Method::GET, &uri, None).await, StatusCode::NOT_FOUND, None);
+    let res = call(&app, &reader, Method::PATCH, &uri, Some(json!({ "version": 1, "title": "x" }))).await;
     assert_status(&res, StatusCode::NOT_FOUND, None);
-    assert!(!listed(&app, &deputy).await.contains(&private));
-    // Public issues are still readable through the baseline.
-    let public = f.issue("pub_ticket_plain_a");
-    assert_status(
-        &call(&app, &deputy, Method::GET, &format!("/api/issues/{public}"), None).await,
-        StatusCode::OK,
-        None,
-    );
+    assert!(!listed(&app, &reader).await.contains(&ticket));
 
     // Leaving the branch: everything there is gone, including their own
     // issues and the ones addressed to them.
@@ -661,7 +628,7 @@ async fn revocation_is_instant(pool: PgPool) {
     )
     .await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
-    for issue in ["pub_ticket_plain_a", "pub_ticket_deputy_a", "priv_action_for_plain_a", "pub_action_team"] {
+    for issue in ["ticket_plain_a", "ticket_deputy_a", "action_for_plain_a", "action_team"] {
         let id = f.issue(issue);
         assert_status(
             &call(&app, &plain, Method::GET, &format!("/api/issues/{id}"), None).await,

@@ -6,7 +6,6 @@ import * as Popover from "@radix-ui/react-popover";
 import {
   Bell,
   Calendar,
-  ChartColumn,
   Check,
   ChevronDown,
   Download,
@@ -67,7 +66,6 @@ function useNav() {
         isAll
           ? { to: "/", label: t("Setup"), icon: <Settings className="size-[18px]" />, exact: true }
           : { to: "/", label: t("Dashboard"), icon: <Home className="size-[18px]" />, exact: true },
-        { to: "/analytics", label: t("Analytics"), icon: <ChartColumn className="size-[18px]" /> },
         { to: "/items", label: t("Items"), icon: <List className="size-[18px]" /> },
       ]
     : [

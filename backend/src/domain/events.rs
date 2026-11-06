@@ -402,7 +402,6 @@ pub struct CalendarEntry {
     pub branch_id: Option<Uuid>,
     pub title: String,
     pub state: IssueState,
-    pub is_private: bool,
     pub organizer_id: Uuid,
     #[serde(with = "time::serde::rfc3339")]
     pub starts_at: OffsetDateTime,
@@ -440,13 +439,13 @@ pub async fn calendar(
 
     let rows = sqlx::query!(
         r#"
-        SELECT i.id, i.number, i.branch_id, i.title, i.state AS "state: IssueState", i.is_private, i.created_by,
+        SELECT i.id, i.number, i.branch_id, i.title, i.state AS "state: IssueState", i.created_by,
                e.starts_at, e.ends_at, e.all_day, e.location,
                r.response AS "my_rsvp?: RsvpResponse"
         FROM issue_event e
         JOIN issue i ON i.id = e.issue_id
         LEFT JOIN event_rsvp r ON r.issue_id = i.id AND r.user_id = $2
-        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.is_private, i.created_by, $1)
+        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
           AND e.starts_at < $4 AND e.ends_at >= $3
           AND ($5::uuid IS NULL OR i.branch_id = $5 OR (i.branch_id IS NULL AND EXISTS (
                 SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $5 AND t.removed_at IS NULL)))
@@ -475,7 +474,6 @@ pub async fn calendar(
             branch_id: r.branch_id,
             title: r.title,
             state: r.state,
-            is_private: r.is_private,
             organizer_id: r.created_by,
             starts_at: r.starts_at,
             ends_at: r.ends_at,

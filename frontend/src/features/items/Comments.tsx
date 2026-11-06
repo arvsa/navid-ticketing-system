@@ -244,10 +244,6 @@ function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItem
     requestAnimationFrame(() => el?.focus());
   };
 
-  const hidden = issue.is_private
-    ? mentions.filter((p) => body.includes(`@${p.first_name} ${p.last_name}`))
-    : [];
-
   return (
     <form
       className="space-y-2 rounded-[12px]"
@@ -294,7 +290,6 @@ function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItem
           </ul>
         )}
       </div>
-      {hidden.length > 0 && <p className="text-[13px] text-text-3">{t("This item is private. People it isn't sent to won't see it or be told.")}</p>}
       <PendingFiles files={files.files} onRemove={files.remove} />
       <div className="flex flex-wrap items-center gap-3">
         <AttachButton onPick={files.add} label={t("Attach files")} iconOnly />
