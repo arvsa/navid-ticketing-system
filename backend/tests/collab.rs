@@ -285,7 +285,7 @@ async fn comments_on_unreadable_issues_are_404(pool: PgPool) {
 async fn reports_go_from_draft_to_submitted_and_lock_on_approval(pool: PgPool) {
     let c = setup(pool).await;
     let issue = c
-        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "report", "title": "Term report", "targets": [{ "user_id": c.org.plain_a }] }))
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "Term report", "targets": [{ "user_id": c.org.plain_a }] }))
         .await;
     let (issue_id, item_id) = (id(&issue), id(&issue["work_items"][0]));
     let reports_uri = format!("/api/issues/{issue_id}/reports");
@@ -384,7 +384,7 @@ async fn reports_go_from_draft_to_submitted_and_lock_on_approval(pool: PgPool) {
 async fn self_filed_reports(pool: PgPool) {
     let c = setup(pool).await;
     let issue = id(&c
-        .issue(&c.plain, json!({ "branch_id": c.org.branch_a, "type": "report", "title": "My incident report" }))
+        .issue(&c.plain, json!({ "branch_id": c.org.branch_a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "My incident report" }))
         .await);
     let uri = format!("/api/issues/{issue}/reports");
 
@@ -502,7 +502,7 @@ async fn attachments_follow_their_parent(pool: PgPool) {
 
     // Draft report files are the author's alone.
     let report_issue = c
-        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "report", "title": "R", "targets": [{ "user_id": c.org.plain_a }] }))
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "R", "targets": [{ "user_id": c.org.plain_a }] }))
         .await;
     let (rid, item) = (id(&report_issue), id(&report_issue["work_items"][0]));
     let report = call(

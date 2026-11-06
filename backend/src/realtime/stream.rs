@@ -3,14 +3,16 @@
 //! Each connection keeps its Actor, refreshed every 60 s and whenever a
 //! `permissions_changed` signal names it. A signal is forwarded when the
 //! actor is a super admin, is a recipient, or shares a branch with it.
-//! A comment heartbeat goes out every 25 s.
+//! A heartbeat goes out every 25 s as an unnamed data event (`data:
+//! heartbeat`), so it reaches the client's `onmessage` and resets its
+//! watchdog; SSE comments never reach page code.
 
 use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use axum::{
     extract::State,
     http::HeaderMap,
-    response::sse::{Event as SseEvent, KeepAlive, Sse},
+    response::sse::{Event as SseEvent, Sse},
 };
 use serde_json::json;
 use tokio::sync::{broadcast::error::RecvError, mpsc};
@@ -45,13 +47,15 @@ pub async fn handler(
         session_token(&headers).ok_or_else(|| AppError::unauthorized("unauthenticated", "sign in to continue"))?;
     let (tx, rx) = mpsc::channel(64);
     tokio::spawn(connection(state, token, auth.actor, tx));
-    Ok(Sse::new(ReceiverStream::new(rx)).keep_alive(KeepAlive::new().interval(HEARTBEAT_EVERY).text("heartbeat")))
+    Ok(Sse::new(ReceiverStream::new(rx)))
 }
 
 async fn connection(state: AppState, token: SessionToken, mut actor: Actor, tx: mpsc::Sender<Item>) {
     let mut signals = state.realtime.subscribe();
     let mut refresh = tokio::time::interval(REFRESH_EVERY);
     refresh.tick().await; // the first tick is immediate
+    let mut heartbeat = tokio::time::interval(HEARTBEAT_EVERY);
+    heartbeat.tick().await;
     if tx.send(Ok(SseEvent::default().event("ready").data("{}"))).await.is_err() {
         return;
     }
@@ -59,6 +63,11 @@ async fn connection(state: AppState, token: SessionToken, mut actor: Actor, tx: 
     loop {
         tokio::select! {
             _ = tx.closed() => break,
+            _ = heartbeat.tick() => {
+                if tx.send(Ok(heartbeat_event())).await.is_err() {
+                    break;
+                }
+            }
             _ = refresh.tick() => match reload(&state, &token).await {
                 Some(fresh) => actor = fresh,
                 None => {
@@ -92,6 +101,11 @@ async fn connection(state: AppState, token: SessionToken, mut actor: Actor, tx: 
     }
 }
 
+/// No `event:` name, so browsers deliver it to `onmessage`.
+fn heartbeat_event() -> SseEvent {
+    SseEvent::default().data("heartbeat")
+}
+
 /// The session must still be valid; returns a freshly loaded Actor.
 async fn reload(state: &AppState, token: &SessionToken) -> Option<Actor> {
     let session = session::lookup(&state.db, token).await.ok()??;
@@ -110,8 +124,8 @@ pub fn forward(actor: &Actor, signal: &Signal) -> Option<SseEvent> {
     } else {
         signal.branch_ids.iter().copied().filter(|b| actor.branches.contains_key(b)).collect()
     };
-    // `settings_changed` (the school's name) is for everyone.
-    let wanted = matches!(signal.kind.as_str(), "resync" | "settings_changed")
+    // `settings_changed` (the school's name), `templates_changed` and `avatars_changed` are for everyone.
+    let wanted = matches!(signal.kind.as_str(), "resync" | "settings_changed" | "templates_changed" | "avatars_changed")
         || actor.is_super_admin
         || is_recipient
         || !branch_ids.is_empty();

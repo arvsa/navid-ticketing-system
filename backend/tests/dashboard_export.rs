@@ -179,7 +179,7 @@ async fn seed(pool: PgPool) -> Ctx {
     c.transition("multi", &in_b, "submit", json!({})).await;
 
     // Reports: one submitted for approval, one draft, one self-filed.
-    let report = c.issue("admin_a", json!({ "branch_id": a, "type": "report", "title": "Term", "targets": [{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }] })).await;
+    let report = c.issue("admin_a", json!({ "branch_id": a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "Term", "targets": [{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }] })).await;
     for item in report["work_items"].as_array().unwrap() {
         let who = if item["assignee_id"] == c.org.plain_a.to_string() { "plain_a" } else { "multi" };
         let rid = report["id"].as_str().unwrap();
@@ -194,7 +194,7 @@ async fn seed(pool: PgPool) -> Ctx {
             c.post(who, &format!("/api/reports/{}/submit", r["id"].as_str().unwrap()), json!({ "version": 1 })).await;
         }
     }
-    let own = c.issue("manager_a", json!({ "branch_id": a, "type": "report", "title": "Incident" })).await;
+    let own = c.issue("manager_a", json!({ "branch_id": a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "Incident" })).await;
     let own_id = own["id"].as_str().unwrap();
     let r = c
         .post(
@@ -262,7 +262,7 @@ async fn dashboard_numbers_match_the_filtered_lists_for_every_actor(pool: PgPool
                 assert!(b.get("open_issues_by_type").is_none() && b.get("work_items_by_status").is_none());
                 continue;
             }
-            for ty in ["ticket", "report", "event", "action"] {
+            for ty in ["ticket", "event", "action"] {
                 let n = open.iter().filter(|i| i["type"] == ty).count();
                 assert_eq!(b["open_issues_by_type"][ty], n, "{who}: open {ty} in {}", b["code"]);
             }
@@ -422,7 +422,7 @@ async fn exported_sheets_match_the_filtered_data(pool: PgPool) {
 
         // Reports: submitted reports only.
         let mut submitted = 0;
-        for i in of("report") {
+        for i in issues.iter().filter(|i| i["tags"].as_array().unwrap().iter().any(|t| t == "report")) {
             let reports = c.all(who, &format!("/api/issues/{}/reports", i["id"].as_str().unwrap())).await;
             submitted += reports.iter().filter(|r| r["submitted_at"].is_string()).count();
         }

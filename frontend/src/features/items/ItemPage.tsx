@@ -8,7 +8,7 @@ import { api } from "@/api/client";
 import { setIssue, useComments, useHistory, useIssue, useIssueByNumber, useTransition } from "@/api/hooks";
 import type { IssueDetail, Target } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
-import { Pill, PriorityText, TypeBadge } from "@/components/badges";
+import { Pill, PriorityText, TagList, TypeBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
 import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
 import { canClose, canEdit, canPassTicket, canTarget, isAdminOf } from "@/lib/can";
@@ -76,7 +76,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const close = useIssueAction(issue, "close");
   const cancel = useIssueAction(issue, "cancel");
   const zone = zoneOf(issue.branch_id) ?? zoneOf(issue.work_items[0]?.branch_id);
-  const hasWork = issue.type === "action" || issue.type === "report";
+  const hasWork = issue.type === "action";
   const tab = search.tab ?? "discussion";
   const labels = useItemLabels(issue);
   const branchName = (id: string) => labels.branchName(id) ?? t("another branch");
@@ -224,6 +224,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <TypeBadge type={issue.type} />
+                <TagList tags={issue.tags} />
                 <Pill fg="var(--text-2)" bg="var(--sunken)">
                   {stateLabel[issue.state]}
                 </Pill>
@@ -247,7 +248,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
             </Card>
           )}
           {issue.type === "ticket" && issue.targets.length === 0 && <p className="text-text-2">{t("Asked the branch admins.")}</p>}
-          {issue.type === "report" && issue.work_items.length === 0 && <SelfReport issue={issue} />}
+          {issue.requires_report && issue.work_items.length === 0 && <SelfReport issue={issue} />}
           {hasWork && issue.work_items.length > 0 && <StatusTiles issue={issue} filter={filter} onFilter={(f) => (setFilter(f), setSearch({ tab: "people" }))} />}
         </>
       )}

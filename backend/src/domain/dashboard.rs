@@ -60,7 +60,6 @@ pub struct BranchNumbers {
 #[derive(Debug, Default, Serialize, utoipa::ToSchema)]
 pub struct TypeCounts {
     pub ticket: i64,
-    pub report: i64,
     pub event: i64,
     pub action: i64,
 }
@@ -149,7 +148,6 @@ pub async fn get(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>) -> AppResu
             for r in &open {
                 match r.issue_type.as_str() {
                     "ticket" => by_type.ticket = r.n,
-                    "report" => by_type.report = r.n,
                     "event" => by_type.event = r.n,
                     _ => by_type.action = r.n,
                 }

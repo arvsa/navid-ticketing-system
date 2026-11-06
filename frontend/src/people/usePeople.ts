@@ -79,7 +79,7 @@ export function usePeople(): Directory {
   // Senders of school-wide items see names in other branches too, so their
   // recipients aren't "someone outside your branch". Only for naming: they
   // don't join the directory lists.
-  const sendsAcross = !me.user.is_super_admin && (["ticket", "action", "report", "event"] as const).some((ty) => canSendAcross({ me }, ty));
+  const sendsAcross = !me.user.is_super_admin && (["ticket", "action", "event"] as const).some((ty) => canSendAcross({ me }, ty));
   const others = useRecipients(sendsAcross);
   const outside = new Map<string, Person>();
   for (const r of others.data ?? []) {

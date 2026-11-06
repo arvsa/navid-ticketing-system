@@ -242,7 +242,7 @@ async fn the_sender_approves_work_they_sent_to_another_branch(pool: PgPool) {
 async fn reports_need_a_submitted_report_before_submission(pool: PgPool) {
     let c = setup(pool).await;
     let (issue, items) = c
-        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "report", "title": "Term report", "targets": [{ "user_id": c.org.plain_a }] }))
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "template_id": report_template(&c.app.db).await, "title": "Term report", "targets": [{ "user_id": c.org.plain_a }] }))
         .await;
     let id = items[0]["id"].as_str().unwrap().to_owned();
     let (issue_id, item_id): (Uuid, Uuid) = (issue.parse().unwrap(), id.parse().unwrap());

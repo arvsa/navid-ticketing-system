@@ -3,15 +3,15 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Plus, Shield, UserPlus } from "lucide-react";
+import { ArrowUpRight, Ban, FileSpreadsheet, Hash, Mail, MoreHorizontal, Pencil, Plus, RotateCcw, Shield, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useBranches } from "@/api/hooks";
+import { useBranches, useGroups } from "@/api/hooks";
 import type { Branch } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
-import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, PageHeader, SectionLabel, cx, inputClass } from "@/components/ui";
+import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, cx, inputClass } from "@/components/ui";
 import { isSuper } from "@/lib/can";
 import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
@@ -20,7 +20,7 @@ import { ConfirmDialog } from "@/features/items/ItemDialogs";
 import { ImportMembersDialog } from "./ImportMembers";
 import { AddMemberDialog } from "./PeoplePage";
 import { PersonPanel } from "./PersonPanel";
-import { localeTag, t, tn } from "@/i18n";
+import { localeTag, num, t, tn } from "@/i18n";
 
 const ZONES = (() => {
   try {
@@ -69,7 +69,7 @@ export function BranchesPage() {
       ) : branches.error ? (
         <ErrorPanel error={branches.error} onRetry={() => branches.refetch()} />
       ) : (
-        <div className="space-y-4">
+        <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(branches.data ?? []).map((b) => (
             <BranchCard key={b.id} branch={b} />
           ))}
@@ -94,6 +94,7 @@ function BranchCard({ branch }: { branch: Branch }) {
   const [adding, setAdding] = useState<null | "one" | "import">(null);
   const admins = people.all.filter((p) => p.adminOf.includes(branch.id));
   const members = people.inBranch(branch.id);
+  const groups = useGroups(branch.id);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["people"] });
     qc.invalidateQueries({ queryKey: ["branches"] });
@@ -114,92 +115,128 @@ function BranchCard({ branch }: { branch: Branch }) {
     onSuccess: () => (toast.success(branch.is_active ? t("Branch closed") : t("Branch reopened")), setClosing(false), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const departments = (groups.data ?? []).filter((g) => !g.is_default && !g.archived_at);
+  const chip = "inline-flex max-w-full items-center gap-1.5 rounded-full bg-sunken py-1 ps-1 pe-3 text-[14px]";
   return (
-    <Card className={cx("p-6", !branch.is_active && "opacity-70")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-[20px] font-semibold">
-            {branch.name}{" "}<span className="font-mono text-[14px] text-text-3">{branch.code}</span>
-            {!branch.is_active && <span className="ms-2 rounded-md bg-sunken px-2 text-[13px] text-text-2">{t("Closed")}</span>}
-          </h2>
-          <p className="text-text-2">
-            {branch.timezone}
-            {branch.email && ` · ${branch.email}`}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {branch.is_active && <Button onClick={() => setBranch(branch.id)}>{t("Open branch")}</Button>}
-          <Button onClick={() => setEditing(true)}>{t("Edit")}</Button>
-          <Button variant={branch.is_active ? "ghost-danger" : "ghost"} onClick={() => setClosing(true)}>
-            {branch.is_active ? t("Close branch") : t("Reopen")}
-          </Button>
-        </div>
-      </div>
-      <div className="mt-5">
-        <SectionLabel className="mb-2">{t("Admins")}</SectionLabel>
-        <ul className="space-y-2">
-          {admins.map((a) => (
-            <li key={a.id} className="flex items-center gap-3">
-              <button onClick={() => setOpen(a.id)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-start hover:bg-surface-2">
-                <Avatar first={a.first_name} last={a.last_name} id={a.id} size={32} />
-                <span className="font-medium text-primary hover:underline">
-                  {a.first_name} {a.last_name}
-                </span>
-              </button>
-              {admins.length > 1 ? (
-                <Button size="sm" variant="ghost" onClick={() => setRemoving(a.id)}>
-                  {t("Remove admin role")}
-                </Button>
-              ) : (
-                <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[13px] font-semibold text-warning">{t("Only one admin")}</span>
-              )}
-            </li>
-          ))}
-          {admins.length === 0 && <li className="text-text-2">{t("No admin yet. Add the branch's people, then appoint one.")}</li>}
-        </ul>
-        {appointing ? (
-          <div className="mt-4 space-y-3 rounded-[12px] border border-border p-4">
-            <PersonSelect people={members} value={pick} onChange={setPick} exclude={admins.map((a) => a.id)} />
-            <div className="flex gap-2">
-              <Button variant="primary" disabled={!pick} loading={appoint.isPending} onClick={() => pick && appoint.mutate(pick)}>
-                {t("Appoint admin")}
-              </Button>
-              <Button onClick={() => setAppointing(false)}>{t("Cancel")}</Button>
-            </div>
-          </div>
-        ) : (
-          <Button className="mt-4" icon={<Shield className="size-4" />} disabled={members.length === 0} onClick={() => setAppointing(true)}>
-            {t("Appoint a branch admin")}
-          </Button>
-        )}
-      </div>
-      <div className="mt-6 border-t border-border pt-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionLabel>{t("People")}</SectionLabel>
+    <Card className={cx("flex flex-col p-5", !branch.is_active && "opacity-70")}>
+      <div className="flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-[20px] leading-7 font-bold break-anywhere">{branch.name}</h2>
+        {!branch.is_active && <span className="mt-0.5 rounded-md bg-sunken px-2 text-[13px] text-text-2">{t("Closed")}</span>}
+        <Menu trigger={<IconButton variant="ghost" size="sm" label={t("More actions")} icon={<MoreHorizontal className="size-5" />} />}>
           {branch.is_active && (
-            <div className="flex gap-2">
-              <IconButton label={t("Import from Excel")} icon={<FileSpreadsheet className="size-4" />} onClick={() => setAdding("import")} />
-              <IconButton variant="primary" label={t("Add member")} hintAlign="end" icon={<UserPlus className="size-4" />} onClick={() => setAdding("one")} />
-            </div>
+            <MenuItem onSelect={() => setBranch(branch.id)}>
+              <ArrowUpRight className="size-4 rtl:-scale-x-100" />
+              {t("Open branch")}
+            </MenuItem>
           )}
+          <MenuItem onSelect={() => setEditing(true)}>
+            <Pencil className="size-4" />
+            {t("Edit")}
+          </MenuItem>
+          <MenuItem danger={branch.is_active} onSelect={() => setClosing(true)}>
+            {branch.is_active ? <Ban className="size-4" /> : <RotateCcw className="size-4" />}
+            {branch.is_active ? t("Close branch") : t("Reopen")}
+          </MenuItem>
+        </Menu>
+      </div>
+
+      <dl className="mt-1 mb-5 space-y-4">
+        <div className="space-y-1 text-text-2">
+          <dt className="sr-only">{t("Code")}</dt>
+          <dd className="flex items-center gap-2">
+            <Hash className="size-4 shrink-0 text-text-3" aria-hidden />
+            <span className="font-mono text-[14px] tracking-wide">{branch.code}</span>
+          </dd>
+          <dt className="sr-only">{t("Email")}</dt>
+          <dd className="flex min-w-0 items-center gap-2">
+            <Mail className="size-4 shrink-0 text-text-3" aria-hidden />
+            {branch.email ? <span className="truncate" dir="ltr">{branch.email}</span> : <span className="text-text-3">{t("No email")}</span>}
+          </dd>
         </div>
-        {members.length === 0 ? (
-          <p className="mt-2 text-text-2">{t("No one here yet. Add people one by one, or import them from an Excel file.")}</p>
-        ) : (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="flex -space-x-2 rtl:space-x-reverse">
-              {members.slice(0, 8).map((m) => (
-                <button key={m.id} onClick={() => setOpen(m.id)} className="rounded-full ring-2 ring-surface" aria-label={`${m.first_name} ${m.last_name}`}>
-                  <Avatar first={m.first_name} last={m.last_name} id={m.id} size={32} />
+
+        <div>
+          <dt className="mb-1.5"><SectionLabel>{t("Admins")}</SectionLabel></dt>
+          <dd className="flex flex-wrap gap-1.5">
+            {admins.map((a) => (
+              <span key={a.id} className={chip}>
+                <button onClick={() => setOpen(a.id)} className="flex min-w-0 items-center gap-1.5 hover:underline">
+                  <Avatar first={a.first_name} last={a.last_name} id={a.id} size={24} />
+                  <span className="truncate">
+                    {a.first_name} {a.last_name}
+                  </span>
                 </button>
-              ))}
-            </div>
-            <Link to="/people" search={{ tab: "members", branch: branch.id }} className="font-semibold text-primary hover:underline">
-              {tn(members.length, "See {n} person", "See all {n} people")}
-            </Link>
-          </div>
+                {admins.length > 1 && (
+                  <button onClick={() => setRemoving(a.id)} aria-label={t("Remove admin role")} className="text-text-3 hover:text-danger">
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </span>
+            ))}
+            {admins.length === 0 && <span className="text-[14px] text-text-2">{t("No admin yet")}</span>}
+            {branch.is_active && (
+              <button
+                onClick={() => setAppointing(true)}
+                disabled={members.length === 0}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1 text-[14px] text-text-2 hover:border-border-strong hover:text-text disabled:opacity-50"
+              >
+                <Plus className="size-3.5" />
+                {t("Appoint")}
+              </button>
+            )}
+          </dd>
+        </div>
+
+        <div>
+          <dt className="mb-1.5"><SectionLabel>{t("Departments")}</SectionLabel></dt>
+          <dd className="flex flex-wrap gap-1.5">
+            {departments.map((g) => (
+              <Link key={g.id} to="/people" search={{ branch: branch.id, group: g.id }} className={cx(chip, "ps-3 hover:bg-surface-2")}>
+                <span className="truncate">{g.name}</span>
+                <span className="text-text-3 tabular">{num(g.member_count)}</span>
+              </Link>
+            ))}
+            {groups.isSuccess && departments.length === 0 && <span className="text-[14px] text-text-2">{t("No departments yet")}</span>}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-auto flex items-center gap-3 border-t border-border pt-4">
+        <Link to="/people" search={{ tab: "members", branch: branch.id }} className="flex min-w-0 flex-1 items-center gap-2 font-semibold text-primary hover:underline">
+          <Users className="size-4 shrink-0" aria-hidden />
+          {tn(members.length, "{n} person", "{n} people")}
+        </Link>
+        {branch.is_active && (
+          <Menu
+            trigger={<IconButton variant="primary" label={t("Add people")} hintAlign="end" icon={<UserPlus className="size-5" />} />}
+          >
+            <MenuItem onSelect={() => setAdding("one")}>
+              <UserPlus className="size-5" />
+              {t("Add one person")}
+            </MenuItem>
+            <MenuItem onSelect={() => setAdding("import")}>
+              <FileSpreadsheet className="size-5" />
+              {t("Import from Excel")}
+            </MenuItem>
+          </Menu>
         )}
       </div>
+
+      <Dialog
+        open={appointing}
+        onOpenChange={(o) => (setAppointing(o), o || setPick(null))}
+        title={t("Appoint a branch admin")}
+        description={branch.name}
+        footer={
+          <>
+            <Button onClick={() => setAppointing(false)}>{t("Cancel")}</Button>
+            <Button variant="primary" disabled={!pick} loading={appoint.isPending} onClick={() => pick && appoint.mutate(pick)}>
+              {t("Appoint admin")}
+            </Button>
+          </>
+        }
+      >
+        <PersonSelect people={members} value={pick} onChange={setPick} exclude={admins.map((a) => a.id)} />
+      </Dialog>
       <AddMemberDialog open={adding === "one"} onOpenChange={(o) => !o && setAdding(null)} branchId={branch.id} branchName={branch.name} />
       <ImportMembersDialog open={adding === "import"} onOpenChange={(o) => !o && setAdding(null)} branchId={branch.id} branchName={branch.name} />
       <ConfirmDialog

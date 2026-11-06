@@ -45,6 +45,8 @@ pub enum Action<'a> {
     SetSuperAdmin,
     /// Change the app's settings (the school's name).
     EditSettings,
+    /// Create, edit and archive issue templates (school-wide).
+    ManageTemplates,
     /// Everyone's names and emails, for chosen branches or all.
     ExportPeople,
     ViewBranch {
@@ -208,6 +210,7 @@ impl Action<'_> {
             | SetSuperAdmin
             | ManageSchoolGroups
             | EditSettings
+            | ManageTemplates
             | ExportPeople => true,
             Export { branch_ids } => branch_ids.len() != 1,
             // A super admin's account is only ever touched by super admins.
@@ -242,6 +245,7 @@ impl Action<'_> {
             | ManageSchoolGroups
             | FindPeopleInOtherBranches
             | EditSettings
+            | ManageTemplates
             | ExportPeople => vec![],
             EditBranch { branch_id }
             | SetBranchAdmin { branch_id }
@@ -461,7 +465,7 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         CreateIssue { issue_type, .. } => has_grant(access, P::IssueCreate, Some(issue_type), branch_only),
         EditIssue { issue } => has_issue_grant(access, P::IssueEdit, issue, me),
         CloseIssue { issue } => {
-            // "Anyone can close the tickets, reports and events they created."
+            // "Anyone can close the tickets and events they created."
             (issue.created_by == me && issue.issue_type != IssueType::Action)
                 || has_issue_grant(access, P::IssueClose, issue, me)
         }
@@ -490,6 +494,7 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         | SetBranchAdmin { .. }
         | SetSuperAdmin
         | EditSettings
+        | ManageTemplates
         | ExportPeople
         | ManageGroups { .. }
         | ManageSchoolGroups
@@ -566,7 +571,7 @@ mod tests {
         vec![
             grant(IssueRead, None, Branch),
             grant(IssueCreate, Some(Ticket), Branch),
-            grant(IssueCreate, Some(Report), Branch),
+            grant(IssueCreate, Some(Action), Branch),
             grant(IssueCreate, Some(Event), Branch),
             grant(IssueEdit, None, Own),
             grant(IssueClose, None, Own),
@@ -877,9 +882,11 @@ mod tests {
         let create = |ty| Action::CreateIssue { branch_id: Some(A), issue_type: ty, targets_whole_branches: false };
         let m = member(1);
         ok(&m, create(IssueType::Ticket));
-        ok(&m, create(IssueType::Report));
         ok(&m, create(IssueType::Event));
-        denied(&m, create(IssueType::Action), Forbidden);
+        // Reports are actions: the baseline creates them, but can't send them.
+        ok(&m, create(IssueType::Action));
+        let ticket_only = actor(4, &[(A, false, vec![grant(Permission::IssueCreate, Some(IssueType::Ticket), Scope::Branch)])]);
+        denied(&ticket_only, create(IssueType::Action), Forbidden);
         ok(&admin(2), create(IssueType::Action));
         ok(&admin_like(3), create(IssueType::Action));
     }
@@ -887,8 +894,8 @@ mod tests {
     #[test]
     fn own_scope_covers_only_issues_you_created() {
         let m = member(1);
-        let mine = issue(m.user_id, IssueType::Report);
-        let theirs = issue(uid(9), IssueType::Report);
+        let mine = issue(m.user_id, IssueType::Action);
+        let theirs = issue(uid(9), IssueType::Action);
         ok(&m, Action::EditIssue { issue: &mine });
         denied(&m, Action::EditIssue { issue: &theirs }, Forbidden);
         ok(&admin_like(2), Action::EditIssue { issue: &theirs });
@@ -902,9 +909,9 @@ mod tests {
     }
 
     #[test]
-    fn creators_can_always_close_their_tickets_reports_and_events() {
+    fn creators_can_always_close_their_tickets_and_events() {
         let bare = actor(1, &[(A, false, vec![grant(Permission::IssueRead, None, Scope::Branch)])]);
-        for ty in [IssueType::Ticket, IssueType::Report, IssueType::Event] {
+        for ty in [IssueType::Ticket, IssueType::Event] {
             ok(&bare, Action::CloseIssue { issue: &issue(bare.user_id, ty) });
         }
         denied(&bare, Action::CloseIssue { issue: &issue(bare.user_id, IssueType::Action) }, Forbidden);
@@ -950,26 +957,26 @@ mod tests {
 
     #[test]
     fn school_wide_items_need_admin_or_target_other_branches() {
-        use IssueType::{Event, Report};
+        use IssueType::Event;
         let create = |ty| Action::CreateIssue { branch_id: None, issue_type: ty, targets_whole_branches: false };
         let mut grants = baseline();
-        grants.push(grant(Permission::IssueTargetOtherBranches, Some(Report), Scope::Branch));
+        grants.push(grant(Permission::IssueTargetOtherBranches, Some(IssueType::Action), Scope::Branch));
         let sender = actor(1, &[(A, false, grants)]);
-        ok(&sender, create(Report));
+        ok(&sender, create(IssueType::Action));
         // Needs the grant for that kind, and the right to create it.
         denied(&sender, create(Event), Forbidden);
         let mut no_create = vec![grant(Permission::IssueTargetOtherBranches, None, Scope::Branch)];
         no_create.push(grant(Permission::IssueRead, None, Scope::Branch));
         denied(&actor(2, &[(A, false, no_create)]), create(IssueType::Action), Forbidden);
         // Admins always may.
-        ok(&admin(3), create(Report));
+        ok(&admin(3), create(IssueType::Action));
         ok(&admin(3), Action::FindPeopleInOtherBranches);
         ok(&sender, Action::FindPeopleInOtherBranches);
         ok(&super_admin(), Action::FindPeopleInOtherBranches);
-        denied(&member(4), create(Report), Forbidden);
+        denied(&member(4), create(IssueType::Action), Forbidden);
         denied(&member(4), Action::FindPeopleInOtherBranches, Forbidden);
         // Whole branches too, with the grant.
-        let whole = Action::CreateIssue { branch_id: None, issue_type: Report, targets_whole_branches: true };
+        let whole = Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
         ok(&sender, whole);
     }
 
@@ -978,7 +985,7 @@ mod tests {
         let mut grants = baseline();
         grants.push(grant(Permission::IssueTargetOtherBranches, None, Scope::Branch));
         let sender = actor(1, &[(A, false, grants.clone())]);
-        let sent = IssueFacts { branch_id: None, target_branch_ids: vec![B], ..issue(uid(1), IssueType::Report) };
+        let sent = IssueFacts { branch_id: None, target_branch_ids: vec![B], ..issue(uid(1), IssueType::Action) };
         ok(&sender, Action::ReadIssue { issue: &sent });
         ok(&sender, Action::EditIssue { issue: &sent });
         ok(&sender, Action::CloseIssue { issue: &sent });

@@ -1,12 +1,12 @@
 // Choosing people, groups and branches.
 import { useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Building2, Search, User, Users, X } from "lucide-react";
+import { Building2, ChevronDown, Search, User, Users, X } from "lucide-react";
 import type { BranchGroup, BranchPerson, Group } from "@/api/types";
 import type { Person } from "@/people/usePeople";
 import { Avatar } from "./badges";
 import { cx, inputClass } from "./ui";
-import { localeTag, quote, t } from "@/i18n";
+import { localeTag, num, quote, t } from "@/i18n";
 
 export type Recipient =
   /** `note`: the person's or group's branch, when it's another branch. */
@@ -65,6 +65,8 @@ export function RecipientPicker({
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  // Other branches start folded, this one open; searching opens them all.
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
   const chosen = new Set(value.map(recipientKey));
   const options = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -109,9 +111,17 @@ export function RecipientPicker({
       .map((s) => ({ ...s, items: s.items.sort((a, b) => rank(a) - rank(b)).slice(0, 25) }))
       .sort((a, b) => Number(b.id === branchId) - Number(a.id === branchId) || a.name.localeCompare(b.name, localeTag));
   }, [options, branches, crossGroups, crossPeople, branchId, branchName]);
-  const flat = sections.flatMap((s) => (s.head ? [s.head, ...s.items] : s.items));
   // Just this branch's people and groups: no headings needed.
   const plain = sections.length === 1 && sections[0].id === branchId && !sections[0].head;
+  const isOpen = (id: string) => plain || !!q.trim() || (id === branchId) !== toggled.has(id);
+  const toggle = (id: string) =>
+    setToggled((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const flat = sections.flatMap((s) => [...(s.head ? [s.head] : []), ...(isOpen(s.id) ? s.items : [])]);
 
   const pick = (o: Recipient) => {
     onChange([...value, o]);
@@ -162,24 +172,52 @@ export function RecipientPicker({
             sections.map((sec) => (
               <div key={sec.id} role="group" aria-label={sec.name} className="py-0.5">
                 {plain ? null : sec.head ? (
-                  <OptionRow o={sec.head} onPick={pick} />
+                  <div className="flex items-center">
+                    <div className="min-w-0 flex-1">
+                      <OptionRow o={sec.head} onPick={pick} />
+                    </div>
+                    {sec.items.length > 0 && <FoldButton open={isOpen(sec.id)} name={sec.name} onToggle={() => toggle(sec.id)} />}
+                  </div>
                 ) : (
-                  <p className="flex items-center gap-3 px-3 pt-2 pb-1 text-[13px] font-semibold text-text-3">
+                  <button
+                    type="button"
+                    aria-expanded={isOpen(sec.id)}
+                    onClick={() => toggle(sec.id)}
+                    className="flex w-full items-center gap-3 rounded-md px-3 pt-2 pb-1 text-start text-[13px] font-semibold text-text-3 hover:text-text-2"
+                  >
                     <Building2 className="size-4" aria-hidden />
-                    {sec.name}
-                  </p>
+                    <span className="flex-1">{sec.name}</span>
+                    <span className="font-normal">{num(sec.items.length)}</span>
+                    <ChevronDown className={cx("size-4 transition-transform", !isOpen(sec.id) && "rtl:rotate-90 ltr:-rotate-90")} aria-hidden />
+                  </button>
                 )}
-                <div className={cx(!plain && "ms-5 border-s border-border ps-1")}>
-                  {sec.items.map((o) => (
-                    <OptionRow key={recipientKey(o)} o={o} onPick={pick} />
-                  ))}
-                </div>
+                {isOpen(sec.id) && (
+                  <div className={cx(!plain && "ms-5 border-s border-border ps-1")}>
+                    {sec.items.map((o) => (
+                      <OptionRow key={recipientKey(o)} o={o} onPick={pick} />
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+function FoldButton({ open, name, onToggle }: { open: boolean; name: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={open ? t("Hide {name}", { name }) : t("Show {name}", { name })}
+      onClick={onToggle}
+      className="rounded-md p-2 text-text-3 hover:bg-sunken hover:text-text-2"
+    >
+      <ChevronDown className={cx("size-4 transition-transform", !open && "rtl:rotate-90 ltr:-rotate-90")} aria-hidden />
+    </button>
   );
 }
 

@@ -3,25 +3,28 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Download } from "lucide-react";
-import { useIssueList, type IssueFilters } from "@/api/hooks";
+import { useIssueList, useTemplates, type IssueFilters } from "@/api/hooks";
 import type { IssueState, IssueSummary, IssueType } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { useNewItem } from "@/app/newItemContext";
-import { PriorityText, ProgressBar, TypeBadge } from "@/components/badges";
+import { PriorityText, ProgressBar, TagList, TypeBadge } from "@/components/badges";
 import { Button, Card, Chip, Hint, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx, inputClass } from "@/components/ui";
 import { timeAgo } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
-import { stateLabel, typeLabel, typePlural } from "@/lib/labels";
+import { stateLabel, tagLabel, templateName, typeLabel, typePlural } from "@/lib/labels";
 import type { ItemsSearch } from "@/app/router";
 import { quote, t, tn } from "@/i18n";
 
-const KINDS: IssueType[] = ["ticket", "action", "report", "event"];
+const KINDS: IssueType[] = ["ticket", "action", "event"];
 
 export function ItemsPage() {
   const search = useSearch({ from: "/authed/shell/items" });
   const navigate = useNavigate({ from: "/items" });
   const { branchId, branch, isAll, branchById } = useBranch();
   const openNew = useNewItem();
+  const templates = useTemplates();
+  // Templates with a tag filter by it, e.g. Reports.
+  const tagged = (templates.data ?? []).filter((x) => x.tag);
   const [q, setQ] = useState(search.q ?? "");
   const set = (patch: Partial<ItemsSearch>) => navigate({ search: (s: ItemsSearch) => ({ ...s, ...patch }), replace: true });
 
@@ -41,10 +44,11 @@ export function ItemsPage() {
     state,
     assignee: search.view === "mine" ? "me" : undefined,
     q: search.q,
+    tag: search.tag,
   };
   const list = useIssueList(filters, 25);
   const rows = list.data?.pages.flatMap((p) => p.items) ?? [];
-  const filtered = !!(search.type || search.q || search.state || search.view);
+  const filtered = !!(search.type || search.q || search.state || search.view || search.tag);
 
   return (
     <div>
@@ -77,6 +81,16 @@ export function ItemsPage() {
               {typePlural[k]}
             </Chip>
           ))}
+          {tagged.map((x) => (
+            <Chip key={x.id} active={search.tag === x.tag} onClick={() => set({ tag: search.tag === x.tag ? undefined : x.tag! })} tone={x.tag === "report" ? "var(--report)" : undefined}>
+              {templateName(x)}
+            </Chip>
+          ))}
+          {search.tag && !tagged.some((x) => x.tag === search.tag) && (
+            <Chip active onClick={() => set({ tag: undefined })}>
+              {tagLabel(search.tag)} ×
+            </Chip>
+          )}
         </div>
         <span className="hidden h-8 w-px bg-border sm:block" aria-hidden />
         <label className="flex items-center gap-2">
@@ -181,6 +195,7 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
               {item.key}
               {branchName && <span className="font-sans">· {branchName}</span>}
               {item.unread && <span className="font-sans">{t("· unread")}</span>}
+              <TagList tags={item.tags} className="font-sans" />
             </span>
           </span>
         </div>

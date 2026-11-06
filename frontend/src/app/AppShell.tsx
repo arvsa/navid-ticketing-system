@@ -5,6 +5,7 @@ import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-route
 import * as Popover from "@radix-ui/react-popover";
 import {
   Bell,
+  BookUser,
   Calendar,
   Check,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   Home,
   Inbox,
   Languages,
+  LayoutTemplate,
   List,
   ListChecks,
   LogOut,
@@ -75,11 +77,13 @@ function useNav() {
       ];
   if (!superAdmin && canApprove) main.push({ to: "/approvals", label: t("To approve"), icon: <Check className="size-[18px]" />, count: mine?.awaiting_my_approval || null });
   if (!superAdmin) main.push({ to: "/calendar", label: t("Calendar"), icon: <Calendar className="size-[18px]" />, count: pendingRsvps || null });
+  main.push({ to: "/directory", label: t("Directory"), icon: <BookUser className="size-[18px]" /> });
 
   const manage: NavEntry[] = [];
   const canPeople = branchId ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") : me.memberships.some((m) => m.is_admin) || superAdmin;
   if (canPeople) manage.push({ to: "/people", label: t("People & groups"), icon: <Users className="size-4" /> });
   if (superAdmin) manage.push({ to: "/branches", label: t("Branches & admins"), icon: <Shield className="size-4" /> });
+  if (superAdmin) manage.push({ to: "/templates", label: t("Templates"), icon: <LayoutTemplate className="size-4" /> });
   const canExport = superAdmin || (branchId ? hasGrant(v, branchId, "export.run") : hasGrantAnywhere(v, "export.run"));
   if (canExport) manage.push({ to: "/export", label: t("Export to Excel"), icon: <Download className="size-4" /> });
   const manageTitle = superAdmin ? t("Set up") : isAll ? t("Run the school") : branch ? t("Run {name}", { name: branch.name }) : t("Manage");
@@ -439,7 +443,7 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
     <header className="sticky top-0 z-30 px-3 pt-3 md:px-6">
       <div className="mx-auto flex h-16 max-w-[1320px] items-center gap-2 rounded-[22px] border border-border bg-surface/90 px-3 shadow-2 backdrop-blur-md">
         <Link to="/" className="flex shrink-0 items-center gap-2.5 rounded-[14px] pe-2" aria-label={`${schoolName} · ${APP_NAME}`}>
-          <BrandMark size={42} />
+          <BrandMark size={52} className="rounded-[14px]" />
           <span className="hidden flex-col leading-tight 2xl:flex">
             <span className="text-[14px] font-bold text-brand dark:text-primary">{schoolName}</span>
             <span className="text-[12px] text-text-3">{APP_NAME}</span>

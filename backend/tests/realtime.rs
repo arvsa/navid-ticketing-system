@@ -23,7 +23,7 @@ struct SseReader {
 }
 
 impl SseReader {
-    /// The next event within `wait`, skipping heartbeat comments.
+    /// The next named event within `wait`, skipping heartbeats (unnamed data events).
     async fn next(&mut self, wait: Duration) -> Option<(String, Value)> {
         let deadline = tokio::time::Instant::now() + wait;
         loop {

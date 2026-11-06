@@ -17,21 +17,24 @@ export const BRAND_NAME = t("Navid Schools");
 export const typeLabel: Record<IssueType, string> = {
   ticket: t("Ticket"),
   action: t("Action"),
-  report: t("Report"),
   event: t("Event"),
 };
 
 export const typePlural: Record<IssueType, string> = {
   ticket: t("Tickets"),
   action: t("Actions"),
-  report: t("Reports"),
   event: t("Events"),
 };
+
+/** Tags and template names are data, but the built-in ones have words. */
+export const tagLabel = (tag: string) => `#${t(tag)}`;
+export const templateName = (tpl: { name: string }) => t(tpl.name);
+/** The built-in Report template's words, listed so the dictionary keeps them. */
+export const BUILT_IN_WORDS = [t("Report"), t("report"), t("A written report, submitted for approval when assigned")];
 
 export const typePitch: Record<IssueType, string> = {
   ticket: t("Ask a question or make a request"),
   action: t("A task that gets done, then signed off"),
-  report: t("Ask for a written report, then approve it"),
   event: t("A date with invitations and replies"),
 };
 

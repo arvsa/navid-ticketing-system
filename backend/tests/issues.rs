@@ -55,7 +55,7 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
     assert_eq!(notifications_of(&app.db, org.admin_a, "ticket_created").await, 1);
 
     let report =
-        post_issue(&app, &plain, json!({ "branch_id": a, "type": "report", "title": "My weekly report" })).await;
+        post_issue(&app, &plain, json!({ "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "My weekly report" })).await;
     assert_status(&report, StatusCode::CREATED, None);
 
     let starts = OffsetDateTime::now_utc() + Duration::days(3);
@@ -68,14 +68,15 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
     assert_eq!(event.body["event"]["location"], "Hall");
     assert_eq!(event.body["event"]["all_day"], false);
 
+    // Reports are actions: members make them for themselves, but can't send them.
     let action = post_issue(&app, &plain, json!({ "branch_id": a, "type": "action", "title": "Do it" })).await;
-    assert_status(&action, StatusCode::FORBIDDEN, Some("forbidden"));
+    assert_status(&action, StatusCode::CREATED, None);
     // issue.target @own covers tickets and events only.
     let targeted_report = post_issue(
         &app,
         &plain,
         json!({
-            "branch_id": a, "type": "report", "title": "R", "targets": [{ "user_id": org.admin_a }]
+            "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "R", "targets": [{ "user_id": org.admin_a }]
         }),
     )
     .await;
@@ -177,7 +178,7 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     assert_eq!(items(&shared).len(), 1);
     assert!(items(&shared)[0]["assignee_id"].is_null());
     let per_member = post_issue(&app, &admin, json!({
-        "branch_id": a, "type": "report", "title": "G", "completion_mode": "per_member", "targets": [{ "group_id": team }]
+        "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "G", "completion_mode": "per_member", "targets": [{ "group_id": team }]
     }))
     .await;
     let mut assignees: Vec<String> =
@@ -319,10 +320,16 @@ async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("invalid_target"),
     );
-    // Only the kinds the grant names (they may create reports, but not send them across).
-    let report = json!({ "branch_id": null, "type": "report", "title": "R",
+    // Only the kinds the grant names (they may create events, but not send them across).
+    let starts = OffsetDateTime::now_utc() + Duration::days(3);
+    let event = json!({ "branch_id": null, "type": "event", "title": "E",
+                        "event": { "starts_at": starts.format(&Rfc3339).unwrap(), "ends_at": (starts + Duration::hours(1)).format(&Rfc3339).unwrap() },
+                        "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
+    assert_status(&post_issue(&app, &plain, event).await, StatusCode::FORBIDDEN, None);
+    // A template's report rule travels with its type: the Report template is an action.
+    let report = json!({ "branch_id": null, "type": "action", "template_id": report_template(&app.db).await, "title": "R",
                          "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
-    assert_status(&post_issue(&app, &plain, report).await, StatusCode::FORBIDDEN, None);
+    assert_status(&post_issue(&app, &plain, report).await, StatusCode::CREATED, None);
 
     // The receiver sees it; the sender edits it, the receiving admin can't.
     let id = id_of(&res);
@@ -430,7 +437,7 @@ async fn issue_lists_filter_search_and_page(pool: PgPool) {
         json!({ "branch_id": a, "type": "action", "title": "Fix 100%_done", "targets": [{ "user_id": org.plain_a }] }),
     )
     .await;
-    let closed = post_issue(&app, &plain, json!({ "branch_id": a, "type": "report", "title": "Old report" })).await;
+    let closed = post_issue(&app, &plain, json!({ "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "Old report" })).await;
     call(&app, &plain, Method::POST, &format!("/api/issues/{}/close", id_of(&closed)), Some(json!({ "version": 1 })))
         .await;
 

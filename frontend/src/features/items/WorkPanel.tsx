@@ -85,7 +85,7 @@ export function PeopleList({ issue, filter, reviewing, onReview }: { issue: Issu
   const viewer = useViewer();
   const people = usePeople();
   const { zoneOf } = useBranch();
-  const reports = useReports(issue.id, issue.type === "report");
+  const reports = useReports(issue.id, issue.requires_report);
   const byWork = new Map((reports.data ?? []).map((r) => [r.work_item_id, r]));
   const [showApproved, setShowApproved] = useState(false);
   const myId = viewer.me.user.id;
@@ -221,7 +221,7 @@ function ReviewBody({
   const transition = useTransition();
   const approveLater = useApproveWithUndo();
   const qc = useQueryClient();
-  const reports = useReports(issue.id, issue.type === "report");
+  const reports = useReports(issue.id, issue.requires_report);
   const files = useFilePicker();
   const [sendingFiles, setSendingFiles] = useState(false);
   const [note, setNote] = useState("");
@@ -286,7 +286,7 @@ function ReviewBody({
           )}
           <h2 className="text-[22px] font-bold">
             {w.assignee_id
-              ? issue.type === "report"
+              ? issue.requires_report
                 ? t("{name}'s report", { name: labels.person(w.assignee_id) })
                 : t("{name}'s work", { name: labels.person(w.assignee_id) })
               : `${labels.branchName(w.branch_id) ?? t("This part")} · ${t("not assigned yet")}`}
@@ -333,7 +333,7 @@ function ReviewBody({
             <b>{tx("Note from {name}:", { name: <PersonName id={w.decided_by} label={labels.person(w.decided_by)} /> })}</b> {quote(w.decision_note)}
           </div>
         )}
-        {issue.type === "report" &&
+        {issue.requires_report &&
           (report ? (
             <div className="space-y-3">
               <div className="rounded-[12px] border border-border bg-surface-2 p-5">
@@ -347,7 +347,7 @@ function ReviewBody({
             <p className="text-text-2">{t("No written report yet.")}</p>
           ))}
         <div>
-          <h3 className="mb-3 font-semibold">{issue.type === "report" ? t("About this report") : t("About this work")}</h3>
+          <h3 className="mb-3 font-semibold">{issue.requires_report ? t("About this report") : t("About this work")}</h3>
           <CommentThread issue={issue} workItemId={w.id} compact emptyText={t("No comments on this part yet.")} />
         </div>
 
@@ -416,7 +416,7 @@ function ReviewBody({
               loading={sendingFiles}
               onClick={async () => {
                 if (!(await sendFiles())) return;
-                approveLater([w], note, issue.type === "report" ? t("Approved {name}'s report", { name: people.short(w.assignee_id) }) : t("Approved {name}'s work", { name: people.short(w.assignee_id) }));
+                approveLater([w], note, issue.requires_report ? t("Approved {name}'s report", { name: people.short(w.assignee_id) }) : t("Approved {name}'s work", { name: people.short(w.assignee_id) }));
                 goNext();
               }}
             >

@@ -22,7 +22,7 @@ async fn the_openapi_document_describes_the_api(pool: PgPool) {
     let paths = doc["paths"].as_object().unwrap();
     let operations: usize = paths.values().map(|p| p.as_object().unwrap().len()).sum();
     // Every route in the router (only /api/openapi.json itself is left out).
-    assert_eq!(operations, 80, "documented operations");
+    assert_eq!(operations, 93, "documented operations");
     for (path, method) in [
         ("/api/auth/login", "post"),
         ("/api/issues", "get"),
@@ -34,6 +34,9 @@ async fn the_openapi_document_describes_the_api(pool: PgPool) {
         ("/api/branches/{id}/members/{user_id}/effective-permissions", "get"),
         ("/api/recipients", "get"),
         ("/api/recipient-groups", "get"),
+        ("/api/me", "patch"),
+        ("/api/me/cover", "put"),
+        ("/api/users/{id}/cover", "get"),
         ("/api/issues/{id}/mute", "put"),
         ("/api/issues/{id}/pass", "post"),
         ("/api/settings", "patch"),
@@ -103,7 +106,7 @@ async fn demo_seed_fills_an_empty_database_once(pool: PgPool) {
     .fetch_all(&app.db)
     .await
     .unwrap();
-    assert_eq!(kinds.len(), 4, "every issue type is seeded");
+    assert_eq!(kinds.len(), 3, "every issue type is seeded");
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]

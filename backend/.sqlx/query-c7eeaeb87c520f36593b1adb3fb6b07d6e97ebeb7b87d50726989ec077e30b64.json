@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE issue SET title = $3, description = $4, priority = $5, version = version + 1\n           WHERE id = $1 AND version = $2",
+  "query": "UPDATE issue SET title = $3, description = $4, priority = $5, tags = $6, version = version + 1\n           WHERE id = $1 AND version = $2",
   "describe": {
     "columns": [],
     "parameters": {
@@ -21,10 +21,11 @@
               ]
             }
           }
-        }
+        },
+        "TextArray"
       ]
     },
     "nullable": []
   },
-  "hash": "be79053402b3065367c9feaa4accea4d7276b02f4f5a3418a2fa9ade39099088"
+  "hash": "c7eeaeb87c520f36593b1adb3fb6b07d6e97ebeb7b87d50726989ec077e30b64"
 }

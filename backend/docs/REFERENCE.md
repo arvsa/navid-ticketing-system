@@ -70,6 +70,35 @@ transactions after 60 s.
   `{school_name}` (super admins): the school's name, shown in the header and
   on the sign-in page. Changing it sends `settings_changed` to everyone.
 
+## Profiles and the directory
+
+- `PUT` / `DELETE /api/me/cover` (max 5 MB) and `/api/me/avatar` (profile
+  picture, max 2 MB): a multipart `file` part, JPEG, PNG or WebP (checked by
+  its bytes). `GET /api/users/{id}/cover?v=` and `/avatar?v=` serve them,
+  cached for good; the version is in `/api/me` and `/api/users/{id}/profile`.
+- `GET /api/avatars`: everyone with a picture, `[{user_id, version}]`, so
+  clients can show pictures beside names. Changes send `avatars_changed`.
+- `GET /api/directory`: every active branch with its departments (groups
+  other than All members, with their current members) and its people (names,
+  emails, who runs it). Everyone signed in reads it and anyone's profile.
+
+## Templates and tags
+
+- Issues are tickets, actions or events. A **template** is a named starting
+  point for a new issue: `POST /api/issues` with `template_id` (and the
+  template's `type`) adds the template's `tag` and fixes its rules on the
+  issue. The built-in **Report** template is an action whose work needs a
+  submitted written report before it goes for approval (`requires_report`
+  on the issue); the issue's creator can also file one for themselves.
+- `GET /api/templates` (everyone signed in; `?include_archived=true` for super
+  admins), `POST /api/templates` `{name, type, description?, tag?,
+  requires_report?, default_sla_hours?}` and `PATCH /api/templates/{id}`
+  `{version, ..., archived?}` (super admins). The type can't change; edits
+  apply to new issues only. Changes send `templates_changed` to everyone.
+- **Tags**: `tags` on `POST /api/issues` (on top of the template's) and
+  `PATCH /api/issues/{id}` (replaces them). Lower case, 1 to 40 characters, at
+  most 10. Filter lists with `GET /api/issues?tag=report` or `?template_id=`.
+
 ## Real-time updates
 
 `GET /api/stream` is a Server-Sent Events stream for the signed-in user.
@@ -83,6 +112,7 @@ the normal API, which applies permissions.
 | `issue_created`, `issue_updated`, `work_item_updated`, `comment_*`, `report_*`, `rsvp_changed`, ... | Something changed on `issue_id`; refetch it (and any list showing it). |
 | `notification` | Your inbox changed; refetch the unread count. |
 | `permissions_changed`, `member_changed`, `group_changed`, `branch_changed` | Refetch `/api/me` and the affected branch data. |
+| `templates_changed` | Refetch `/api/templates`. |
 | `resync` | Events may have been missed; refetch everything. |
 | `session_ended` | The session is no longer valid; sign in again. |
 
@@ -120,6 +150,7 @@ an `x-request-id` header to quote when reporting problems.
 | 403 | `not_invited` | RSVP to an event you aren't invited to. |
 | 404 | `not_found` | Missing, or not readable by you (never says which). |
 | 409 | `version_conflict` | Someone else changed it; reload and retry. |
+| 409 | `template_name_taken` | Another template in use has this name. |
 | 409 | `already_exists` | Generic uniqueness conflict. |
 | 409 | `email_taken` | A user with this email exists. |
 | 409 | `branch_code_taken` | A branch with this code exists. |
@@ -159,6 +190,7 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `invalid_current_password` | The current password is wrong. |
 | 422 | `invalid_email` | Not a valid email. |
 | 422 | `invalid_name` | A name is empty or too long. |
+| 422 | `invalid_bio` | A bio is longer than 500 characters. |
 | 422 | `reserved_group_name` | A school-wide group can't be called "All members": every branch already has one. |
 | 422 | `invalid_timezone` | Not an IANA timezone name. |
 | 422 | `invalid_branch_code` | Branch codes are 2 to 10 uppercase letters or digits. |
@@ -172,8 +204,11 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `event_required` | Events need event details. |
 | 422 | `invalid_event` | Only events have event details. |
 | 422 | `invalid_event_range` | An event must end after it starts. |
-| 422 | `invalid_completion_mode` | Only actions and reports have per-member work. |
-| 422 | `invalid_sla` | Only actions and reports have an SLA. |
+| 422 | `invalid_completion_mode` | Only actions have per-member work. |
+| 422 | `invalid_sla` | Only actions have an SLA. |
+| 422 | `invalid_template` | No such template, archived, of another type, or its rules don't fit its type. |
+| 422 | `invalid_tag` | Tags are 1 to 40 characters, at most 10 on an issue. |
+| 422 | `invalid_description` | A template's description is at most 500 characters. |
 | 422 | `invalid_reminders` | Up to 10 reminders, 1 minute to 4 weeks before. |
 | 422 | `invalid_assignee` | The assignee must be an active member of the branch. |
 | 422 | `assignee_required` | `assignee_id` is required. |
@@ -182,7 +217,7 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `invalid_work_item` | The work item isn't part of this issue. |
 | 422 | `invalid_comment` | Comments are 1 to 20,000 characters. |
 | 422 | `too_many_mentions` | At most 50 mentions. |
-| 422 | `not_a_report` | Reports go on report issues. |
+| 422 | `not_a_report` | Reports go on issues that need one (made from a template like Report). |
 | 422 | `invalid_report` | Reports are 1 to 100,000 characters. |
 | 422 | `invalid_parent` | The comment or report to attach to doesn't exist or is locked. |
 | 422 | `invalid_upload` | The multipart upload is malformed. |

@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use super::audit::{self, AuditEntry};
 use crate::{
-    authz::{authorize, Action, Actor, IssueFilter, IssueType},
+    authz::{authorize, Action, Actor, IssueFilter},
     error::{AppError, AppResult},
 };
 
@@ -32,9 +32,40 @@ pub const MAX_BODY_CHARS: usize = 32_000;
 pub struct ExportQuery {
     /// `None` = every branch (super admins only).
     pub branch_ids: Option<Vec<Uuid>>,
-    pub types: Vec<IssueType>,
+    pub types: Vec<Sheet>,
     pub from: Option<OffsetDateTime>,
     pub to: Option<OffsetDateTime>,
+}
+
+/// The sheets to export. `Report` is the written reports (on actions made
+/// from a template that needs one).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sheet {
+    Ticket,
+    Action,
+    Report,
+    Event,
+}
+
+impl Sheet {
+    pub fn from_code(code: &str) -> Option<Self> {
+        Some(match code {
+            "ticket" => Self::Ticket,
+            "action" => Self::Action,
+            "report" => Self::Report,
+            "event" => Self::Event,
+            _ => return None,
+        })
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Ticket => "ticket",
+            Self::Action => "action",
+            Self::Report => "report",
+            Self::Event => "event",
+        }
+    }
 }
 
 pub struct ExportFile {
@@ -63,16 +94,16 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         return Err(AppError::validation("invalid_query", "no branches to export"));
     }
     authorize(actor, Action::Export { branch_ids: &branch_ids })?;
-    let types: Vec<IssueType> = if q.types.is_empty() {
-        vec![IssueType::Ticket, IssueType::Action, IssueType::Report, IssueType::Event]
+    let types: Vec<Sheet> = if q.types.is_empty() {
+        vec![Sheet::Ticket, Sheet::Action, Sheet::Report, Sheet::Event]
     } else {
         q.types.clone()
     };
-    let want = |t: IssueType| types.contains(&t);
+    let want = |t: Sheet| types.contains(&t);
     let filter = IssueFilter::for_actor(actor).into_json();
     let fetch_limit = (MAX_ROWS + 1) as i64;
 
-    let tickets = if want(IssueType::Ticket) {
+    let tickets = if want(Sheet::Ticket) {
         sqlx::query!(
             r#"
             SELECT i.number, i.title, i.state::text AS "state!", i.created_at, i.closed_at,
@@ -113,7 +144,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         vec![]
     };
 
-    let actions = if want(IssueType::Action) {
+    let actions = if want(Sheet::Action) {
         sqlx::query!(
             r#"
             SELECT i.number, i.title, b.code AS branch, b.timezone, w.status AS "status!: String",
@@ -145,7 +176,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         vec![]
     };
 
-    let reports = if want(IssueType::Report) {
+    let reports = if want(Sheet::Report) {
         sqlx::query!(
             r#"
             SELECT i.number, ty.code AS "issue_type!", i.title, b.code AS "branch?", coalesce(b.timezone, 'UTC') AS "timezone!",
@@ -178,7 +209,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         vec![]
     };
 
-    let events = if want(IssueType::Event) {
+    let events = if want(Sheet::Event) {
         sqlx::query!(
             r#"
             SELECT i.number, i.title, e.starts_at, e.ends_at, e.location,
@@ -229,7 +260,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
     let header = Format::new().set_bold();
     let date = Format::new().set_num_format("yyyy-mm-dd hh:mm");
 
-    if want(IssueType::Ticket) {
+    if want(Sheet::Ticket) {
         let ws = sheet(
             &mut wb,
             "Tickets",
@@ -261,7 +292,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         }
         finish(ws, tickets.len(), 8).map_err(x)?;
     }
-    if want(IssueType::Action) {
+    if want(Sheet::Action) {
         let ws = sheet(
             &mut wb,
             "Actions",
@@ -297,7 +328,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         }
         finish(ws, actions.len(), 10).map_err(x)?;
     }
-    if want(IssueType::Report) {
+    if want(Sheet::Report) {
         let ws = sheet(
             &mut wb,
             "Reports",
@@ -327,7 +358,7 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
         }
         finish(ws, reports.len(), 7).map_err(x)?;
     }
-    if want(IssueType::Event) {
+    if want(Sheet::Event) {
         let ws = sheet(
             &mut wb,
             "Events",

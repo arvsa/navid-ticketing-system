@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, endOfDay, startOfDay } from "date-fns";
 import { ApiError, qs } from "@/api/client";
-import type { IssueType } from "@/api/types";
+import type { ExportSheet } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Button, Card, Chip, EmptyState, Field, PageHeader, Segmented, cx } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
@@ -38,7 +38,7 @@ export function ExportPage() {
   const superAdmin = isSuper(viewer);
   const allowed = options.filter((o) => superAdmin || isAdminOf(viewer, o.id) || hasGrant(viewer, o.id, "export.run"));
   const [chosen, setChosen] = useState<string[]>(() => (branchId && allowed.some((o) => o.id === branchId) ? [branchId] : superAdmin ? [] : allowed.slice(0, 1).map((o) => o.id)));
-  const [types, setTypes] = useState<IssueType[]>(["ticket", "action", "report", "event"]);
+  const [types, setTypes] = useState<ExportSheet[]>(["ticket", "action", "report", "event"]);
   const [range, setRange] = useState<Range>("this");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -139,10 +139,10 @@ export function ExportPage() {
             <fieldset>
               <legend className="mb-3 text-[17px] font-semibold">{t("Include")}</legend>
               <div className="flex flex-wrap gap-4">
-                {(["ticket", "action", "report", "event"] as IssueType[]).map((t) => (
-                  <label key={t} className="inline-flex items-center gap-2">
-                    <input type="checkbox" className="size-5" checked={types.includes(t)} onChange={() => setTypes(toggle(types, t))} />
-                    {typePlural[t]}
+                {(["ticket", "action", "report", "event"] as ExportSheet[]).map((s) => (
+                  <label key={s} className="inline-flex items-center gap-2">
+                    <input type="checkbox" className="size-5" checked={types.includes(s)} onChange={() => setTypes(toggle(types, s))} />
+                    {s === "report" ? t("Written reports") : typePlural[s]}
                   </label>
                 ))}
               </div>

@@ -1,5 +1,6 @@
 // Click a person's name or avatar to see who they are: email and branches.
 import type { ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import * as Popover from "@radix-ui/react-popover";
 import { Copy, Mail, Shield } from "lucide-react";
 import { toast } from "sonner";
@@ -74,6 +75,9 @@ export function PersonPopover({ id, children, className }: { id?: string | null;
               ))}
             </ul>
           )}
+          <Link to="/directory" search={{ person: p.id }} className="mt-3 block border-t border-border pt-3 text-[14px] font-semibold text-primary hover:underline">
+            {t("View profile")}
+          </Link>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

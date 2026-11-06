@@ -26,7 +26,7 @@ const work = (patch: Partial<WorkItem>): WorkItem => ({
 });
 const issue = (patch: Partial<IssueDetail>): IssueDetail => ({
   id: "i", key: "ISS-1", number: 1, branch_id: "br", type: "action", title: "T", priority: "medium",
-  completion_mode: "per_member", state: "open",
+  completion_mode: "per_member", state: "open", tags: [], requires_report: false,
   created_by: "boss", version: 1, created_at: "", updated_at: "", targets: [], work_items: [], attachments: [],
   watching: false, muted: false, ...patch,
 });
@@ -55,7 +55,7 @@ describe("primaryAction", () => {
   it("my action in progress is sent for approval", () =>
     expect(primaryAction(issue({ work_items: [work({ status: "in_progress" })] }), v).kind).toBe("submit"));
   it("my report in progress continues the report", () =>
-    expect(primaryAction(issue({ type: "report", work_items: [work({ status: "in_progress" })] }), v).kind).toBe("write-report"));
+    expect(primaryAction(issue({ type: "action", requires_report: true, tags: ["report"], work_items: [work({ status: "in_progress" })] }), v).kind).toBe("write-report"));
   it("blocked work continues", () => expect(primaryAction(issue({ work_items: [work({ status: "blocked" })] }), v).kind).toBe("continue"));
   it("approvers review waiting work", () => {
     const admin = me();

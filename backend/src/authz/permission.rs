@@ -23,12 +23,12 @@ impl Scope {
     }
 }
 
-/// The four issue types (`issue_type.code`).
+/// The three issue types (`issue_type.code`). Reports are actions made
+/// from the Report template.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueType {
     Ticket,
-    Report,
     Event,
     Action,
 }
@@ -37,7 +37,6 @@ impl IssueType {
     pub fn code(self) -> &'static str {
         match self {
             Self::Ticket => "ticket",
-            Self::Report => "report",
             Self::Event => "event",
             Self::Action => "action",
         }
@@ -46,7 +45,6 @@ impl IssueType {
     pub fn from_code(code: &str) -> Option<Self> {
         Some(match code {
             "ticket" => Self::Ticket,
-            "report" => Self::Report,
             "event" => Self::Event,
             "action" => Self::Action,
             _ => return None,

@@ -11,7 +11,7 @@ import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
-import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
+import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
@@ -782,9 +782,25 @@ function MembersTab({ branchId, branchName, onOpen }: { branchId: string; branch
           <Segmented size="sm" label={t("Who")} value={left ? "left" : "current"} onChange={(v) => setLeft(v === "left")} options={[{ value: "current", label: t("Current") }, { value: "left", label: t("Left the branch") }]} />
         )}
         {manage && (
-          <div className="ms-auto flex gap-2">
-            <IconButton label={t("Import from Excel")} icon={<FileSpreadsheet className="size-4" />} onClick={() => setImporting(true)} />
-            <IconButton variant="primary" label={t("Add member")} hintAlign="end" icon={<UserPlus className="size-4" />} onClick={() => setAdding(true)} />
+          <div className="ms-auto">
+            {/* One way in: add someone by hand, or many from an Excel file. */}
+            <Menu
+              trigger={
+                <Button variant="primary" size="lg" icon={<UserPlus className="size-6" />}>
+                  {t("Add people")}
+                  <ChevronDown className="size-4 opacity-80" aria-hidden />
+                </Button>
+              }
+            >
+              <MenuItem onSelect={() => setAdding(true)}>
+                <UserPlus className="size-5" />
+                {t("Add one person")}
+              </MenuItem>
+              <MenuItem onSelect={() => setImporting(true)}>
+                <FileSpreadsheet className="size-5" />
+                {t("Import from Excel")}
+              </MenuItem>
+            </Menu>
           </div>
         )}
       </div>

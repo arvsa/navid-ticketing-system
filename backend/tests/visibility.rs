@@ -114,7 +114,7 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     let b = Some(org.branch_b);
     let creators = [org.admin_a, org.plain_a, org.boss_like_a, org.manager_a];
     for by in creators {
-        for ty in ["ticket", "action", "report", "event"] {
+        for ty in ["ticket", "action", "event"] {
             issue(db, NewIssue { branch: a, ty, by }).await;
         }
     }

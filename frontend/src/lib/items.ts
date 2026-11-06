@@ -81,7 +81,7 @@ export function primaryAction(issue: IssueDetail, v: Viewer): PrimaryAction {
   const claimable = issue.work_items.find((w) => canClaim(v, issue, w));
   if (claimable) return { kind: "claim", work: claimable };
   if (mine?.status === "blocked") return { kind: "continue", work: mine };
-  if (mine?.status === "in_progress") return issue.type === "report" ? { kind: "write-report", work: mine } : { kind: "submit", work: mine };
+  if (mine?.status === "in_progress") return issue.requires_report ? { kind: "write-report", work: mine } : { kind: "submit", work: mine };
   const waiting = issue.work_items.filter((w) => canApprove(v, issue, w));
   if (waiting.length) return { kind: "review", count: waiting.length, first: waiting[0] };
   // School-wide work waiting for someone in a branch I run.

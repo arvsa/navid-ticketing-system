@@ -136,7 +136,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
       </ol>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div>{issue.type === "report" ? <ReportEditor issue={issue} work={work} /> : <ActionCard issue={issue} work={work} />}</div>
+        <div>{issue.requires_report ? <ReportEditor issue={issue} work={work} /> : <ActionCard issue={issue} work={work} />}</div>
         <div className="space-y-6">
           <Card className="p-6">
             <h2 className="text-[18px] font-semibold">{t("What was asked")}</h2>
@@ -149,7 +149,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
             )}
           </Card>
           <Card>
-            <h2 className="border-b border-border px-6 py-5 text-[18px] font-semibold">{issue.type === "report" ? t("About your report") : t("About your work")}</h2>
+            <h2 className="border-b border-border px-6 py-5 text-[18px] font-semibold">{issue.requires_report ? t("About your report") : t("About your work")}</h2>
             <div className="px-6 py-5">
               <CommentThread issue={issue} workItemId={work.id} compact emptyText={t("Questions about this? Ask here.")} />
             </div>

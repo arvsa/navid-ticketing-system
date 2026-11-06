@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.default_sla_hours FROM issue i JOIN issue_template t ON t.id = i.template_id WHERE i.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "default_sla_hours",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "default_sla_hours"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "6f57cb60b07ccaaeac9d0f295486af3a4e9ad462d7edddda200f790198333836"
+}

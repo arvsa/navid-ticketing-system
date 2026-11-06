@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT g.id, g.branch_id AS \"branch_id!\", g.name, g.description,\n               ARRAY(SELECT gm.user_id FROM group_member gm\n                     JOIN app_user u ON u.id = gm.user_id AND u.is_active\n                     JOIN branch_membership m ON m.user_id = gm.user_id AND m.branch_id = g.branch_id\n                                             AND m.left_at IS NULL\n                     WHERE gm.group_id = g.id\n                     ORDER BY u.first_name, u.last_name, u.id) AS \"member_ids!\"\n        FROM user_group g\n        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL\n        ORDER BY lower(g.name), g.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "member_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "ea300617616d00c7d9a66603e8620486a9e9e309d9c13a6da36829ef3ccff496"
+}

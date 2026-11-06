@@ -27,7 +27,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const TYPES: [&str; 4] = ["ticket", "report", "event", "action"];
+const TYPES: [&str; 3] = ["ticket", "event", "action"];
 
 /// Grants for the single-grant actors in branch A: (name, permission, type, scope).
 /// Each also gets `issue.read @branch` unless the row is about reading, so a
@@ -50,7 +50,7 @@ const GRANTEES: &[(&str, &str, Option<&str>, &str)] = &[
     ("g_assign_targeted", "work_item.assign", None, "targeted"),
     ("g_assign_branch", "work_item.assign", None, "branch"),
     ("g_approve", "work_item.approve", None, "branch"),
-    ("g_approve_report", "work_item.approve", Some("report"), "branch"),
+    ("g_approve_ticket", "work_item.approve", Some("ticket"), "branch"),
     ("g_comment_targeted", "comment.create", None, "targeted"),
     ("g_comment_branch", "comment.create", None, "branch"),
     ("g_internal", "comment.internal", None, "branch"),
@@ -222,7 +222,7 @@ async fn seed(db: &PgPool) -> Fixture {
         let id = insert_issue(db, Some(a), "action", u(&users, "plain_a")).await;
         items.insert(key, target_with_item(db, id, a, Some(u(&users, who)), None).await);
     }
-    let report = insert_issue(db, Some(a), "report", u(&users, "admin_a")).await;
+    let report = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_report", target_with_item(db, report, a, Some(u(&users, "plain_a")), None).await);
     // A ticket addressed to the targeted-comment grantee.
     let id = insert_issue(db, Some(a), "ticket", u(&users, "admin_a")).await;
@@ -354,7 +354,7 @@ async fn matrix(pool: PgPool) {
         ("g_read_branch", "read", "action_admin_a", Allow),
         ("g_read_branch", "read", "ticket_plain_b", NotFound),
         ("g_read_ticket", "read", "ticket_admin_a", Allow),
-        ("g_read_ticket", "read", "report_admin_a", NotFound),
+        ("g_read_ticket", "read", "event_admin_a", NotFound),
         ("g_read_own", "read", "own_g_read_own", Allow),
         ("g_read_own", "read", "ticket_plain_a", NotFound),
         ("g_read_targeted", "read", "ticket_plain_a", NotFound),
@@ -365,9 +365,9 @@ async fn matrix(pool: PgPool) {
         ("g_create_action", "create:ticket", "A", Forbidden),
         ("g_create_action", "create:action", "B", NotFound),
         ("plain_a", "create:ticket", "A", Allow),
-        ("plain_a", "create:report", "A", Allow),
         ("plain_a", "create:event", "A", Allow),
-        ("plain_a", "create:action", "A", Forbidden),
+        // Reports are actions: everyone makes them, but can't send them (below).
+        ("plain_a", "create:action", "A", Allow),
         ("deputy_a", "create:action", "A", Allow),
         // ---- issue.edit: own, branch, per type ----
         ("g_edit_own", "edit", "own_g_edit_own", Allow),
@@ -375,9 +375,9 @@ async fn matrix(pool: PgPool) {
         ("g_edit_branch", "edit", "action_plain_a", Allow),
         ("g_edit_ticket", "edit", "ticket_plain_a", Allow),
         ("g_edit_ticket", "edit", "event_plain_a", Forbidden),
-        ("plain_a", "edit", "report_plain_a", Allow),
-        ("plain_a", "edit", "report_deputy_a", Forbidden),
-        // ---- issue.close: own, branch (+ creators always close tickets/reports/events) ----
+        ("plain_a", "edit", "action_plain_a", Allow),
+        ("plain_a", "edit", "action_deputy_a", Forbidden),
+        // ---- issue.close: own, branch (+ creators always close tickets/events) ----
         ("g_close_own", "close", "own_g_close_own", Allow),
         ("g_close_own", "close", "action_plain_a", Forbidden),
         ("g_close_branch", "close", "action_plain_a", Allow),
@@ -387,9 +387,9 @@ async fn matrix(pool: PgPool) {
         // ---- issue.target: own, branch ----
         ("g_target_own", "target", "own_g_target_own", Allow),
         ("g_target_own", "target", "ticket_plain_a", Forbidden),
-        ("g_target_branch", "target", "report_plain_a", Allow),
+        ("g_target_branch", "target", "action_plain_a", Allow),
         ("plain_a", "target", "ticket_plain_a", Allow),
-        ("plain_a", "target", "report_plain_a", Forbidden),
+        ("plain_a", "target", "action_plain_a", Forbidden),
         // ---- work_item.update: targeted (assignee / member of unassigned target), branch ----
         ("g_update_targeted", "update", "wi_g_update_targeted", Allow),
         ("g_update_targeted", "update", "wi_plain_a", Forbidden),
@@ -405,8 +405,8 @@ async fn matrix(pool: PgPool) {
         ("g_read_branch", "claim", "wi_shared", Forbidden),
         // ---- work_item.approve: branch, per type ----
         ("g_approve", "approve", "wi_deputy_a", Allow),
-        ("g_approve_report", "approve", "wi_report", Allow),
-        ("g_approve_report", "approve", "wi_deputy_a", Forbidden),
+        ("g_approve", "approve", "wi_report", Allow),
+        ("g_approve_ticket", "approve", "wi_report", Forbidden),
         ("plain_a", "approve", "wi_deputy_a", Allow), // the item is theirs: senders approve
         ("plain_a", "approve", "wi_report", Forbidden),
         // ---- comment.create: targeted (created or targeted), branch ----
@@ -488,7 +488,7 @@ async fn matrix(pool: PgPool) {
         ("admin_a", "edit", "ticket_plain_a", Allow),
         ("admin_a", "read", "ticket_plain_b", NotFound),
         // The multi-branch member: admin in A, plain in B; nothing carries over.
-        ("multi", "edit", "report_deputy_a", Allow),
+        ("multi", "edit", "action_deputy_a", Allow),
         ("multi", "manage_groups", "A", Allow),
         ("multi", "manage_groups", "B", Forbidden),
         ("multi", "read", "ticket_plain_b", Allow),

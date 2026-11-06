@@ -24,6 +24,10 @@
   --color-brand-teal: var(--brand-teal);
   --color-brand-cream: var(--brand-cream);
   --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-on-soft: var(--accent-on-soft);
+  --color-accent-wing: var(--accent-wing);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-success-solid: var(--success-solid);

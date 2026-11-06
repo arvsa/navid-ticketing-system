@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::json::ApiQuery;
 use crate::{
-    authz::{Actor, IssueType},
+    authz::Actor,
     domain::{
         dashboard::{self, Dashboard},
         exports::{self, ExportQuery},
@@ -74,7 +74,7 @@ fn parse_time(raw: Option<&str>) -> AppResult<Option<OffsetDateTime>> {
 async fn export(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<ExportParams>) -> AppResult<Response> {
     let query = ExportQuery {
         branch_ids: parse_list(q.branch_ids.as_deref(), |p| p.parse().ok(), "branch_ids are UUIDs")?,
-        types: parse_list(q.types.as_deref(), IssueType::from_code, "types are ticket, report, event, action")?
+        types: parse_list(q.types.as_deref(), exports::Sheet::from_code, "types are ticket, report, event, action")?
             .unwrap_or_default(),
         from: parse_time(q.from.as_deref())?,
         to: parse_time(q.to.as_deref())?,

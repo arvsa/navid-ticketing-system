@@ -25,6 +25,7 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
   const [title, setTitle] = useState(issue.title);
   const [description, setDescription] = useState(issue.description ?? "");
   const [priority, setPriority] = useState<Priority>(issue.priority);
+  const [tags, setTags] = useState(issue.tags.join(t(", ")));
   const [starts, setStarts] = useState(issue.event ? toLocalInput(issue.event.starts_at, zone) : "");
   const [ends, setEnds] = useState(issue.event ? toLocalInput(issue.event.ends_at, zone) : "");
   const [location, setLocation] = useState(issue.event?.location ?? "");
@@ -32,6 +33,8 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
   const save = useMutation({
     mutationFn: (version: number) => {
       const body: IssuePatch = { version, title: title.trim(), description: description || null, priority };
+      const nextTags = tags.split(/[,،]/).map((x) => x.trim()).filter(Boolean);
+      if (nextTags.join(",") !== issue.tags.join(",")) body.tags = nextTags;
       if (issue.event)
         body.event = {
           starts_at: fromLocalInput(starts, zone),
@@ -113,6 +116,9 @@ export function EditDialog({ issue, open, onOpenChange }: { issue: IssueDetail; 
               ))}
             </select>
           )}
+        </Field>
+        <Field label={t("Tags")} optional hint={t("Separate tags with commas")}>
+          {(p) => <input {...p} value={tags} onChange={(e) => setTags(e.target.value)} className={inputClass} />}
         </Field>
         {issue.event && (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -203,7 +209,7 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
         }
         branchId={branchId ?? null}
       />
-      {(issue.type === "action" || issue.type === "report") && (
+      {issue.type === "action" && (
         <p className="mt-3 text-[14px] text-text-2">{t("New people get their own part of the work, due at the same time.")}</p>
       )}
     </Dialog>

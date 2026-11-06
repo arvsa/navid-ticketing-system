@@ -28,7 +28,12 @@ async fn unknown_route_uses_the_error_shape(pool: PgPool) {
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn init_migration_seeds_catalogs(pool: PgPool) {
     let types = sqlx::query_scalar!("SELECT code FROM issue_type ORDER BY code").fetch_all(&pool).await.unwrap();
-    assert_eq!(types, ["action", "event", "report", "ticket"]);
+    assert_eq!(types, ["action", "event", "ticket"]);
+    // Reports are actions made from the built-in Report template.
+    let report = sqlx::query!("SELECT requires_report, tag FROM issue_template").fetch_all(&pool).await.unwrap();
+    assert_eq!(report.len(), 1);
+    assert!(report[0].requires_report);
+    assert_eq!(report[0].tag.as_deref(), Some("report"));
 
     let permissions = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM permission"#).fetch_one(&pool).await.unwrap();
     assert_eq!(permissions, 16);

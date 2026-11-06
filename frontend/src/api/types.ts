@@ -38,6 +38,8 @@ export type Member = S["Member"];
 /** Someone in some branch, to send a school-wide item to. */
 export type BranchPerson = S["Recipient"];
 export type BranchGroup = S["RecipientGroup"];
+export type PublicProfile = S["PublicProfile"];
+export type MyProfilePatch = S["MyProfilePatch"];
 export type AddedMember = S["AddedMember"];
 export type ImportOutcome = S["ImportOutcome"];
 export type ImportRow = Omit<S["ImportRow"], "error"> & { error?: { code: string; message: string } | null };
@@ -90,8 +92,17 @@ export type Dashboard = S["Dashboard"];
 export type BranchNumbers = S["BranchNumbers"];
 export type DeleteOutcome = S["DeleteOutcome"];
 export type Settings = S["Settings"];
+export type AvatarRef = S["AvatarRef"];
+export type DirectoryBranch = S["DirectoryBranch"];
+export type DirectoryGroup = S["DirectoryGroup"];
+export type DirectoryPerson = S["DirectoryPerson"];
+export type Template = Omit<S["Template"], "type"> & { type: IssueType };
+export type NewTemplate = Omit<S["NewTemplate"], "type"> & { type: IssueType };
+export type TemplatePatch = S["TemplatePatch"];
+/** Export sheets: the issue types, plus the written reports. */
+export type ExportSheet = IssueType | "report";
 
-export const ISSUE_TYPES: IssueType[] = ["ticket", "action", "report", "event"];
+export const ISSUE_TYPES: IssueType[] = ["ticket", "action", "event"];
 export const ISSUE_STATES: IssueState[] = ["open", "closed", "cancelled"];
 export const WORK_STATUSES: WorkStatus[] = [
   "open",

@@ -12,6 +12,7 @@ import { keys } from "./keys";
 import type {
   Branch,
   BranchGroup,
+  PublicProfile,
   BranchPerson,
   CalendarEntry,
   CatalogEntry,
@@ -31,7 +32,10 @@ import type {
   Report,
   RsvpPage,
   RsvpResponse,
+  AvatarRef,
+  DirectoryBranch,
   Settings,
+  Template,
   Transition,
   WorkItem,
   WorkStatus,
@@ -42,6 +46,34 @@ import type {
 /** App settings (the school's name). Readable before signing in. */
 export function useSettings() {
   return useQuery({ queryKey: keys.settings, queryFn: () => api.get<Settings>("/settings"), staleTime: 10 * 60_000 });
+}
+
+// ---------- profiles ----------
+
+/** user id → picture version, for everyone with a profile picture. */
+export function useAvatars() {
+  return useQuery({
+    queryKey: keys.avatars,
+    queryFn: async () => new Map((await api.get<AvatarRef[]>("/avatars")).map((a) => [a.user_id, a.version])),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+/** Every branch with its departments and people. */
+export function useDirectory() {
+  return useQuery({ queryKey: keys.directory, queryFn: () => api.get<DirectoryBranch[]>("/directory"), staleTime: 5 * 60_000 });
+}
+
+// ---------- templates ----------
+
+/** Issue templates, in their order. Archived ones for super admins asking. */
+export function useTemplates(includeArchived = false) {
+  return useQuery({
+    queryKey: keys.templates(includeArchived),
+    queryFn: () => api.get<Template[]>("/templates", includeArchived ? { include_archived: true } : undefined),
+    staleTime: 5 * 60_000,
+  });
 }
 
 // ---------- branches, people, groups ----------
@@ -130,6 +162,7 @@ export type IssueFilters = {
   state?: IssueState;
   assignee?: "me";
   q?: string;
+  tag?: string;
 };
 
 export function useIssueList(filters: IssueFilters, limit = 25) {
@@ -149,6 +182,17 @@ export function useRecipients(enabled: boolean) {
     queryFn: () => api.get<BranchPerson[]>("/recipients"),
     enabled,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** Someone's bio and cover (people in a branch with them, and super admins). */
+export function useUserProfile(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: keys.userProfile(userId ?? ""),
+    queryFn: () => api.get<PublicProfile>(`/users/${userId}/profile`),
+    enabled: !!userId,
+    retry: false,
+    staleTime: 60_000,
   });
 }
 

@@ -75,15 +75,18 @@ export type ItemsSearch = {
   type?: IssueType;
   state?: IssueState;
   q?: string;
+  tag?: string;
 };
 const items = createRoute({
   getParentRoute: () => shell,
   path: "/items",
   validateSearch: (s: Record<string, unknown>): ItemsSearch => ({
     view: s.view === "mine" ? "mine" : undefined,
-    type: ["ticket", "action", "report", "event"].includes(s.type as string) ? (s.type as IssueType) : undefined,
+    type: ["ticket", "action", "event"].includes(s.type as string) ? (s.type as IssueType) : undefined,
     state: ["open", "closed", "cancelled"].includes(s.state as string) ? (s.state as IssueState) : undefined,
     q: typeof s.q === "string" && s.q ? s.q : undefined,
+    // Old links to reports: reports are actions with the report tag now.
+    tag: typeof s.tag === "string" && s.tag ? s.tag : s.type === "report" ? "report" : undefined,
   }),
   component: lazyRouteComponent(() => import("@/features/items/ItemsPage"), "ItemsPage"),
 });
@@ -144,6 +147,21 @@ const branches = createRoute({
   path: "/branches",
   component: lazyRouteComponent(() => import("@/features/admin/BranchesPage"), "BranchesPage"),
 });
+export type DirectorySearch = { branch?: string; person?: string };
+const directory = createRoute({
+  getParentRoute: () => shell,
+  path: "/directory",
+  validateSearch: (s: Record<string, unknown>): DirectorySearch => ({
+    branch: typeof s.branch === "string" ? s.branch : undefined,
+    person: typeof s.person === "string" ? s.person : undefined,
+  }),
+  component: lazyRouteComponent(() => import("@/features/directory/DirectoryPage"), "DirectoryPage"),
+});
+const templatesPage = createRoute({
+  getParentRoute: () => shell,
+  path: "/templates",
+  component: lazyRouteComponent(() => import("@/features/admin/TemplatesPage"), "TemplatesPage"),
+});
 const exportPage = createRoute({
   getParentRoute: () => shell,
   path: "/export",
@@ -160,7 +178,8 @@ const newItem = createRoute({
   getParentRoute: () => shell,
   path: "/new",
   validateSearch: (s: Record<string, unknown>): NewItemOptions => ({
-    type: ["ticket", "action", "report", "event"].includes(s.type as string) ? (s.type as IssueType) : undefined,
+    type: ["ticket", "action", "event"].includes(s.type as string) ? (s.type as IssueType) : s.type === "report" ? "action" : undefined,
+    templateTag: s.type === "report" ? "report" : typeof s.template === "string" ? s.template : undefined,
     date: typeof s.date === "string" ? s.date : undefined,
     group: typeof s.group === "string" ? s.group : undefined,
   }),
@@ -180,7 +199,7 @@ const tree = root.addChildren([
   signIn,
   changePassword,
   authed.addChildren([
-    shell.addChildren([home, myWork, items, item, myAssignment, approvals, calendar, inbox, people, branches, exportPage, profile, newItem]),
+    shell.addChildren([home, myWork, items, item, myAssignment, approvals, calendar, inbox, people, directory, branches, templatesPage, exportPage, profile, newItem]),
   ]),
 ]);
 

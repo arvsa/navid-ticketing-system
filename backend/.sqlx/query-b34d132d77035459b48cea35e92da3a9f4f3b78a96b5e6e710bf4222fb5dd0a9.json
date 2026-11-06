@@ -1,0 +1,172 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id, t.name, t.description, ty.code AS issue_type, t.tag, t.requires_report, t.default_sla_hours,\n               t.fields, t.position, t.archived_at, t.version, t.created_at, t.updated_at\n        FROM issue_template t JOIN issue_type ty ON ty.id = t.type_id\n        WHERE $1 OR t.archived_at IS NULL\n        ORDER BY t.archived_at IS NOT NULL, t.position, lower(t.name), t.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "issue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "requires_report",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "requires_report"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "default_sla_hours",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "default_sla_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "fields",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "fields"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "archived_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "archived_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "version",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b34d132d77035459b48cea35e92da3a9f4f3b78a96b5e6e710bf4222fb5dd0a9"
+}

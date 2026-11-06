@@ -12,6 +12,7 @@ use super::{
     events::{self, EventView},
     notifications::{self, Kind, Notice},
     targets::{self, IssueCtx, Target, TargetInput},
+    templates,
     types::{CompletionMode, IssueState, Priority, TargetKind},
     work_items::{self, WorkItem},
 };
@@ -39,6 +40,8 @@ pub struct IssueSummary {
     pub title: String,
     pub priority: Priority,
     pub state: IssueState,
+    pub template_id: Option<Uuid>,
+    pub tags: Vec<String>,
     pub created_by: Uuid,
     pub work_item_count: i64,
     pub done_count: i64,
@@ -64,6 +67,11 @@ pub struct IssueDetail {
     pub priority: Priority,
     pub completion_mode: CompletionMode,
     pub state: IssueState,
+    /// The template it was made from, if any.
+    pub template_id: Option<Uuid>,
+    pub tags: Vec<String>,
+    /// Each piece of work needs a submitted written report (fixed at creation).
+    pub requires_report: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub closed_at: Option<OffsetDateTime>,
     pub closed_by: Option<Uuid>,
@@ -125,7 +133,7 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.description,
                i.priority AS "priority: Priority", i.completion_mode AS "completion_mode: CompletionMode",
-               i.state AS "state: IssueState", i.closed_at, i.closed_by,
+               i.state AS "state: IssueState", i.template_id, i.tags, i.requires_report, i.closed_at, i.closed_by,
                i.created_by, i.version, i.created_at, i.updated_at,
                EXISTS (SELECT 1 FROM issue_watcher w WHERE w.issue_id = i.id AND w.user_id = $2) AS "watching!",
                EXISTS (SELECT 1 FROM issue_mute m WHERE m.issue_id = i.id AND m.user_id = $2) AS "muted!",
@@ -162,6 +170,9 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         priority: r.priority,
         completion_mode: r.completion_mode,
         state: r.state,
+        template_id: r.template_id,
+        tags: r.tags,
+        requires_report: r.requires_report,
         closed_at: r.closed_at,
         closed_by: r.closed_by,
         created_by: r.created_by,
@@ -188,6 +199,10 @@ pub struct IssueQuery {
     pub assignee: Option<String>,
     /// Case-insensitive substring of the title.
     pub q: Option<String>,
+    /// Only issues with this tag.
+    pub tag: Option<String>,
+    /// Only issues made from this template.
+    pub template_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -209,12 +224,13 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         IssueType::from_code(t).ok_or_else(|| AppError::validation("invalid_query", "unknown issue type"))?;
     }
     let pattern = query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()).map(like_pattern);
+    let tag = query.tag.as_deref().map(templates::normalize_tag).transpose()?.flatten();
     let filter = IssueFilter::for_actor(actor).into_json();
 
     let rows = sqlx::query!(
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.priority AS "priority: Priority",
-               i.state AS "state: IssueState", i.created_by, i.created_at,
+               i.state AS "state: IssueState", i.template_id, i.tags, i.created_by, i.created_at,
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id) AS "work_item_count!",
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id
                   AND w.status IN ('approved', 'cancelled')) AS "done_count!",
@@ -250,6 +266,8 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
           AND (NOT $6 OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id AND w.assignee_id = $2))
           AND ($7::text IS NULL OR i.title ILIKE $7)
           AND ($8::timestamptz IS NULL OR (i.created_at, i.id) < ($8, $9))
+          AND ($11::text IS NULL OR i.tags @> ARRAY[$11])
+          AND ($12::uuid IS NULL OR i.template_id = $12)
         ORDER BY i.created_at DESC, i.id DESC
         LIMIT $10
         "#,
@@ -263,6 +281,8 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         after.as_ref().map(|c| c.created_at),
         after.as_ref().map(|c| c.id),
         limit + 1,
+        tag,
+        query.template_id,
     )
     .fetch_all(db)
     .await?;
@@ -278,6 +298,8 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
             title: r.title,
             priority: r.priority,
             state: r.state,
+            template_id: r.template_id,
+            tags: r.tags,
             created_by: r.created_by,
             work_item_count: r.work_item_count,
             done_count: r.done_count,
@@ -315,11 +337,17 @@ pub struct NewIssue {
     pub completion_mode: CompletionMode,
     #[serde(default)]
     pub targets: Vec<TargetInput>,
-    /// Actions and Reports only; defaults to now + the type's default SLA.
+    /// Actions only; defaults to now + the template's or the type's default SLA.
     #[serde(default, with = "time::serde::rfc3339::option")]
     pub sla_due_at: Option<OffsetDateTime>,
     /// Required for Events, rejected otherwise.
     pub event: Option<EventInput>,
+    /// Make it from this template: it must be of the same type. Its tag is
+    /// added and its rules (a written report per piece of work) apply.
+    pub template_id: Option<Uuid>,
+    /// Free tags, on top of the template's.
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -336,16 +364,17 @@ fn default_priority() -> Priority {
 
 pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<IssueDetail> {
     let issue_type = IssueType::from_code(&input.issue_type)
-        .ok_or_else(|| AppError::validation("invalid_issue_type", "type must be ticket, report, event or action"))?;
+        .ok_or_else(|| AppError::validation("invalid_issue_type", "type must be ticket, action or event"))?;
     let title = validate_title(&input.title)?;
     let description = clean_text(input.description);
-    let has_work = matches!(issue_type, IssueType::Action | IssueType::Report);
+    let has_work = issue_type == IssueType::Action;
     if !has_work && input.completion_mode == CompletionMode::PerMember {
-        return Err(AppError::validation("invalid_completion_mode", "only actions and reports have per-member work"));
+        return Err(AppError::validation("invalid_completion_mode", "only actions have per-member work"));
     }
     if !has_work && input.sla_due_at.is_some() {
-        return Err(AppError::validation("invalid_sla", "only actions and reports have an SLA"));
+        return Err(AppError::validation("invalid_sla", "only actions have an SLA"));
     }
+    let free_tags = templates::normalize_tags(input.tags.iter().map(String::as_str))?;
     match (issue_type, &input.event) {
         (IssueType::Event, None) => return Err(AppError::validation("event_required", "events need event details")),
         (IssueType::Event, Some(e)) => validate_event(&e.details)?,
@@ -387,12 +416,26 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
     }
 
     let mut tx = db.begin().await?;
-    let sla_due_at = if has_work { Some(sla_or_default(&mut tx, issue_type, input.sla_due_at).await?) } else { None };
+    let template = match input.template_id {
+        Some(id) => Some(templates::for_new_issue(&mut tx, id, issue_type).await?),
+        None => None,
+    };
+    let tags = templates::normalize_tags(
+        template.as_ref().and_then(|t| t.tag.as_deref()).into_iter().chain(free_tags.iter().map(String::as_str)),
+    )?;
+    let requires_report = template.as_ref().is_some_and(|t| t.requires_report);
+    let sla_due_at = if has_work {
+        let hours = template.as_ref().and_then(|t| t.default_sla_hours);
+        Some(sla_or_default(&mut tx, issue_type, hours, input.sla_due_at).await?)
+    } else {
+        None
+    };
 
     let issue_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO issue (branch_id, type_id, title, description, priority, completion_mode, created_by)
-        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7)
+        INSERT INTO issue (branch_id, type_id, title, description, priority, completion_mode, created_by,
+                           template_id, tags, requires_report)
+        VALUES ($1, (SELECT id FROM issue_type WHERE code = $2), $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id
         "#,
         input.branch_id,
@@ -402,6 +445,9 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         input.priority as Priority,
         input.completion_mode as CompletionMode,
         actor.user_id,
+        input.template_id,
+        &tags,
+        requires_report,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -431,6 +477,7 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
             new_value: Some(json!({
                 "type": issue_type.code(), "title": title, "description": description, "priority": input.priority,
                 "completion_mode": input.completion_mode, "event": input.event,
+                "template_id": input.template_id, "tags": tags,
             })),
         },
     )
@@ -476,18 +523,23 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
     detail(db, actor, issue_id).await
 }
 
+/// The given due time, else the template's default, else the type's.
 async fn sla_or_default(
     tx: &mut Tx,
     issue_type: IssueType,
+    template_hours: Option<i32>,
     given: Option<OffsetDateTime>,
 ) -> AppResult<OffsetDateTime> {
     if let Some(at) = given {
         return Ok(at);
     }
-    let hours = sqlx::query_scalar!("SELECT default_sla_hours FROM issue_type WHERE code = $1", issue_type.code())
-        .fetch_one(&mut **tx)
-        .await?
-        .unwrap_or(72);
+    let hours = match template_hours {
+        Some(h) => h,
+        None => sqlx::query_scalar!("SELECT default_sla_hours FROM issue_type WHERE code = $1", issue_type.code())
+            .fetch_one(&mut **tx)
+            .await?
+            .unwrap_or(72),
+    };
     Ok(OffsetDateTime::now_utc() + Duration::hours(hours.into()))
 }
 
@@ -504,6 +556,8 @@ pub struct IssuePatch {
     pub description: Option<Option<String>>,
     pub priority: Option<Priority>,
     pub event: Option<EventPatch>,
+    /// Replaces the tags.
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
@@ -521,8 +575,11 @@ pub struct EventPatch {
 
 pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatch) -> AppResult<IssueDetail> {
     let facts = readable(db, actor, issue_id).await?;
-    let edits_content =
-        patch.title.is_some() || patch.description.is_some() || patch.priority.is_some() || patch.event.is_some();
+    let edits_content = patch.title.is_some()
+        || patch.description.is_some()
+        || patch.priority.is_some()
+        || patch.event.is_some()
+        || patch.tags.is_some();
     if edits_content {
         authorize(actor, Action::EditIssue { issue: &facts })?;
     }
@@ -530,6 +587,7 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
         return Err(AppError::validation("invalid_event", "only events have event details"));
     }
     let title = patch.title.as_deref().map(validate_title).transpose()?;
+    let tags = patch.tags.as_ref().map(|t| templates::normalize_tags(t.iter().map(String::as_str))).transpose()?;
     let reminders =
         patch.event.as_ref().and_then(|e| e.reminders.as_deref()).map(events::validate_reminders).transpose()?;
 
@@ -542,15 +600,17 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
         None => old.description.clone(),
     };
     let new_priority = patch.priority.unwrap_or(old.priority);
+    let new_tags = tags.unwrap_or_else(|| old.tags.clone());
 
     sqlx::query!(
-        r#"UPDATE issue SET title = $3, description = $4, priority = $5, version = version + 1
+        r#"UPDATE issue SET title = $3, description = $4, priority = $5, tags = $6, version = version + 1
            WHERE id = $1 AND version = $2"#,
         issue_id,
         patch.version,
         new_title,
         new_description,
         new_priority as Priority,
+        &new_tags,
     )
     .execute(&mut *tx)
     .await?;
@@ -566,6 +626,7 @@ pub async fn update(db: &PgPool, actor: &Actor, issue_id: Uuid, patch: IssuePatc
     diff("title", json!(old.title), json!(new_title));
     diff("description", json!(old.description), json!(new_description));
     diff("priority", json!(old.priority), json!(new_priority));
+    diff("tags", json!(old.tags), json!(new_tags));
 
     if let Some(ev) = patch.event {
         let cur = sqlx::query_as!(
@@ -693,12 +754,13 @@ struct OpenIssue {
     title: String,
     description: Option<String>,
     priority: Priority,
+    tags: Vec<String>,
 }
 
 /// Locks the issue, checks the client's version and that it is still open.
 async fn lock_open(tx: &mut Tx, issue_id: Uuid, version: i32) -> AppResult<OpenIssue> {
     let row = sqlx::query!(
-        r#"SELECT title, description, priority AS "priority: Priority", state AS "state: IssueState", version
+        r#"SELECT title, description, priority AS "priority: Priority", state AS "state: IssueState", version, tags
            FROM issue WHERE id = $1 FOR UPDATE"#,
         issue_id
     )
@@ -710,7 +772,7 @@ async fn lock_open(tx: &mut Tx, issue_id: Uuid, version: i32) -> AppResult<OpenI
     if row.state != IssueState::Open {
         return Err(AppError::conflict("issue_not_open", "the issue is closed or cancelled"));
     }
-    Ok(OpenIssue { title: row.title, description: row.description, priority: row.priority })
+    Ok(OpenIssue { title: row.title, description: row.description, priority: row.priority, tags: row.tags })
 }
 
 /// Edits and closes by someone other than the creator notify the creator.
@@ -753,7 +815,7 @@ pub async fn add_target(db: &PgPool, actor: &Actor, issue_id: Uuid, input: NewTa
 
     let mut tx = db.begin().await?;
     let issue = lock_ctx(&mut tx, issue_id).await?;
-    let sla = if matches!(issue.issue_type, IssueType::Action | IssueType::Report) {
+    let sla = if issue.issue_type == IssueType::Action {
         let existing = match input.sla_due_at {
             Some(at) => Some(at),
             None => sqlx::query_scalar!(
@@ -764,7 +826,14 @@ pub async fn add_target(db: &PgPool, actor: &Actor, issue_id: Uuid, input: NewTa
             .await?
             .flatten(),
         };
-        Some(sla_or_default(&mut tx, issue.issue_type, existing).await?)
+        let template_hours = sqlx::query_scalar!(
+            "SELECT t.default_sla_hours FROM issue i JOIN issue_template t ON t.id = i.template_id WHERE i.id = $1",
+            issue_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .flatten();
+        Some(sla_or_default(&mut tx, issue.issue_type, template_hours, existing).await?)
     } else {
         None
     };

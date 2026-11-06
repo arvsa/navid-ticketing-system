@@ -505,7 +505,7 @@ async fn fetch_member(tx: &mut crate::db::Tx, branch_id: Uuid, user_id: Uuid) ->
     .await?)
 }
 
-fn required_name(name: Option<&str>, field: &str) -> AppResult<String> {
+pub(crate) fn required_name(name: Option<&str>, field: &str) -> AppResult<String> {
     let name = name.map(str::trim).unwrap_or_default();
     if name.is_empty() || name.chars().count() > 100 {
         return Err(AppError::validation("invalid_name", format!("{field} must be between 1 and 100 characters")));

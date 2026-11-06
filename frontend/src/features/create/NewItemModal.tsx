@@ -1,24 +1,25 @@
 // New item, as a modal over the current page (UX_SPEC §4.7). One calm column:
 // pick a kind, fill in what it needs, and a one-line summary sits by the button.
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { useGroups, useRecipientGroups, useRecipients } from "@/api/hooks";
-import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority } from "@/api/types";
-import { PRIORITIES } from "@/api/types";
+import { useGroups, useRecipientGroups, useRecipients, useTemplates } from "@/api/hooks";
+import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority, Template } from "@/api/types";
+import { ISSUE_TYPES, PRIORITIES } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import type { NewItemOptions } from "@/app/newItemContext";
 import { AttachButton, PendingFiles, reportFailedUploads, uploadAll, useFilePicker } from "@/components/files";
 import { RecipientPicker, type Recipient } from "@/components/pickers";
+import { TagList } from "@/components/badges";
 import { Button, DrawerClose, Field, Segmented, cx, inputClass } from "@/components/ui";
 import { DateInput } from "@/components/DateInput";
 import { canSendType, canTargetWholeBranch, creatableTypes, isSuper } from "./rules";
 import { describeReminders, formatDateTime, fromLocalInput, toLocalInput } from "@/lib/dates";
-import { errorMessage, modeTitle, priorityLabel, typeLabel, typePitch, typePlural } from "@/lib/labels";
+import { errorMessage, modeTitle, priorityLabel, templateName, typeLabel, typePitch, typePlural } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { num, t, tn } from "@/i18n";
@@ -32,6 +33,10 @@ const REMINDER_CHOICES = [
 
 type Draft = {
   type?: IssueType;
+  /** The template it's made from: its type is the draft's. */
+  template?: string;
+  /** Free tags, comma separated. */
+  tags: string;
   title: string;
   description: string;
   priority: Priority;
@@ -48,18 +53,24 @@ type Draft = {
 
 const DRAFT_KEY = "st.draft.new";
 
-function defaultDue(type: IssueType | undefined) {
-  const d = setMinutes(setHours(addDays(new Date(), type === "action" ? 3 : 7), 17), 0);
+function defaultDue(type: IssueType | undefined, template?: Template) {
+  const days = template?.default_sla_hours ? Math.max(1, Math.round(template.default_sla_hours / 24)) : type === "action" ? 3 : 7;
+  const d = setMinutes(setHours(addDays(new Date(), days), 17), 0);
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
 function readDraft(): Partial<Draft> {
   try {
-    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "{}");
+    const d: Partial<Draft> = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "{}");
+    // Drafts from before templates may say "report".
+    if (d.type && !ISSUE_TYPES.includes(d.type)) return {};
+    return d;
   } catch {
     return {};
   }
 }
+
+const splitTags = (s: string) => s.split(/[,،]/).map((x) => x.trim()).filter(Boolean);
 
 function clearDraft() {
   try {
@@ -77,13 +88,15 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const { branchId, options, zoneOf } = useBranch();
   const superAdmin = isSuper(viewer);
   const files = useFilePicker();
+  const templates = useTemplates();
 
   const [d, setD] = useState<Draft>(() => {
-    const saved = initial.type || initial.date || initial.group ? {} : readDraft();
+    const saved = initial.type || initial.templateTag || initial.date || initial.group ? {} : readDraft();
     const type = initial.type ?? saved.type;
     const start = initial.date ? `${initial.date}T18:00` : format(setMinutes(setHours(addDays(new Date(), 1), 18), 0), "yyyy-MM-dd'T'HH:mm");
     return {
       title: "",
+      tags: "",
       description: "",
       priority: "medium",
       mode: "per_member",
@@ -94,12 +107,26 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
       location: "",
       reminders: [1440, 60],
       recipients: [],
-      branch: branchId ?? (superAdmin && type !== "event" ? "school" : options[0]?.id ?? ""),
       ...saved,
+      branch: branchId ?? (superAdmin && type !== "event" ? "school" : options[0]?.id ?? ""),
       type,
     };
   });
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
+  const template = templates.data?.find((x) => x.id === d.template);
+  const isReport = !!template?.requires_report;
+  const typeTemplates = (templates.data ?? []).filter((x) => x.type === d.type);
+  const pickTemplate = (x: Template) => set({ type: x.type, template: x.id, due: defaultDue(x.type, x) });
+
+  // Opened for a template (e.g. "New report"), or a draft's template is gone.
+  useEffect(() => {
+    if (!templates.data) return;
+    if (initial.templateTag && !d.template) {
+      const x = templates.data.find((y) => y.tag === initial.templateTag);
+      if (x) pickTemplate(x);
+    } else if (d.template && !template) set({ template: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates.data]);
   const [error, setError] = useState<{ field?: string; text: string } | null>(null);
   const [showMore, setShowMore] = useState(false);
 
@@ -139,7 +166,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         ? options.filter((o) => o.id === createBranch).map((o) => ({ id: o.id, name: o.name }))
         : undefined;
   const canSend = d.type ? canSendType(viewer, createBranch, d.type) : false;
-  const hasWork = d.type === "action" || d.type === "report";
+  const hasWork = d.type === "action";
   const groupGoing = d.recipients.some((r) => r.kind !== "user");
 
   useEffect(() => {
@@ -170,6 +197,8 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         title: d.title.trim(),
         description: d.description.trim() || null,
         priority: d.priority,
+        template_id: d.template ?? null,
+        tags: splitTags(d.tags),
         targets: d.recipients.map((r) =>
           r.kind === "branch"
             ? { branch_id: r.id }
@@ -234,7 +263,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const dueText = hasWork && d.recipients.length ? t(", due {when}", { when: formatDateTime(fromLocalInput(d.due, zone), zone) }) : "";
   const summary = !d.type
     ? ""
-    : d.type === "report"
+    : isReport
       ? d.recipients.length
         ? tn(pieces, "{n} report to write{due}. Each comes back to you to approve.", "{n} reports to write{due}. Each comes back to you to approve.", { due: dueText })
         : t("You file this report yourself.")
@@ -259,7 +288,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               : t("Just on your calendar until you invite someone.");
 
   const sendLabel =
-    d.type === "report"
+    isReport
       ? d.recipients.length
         ? pieces > 1
           ? t("Request {n} reports", { n: pieces })
@@ -276,31 +305,13 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
             : t("Send");
 
   const branchPeople = createBranch ? people.inBranch(createBranch) : [];
-  const showBranchPicker = options.length > 1 || canGoSchoolWide;
 
   return (
     <>
       <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-        <h2 className="text-[20px] font-bold">{d.type ? t("New {kind}", { kind: typeLabel[d.type].toLowerCase() }) : t("New item")}</h2>
-        {showBranchPicker ? (
-          <select
-            value={d.branch}
-            onChange={(e) => set({ branch: e.target.value, recipients: [] })}
-            className="h-8 rounded-full border border-border bg-surface-2 px-3 text-[14px] text-text-2"
-            aria-label={t("Create in")}
-          >
-            {canGoSchoolWide && <option value="school">{t("School-wide (several branches)")}</option>}
-            {options
-              .filter((o) => superAdmin || creatableTypes(viewer, o.id).length > 0)
-              .map((o) => (
-                <option key={o.id} value={o.id}>
-                  {t("in {name}", { name: o.name })}
-                </option>
-              ))}
-          </select>
-        ) : (
-          <span className="text-text-2">{t("in {name}", { name: branch?.name })}</span>
-        )}
+        <h2 className="text-[20px] font-bold">
+          {template ? t("New {kind}", { kind: templateName(template).toLowerCase() }) : d.type ? t("New {kind}", { kind: typeLabel[d.type].toLowerCase() }) : t("New item")}
+        </h2>
         <DrawerClose className="ms-auto rounded-full p-2 text-text-2 hover:bg-sunken" aria-label={t("Close")}>
           <X className="size-5" />
         </DrawerClose>
@@ -308,32 +319,34 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
 
       <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
         {!initial.onlyType && (
-        <div role="radiogroup" aria-label={t("What do you need?")} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(["ticket", "action", "report", "event"] as IssueType[])
+        <div role="radiogroup" aria-label={t("What do you need?")} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(["ticket", "action", "event"] as IssueType[])
             .filter((k) => kinds.includes(k))
-            .map((k) => {
-              const on = d.type === k;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => set({ type: k, due: defaultDue(k) })}
-                  className={cx(
-                    "rounded-[16px] border px-4 py-3 text-start transition-colors",
-                    on ? "border-transparent" : "border-border hover:border-border-strong hover:bg-surface-2",
-                  )}
-                  style={on ? { background: `var(--${k}-soft)`, boxShadow: `inset 0 0 0 2px var(--${k})` } : undefined}
-                >
-                  <span className="block font-semibold" style={{ color: `var(--${k})` }}>
-                    {typeLabel[k]}
-                  </span>
-                  <span className="mt-0.5 block text-[13px] leading-snug text-text-2">{typePitch[k]}</span>
-                </button>
-              );
-            })}
+            .map((k) => (
+              <KindCard key={k} on={d.type === k} tone={k} title={typeLabel[k]} pitch={typePitch[k]} onPick={() => set({ type: k, template: undefined, due: defaultDue(k) })} />
+            ))}
         </div>
+        )}
+        {d.type && kinds.includes(d.type) && (typeTemplates.length > 0 || superAdmin) && (
+          <div className="space-y-1.5">
+            <span className="block font-semibold">{t("Template")}</span>
+            <div role="radiogroup" aria-label={t("Template")} className="flex flex-wrap items-center gap-2">
+              <TemplateChip on={!d.template} onPick={() => set({ template: undefined, due: defaultDue(d.type) })}>
+                {t("None")}
+              </TemplateChip>
+              {typeTemplates.map((x) => (
+                <TemplateChip key={x.id} on={d.template === x.id} tone={x.tag === "report" ? "report" : d.type} onPick={() => pickTemplate(x)}>
+                  {templateName(x)}
+                </TemplateChip>
+              ))}
+              {superAdmin && (
+                <Link to="/templates" onClick={onClose} className="px-2 text-[14px] font-medium text-primary hover:underline">
+                  {t("Manage templates")}
+                </Link>
+              )}
+            </div>
+            {template?.description && <p className="text-[13px] text-text-3">{t(template.description)}</p>}
+          </div>
         )}
         {initial.onlyType && d.type && !kinds.includes(d.type) && <p className="text-text-2">{cantCreate(d.type)}</p>}
         {!initial.onlyType && kinds.length === 0 && <p className="text-text-2">{t("You can't create items here.")}</p>}
@@ -348,7 +361,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   value={d.title}
                   onChange={(e) => set({ title: e.target.value })}
                   maxLength={200}
-                  placeholder={d.type === "report" ? t("Term 1 science report") : d.type === "event" ? t("Parent evening") : d.type === "ticket" ? t("Where do I order lab supplies?") : t("Update fire-exit signs")}
+                  placeholder={isReport ? t("Term 1 science report") : d.type === "event" ? t("Parent evening") : d.type === "ticket" ? t("Where do I order lab supplies?") : t("Update fire-exit signs")}
                   className={cx(inputClass, "h-12 text-[17px]")}
                 />
               )}
@@ -437,11 +450,25 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               </Field>
             </div>
 
-            {showMore || d.description || files.files.length || d.type === "event" ? (
+            {showMore || d.description || d.tags || files.files.length || d.type === "event" ? (
               <div className="space-y-2">
                 <Field label={t("Details")} optional>
                   {(p) => (
-                    <textarea {...p} value={d.description} onChange={(e) => set({ description: e.target.value })} rows={4} placeholder={d.type === "report" ? t("What should the report cover?") : ""} className={inputClass} />
+                    <textarea {...p} value={d.description} onChange={(e) => set({ description: e.target.value })} rows={4} placeholder={isReport ? t("What should the report cover?") : ""} className={inputClass} />
+                  )}
+                </Field>
+                <Field label={t("Tags")} optional>
+                  {(p) => (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {template?.tag && <TagList tags={[template.tag]} />}
+                      <input
+                        {...p}
+                        value={d.tags}
+                        onChange={(e) => set({ tags: e.target.value })}
+                        placeholder={t("Separate tags with commas")}
+                        className={cx(inputClass, "h-10 flex-1 py-0")}
+                      />
+                    </div>
                   )}
                 </Field>
                 <PendingFiles files={files.files} onRemove={files.remove} />
@@ -469,7 +496,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               </div>
             ) : (
               <button type="button" className="font-medium text-primary hover:underline" onClick={() => setShowMore(true)}>
-                {t("+ Add details or files")}
+                {t("+ Add details, tags or files")}
               </button>
             )}
           </>
@@ -486,5 +513,38 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
         </Button>
       </div>
     </>
+  );
+}
+
+function KindCard({ on, tone, title, pitch, onPick }: { on: boolean; tone: string; title: string; pitch: string; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onPick}
+      className={cx("rounded-[16px] border px-4 py-3 text-start transition-colors", on ? "border-transparent" : "border-border hover:border-border-strong hover:bg-surface-2")}
+      style={on ? { background: `var(--${tone}-soft)`, boxShadow: `inset 0 0 0 2px var(--${tone})` } : undefined}
+    >
+      <span className="block font-semibold" style={{ color: `var(--${tone})` }}>
+        {title}
+      </span>
+      <span className="mt-0.5 block text-[13px] leading-snug text-text-2">{pitch}</span>
+    </button>
+  );
+}
+
+function TemplateChip({ on, tone, onPick, children }: { on: boolean; tone?: string; onPick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onPick}
+      className={cx("h-9 rounded-full border px-4 text-[14px] font-medium", on ? "border-transparent" : "border-border text-text-2 hover:bg-surface-2")}
+      style={on ? { background: `var(--${tone ?? "primary"}-soft)`, color: `var(--${tone ?? "primary"})`, boxShadow: `inset 0 0 0 1.5px var(--${tone ?? "primary"})` } : undefined}
+    >
+      {children}
+    </button>
   );
 }

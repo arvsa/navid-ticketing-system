@@ -1,6 +1,9 @@
 /* Design tokens (UX_SPEC §8), with item-kind colours and the dark sidebar
    taken from the "School Ticketing UI" screen designs. The primary colour is
-   the green of the Navid Schools logo; --brand-* are its companions. */
+   the green of the Navid Schools logo; --brand-* are its companions. The
+   secondary colour (--accent-*) is the gold of the sign-in butterflies:
+   --accent for text and icons, --accent-soft behind it, --accent-wing for
+   decoration (butterflies, flourishes), never for text. */
 :root {
   --bg: #f3f5f4; --surface: #ffffff; --surface-2: #f8faf9; --sunken: #eaeeec;
   --border: #e4e4e9; --border-strong: #cfd0d8; --input-border: #c3c5cf;
@@ -8,6 +11,7 @@
   --primary: #006858; --primary-hover: #005448; --on-primary: #ffffff;
   --primary-soft: #e0f1ec; --primary-on-soft: #005a4c; --focus: #0a8a76;
   --brand: #006858; --brand-deep: #00473c; --brand-teal: #47a6a1; --brand-cream: #fcf2ad; --brand-ink: #111513;
+  --accent: #8a6700; --accent-soft: #fdf3c4; --accent-on-soft: #6b4f00; --accent-wing: #eec948;
   --success: #1b7a43; --success-soft: #e3f5ea; --success-solid: #1d7a46;
   --warning: #8a5300; --warning-soft: #fff3d6; --warning-edge: #e3a33a;
   --danger: #b42318; --danger-soft: #fdecea; --danger-solid: #c4320a;
@@ -46,6 +50,7 @@
   --primary: #78c2a4; --primary-hover: #8fd0b5; --on-primary: #10201a;
   --primary-soft: #2f4038; --primary-on-soft: #a9dcc6; --focus: #78c2a4;
   --brand: #006858; --brand-deep: #00352d; --brand-teal: #47a6a1; --brand-cream: #fcf2ad; --brand-ink: #111513;
+  --accent: #ecd476; --accent-soft: #4a4230; --accent-on-soft: #f4e3a0; --accent-wing: #e3c65a;
   --success: #9fd08f; --success-soft: #33402f; --success-solid: #4f8a4a;
   --warning: #ecc274; --warning-soft: #4a3d24; --warning-edge: #b08a45;
   --danger: #f0988a; --danger-soft: #4d302a; --danger-solid: #b5523e;

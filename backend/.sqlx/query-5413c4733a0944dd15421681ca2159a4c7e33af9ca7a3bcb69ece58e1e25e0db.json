@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT requires_report FROM issue WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "requires_report",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "requires_report"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5413c4733a0944dd15421681ca2159a4c7e33af9ca7a3bcb69ece58e1e25e0db"
+}

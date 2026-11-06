@@ -50,6 +50,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/avatars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/avatars: everyone with a profile picture and its version. */
+        get: operations["get__api_avatars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/branches": {
         parameters: {
             query?: never;
@@ -224,6 +241,26 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get__api_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/directory: every active branch with its departments and people,
+         *     for everyone signed in.
+         */
+        get: operations["get__api_directory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -646,6 +683,43 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** PATCH /api/me: your bio, and your name if you're a super admin. */
+        patch: operations["patch__api_me"];
+        trace?: never;
+    };
+    "/api/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** PUT /api/me/avatar, `multipart/form-data` with a `file` part. */
+        put: operations["put__api_me_avatar"];
+        post?: never;
+        /** DELETE /api/me/avatar */
+        delete: operations["delete__api_me_avatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** PUT /api/me/cover, `multipart/form-data` with a `file` part. */
+        put: operations["put__api_me_cover"];
+        post?: never;
+        /** DELETE /api/me/cover */
+        delete: operations["delete__api_me_cover"];
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -759,6 +833,23 @@ export interface paths {
          *     Any signed-in user may read it; it describes rules, not data.
          */
         get: operations["get__api_permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/recipient-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups in every branch, to send a school-wide item to. */
+        get: operations["get__api_recipient_groups"];
         put?: never;
         post?: never;
         delete?: never;
@@ -885,6 +976,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/templates: everyone signed in; archived ones for super admins. */
+        get: operations["get__api_templates"];
+        put?: never;
+        /** POST /api/templates: super admins only. */
+        post: operations["post__api_templates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** PATCH /api/templates/{id}: super admins only; also archives and restores. */
+        patch: operations["patch__api_templates_id_"];
+        trace?: never;
+    };
     "/api/users/{id}/active": {
         parameters: {
             query?: never;
@@ -899,6 +1025,60 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["patch__api_users_id_active"];
+        trace?: never;
+    };
+    "/api/users/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/users/{id}/avatar: the profile picture, cached for good like the cover. */
+        get: operations["get__api_users_id_avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/users/{id}/cover: the image. Its URL changes with every upload
+         *     (`?v=<cover_version>`), so it's cached for good.
+         */
+        get: operations["get__api_users_id_cover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/users/{id}/profile: bio, cover and picture, for everyone signed in. */
+        get: operations["get__api_users_id_profile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/users/{id}/reset-password": {
@@ -1016,6 +1196,12 @@ export interface components {
             report_id?: string | null;
             /** Format: uuid */
             uploaded_by: string;
+        };
+        /** @description Someone's profile picture, for the people list. */
+        AvatarRef: {
+            /** Format: uuid */
+            user_id: string;
+            version: string;
         };
         Branch: {
             code: string;
@@ -1135,6 +1321,34 @@ export interface components {
              *     targets, so it was archived instead.
              */
             deleted: boolean;
+        };
+        DirectoryBranch: {
+            code: string;
+            /** @description The branch's contact address. */
+            email?: string | null;
+            groups: components["schemas"]["DirectoryGroup"][];
+            /** Format: uuid */
+            id: string;
+            name: string;
+            people: components["schemas"]["DirectoryPerson"][];
+            timezone: string;
+        };
+        DirectoryGroup: {
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @description Current, active members. */
+            member_ids: string[];
+            name: string;
+        };
+        DirectoryPerson: {
+            email: string;
+            first_name: string;
+            /** @description Runs this branch. */
+            is_admin: boolean;
+            last_name: string;
+            /** Format: uuid */
+            user_id: string;
         };
         EffectivePermissions: {
             /** Format: uuid */
@@ -1353,8 +1567,16 @@ export interface components {
             /** Format: int64 */
             number: number;
             priority: components["schemas"]["Priority"];
+            /** @description Each piece of work needs a submitted written report (fixed at creation). */
+            requires_report: boolean;
             state: components["schemas"]["IssueState"];
+            tags: string[];
             targets: components["schemas"]["Target"][];
+            /**
+             * Format: uuid
+             * @description The template it was made from, if any.
+             */
+            template_id?: string | null;
             title: string;
             type: string;
             /** Format: date-time */
@@ -1368,6 +1590,8 @@ export interface components {
             description?: string | null;
             event?: components["schemas"]["EventPatch"] | null;
             priority?: components["schemas"]["Priority"] | null;
+            /** @description Replaces the tags. */
+            tags?: string[] | null;
             title?: string | null;
             /**
              * Format: int32
@@ -1397,6 +1621,9 @@ export interface components {
             number: number;
             priority: components["schemas"]["Priority"];
             state: components["schemas"]["IssueState"];
+            tags: string[];
+            /** Format: uuid */
+            template_id?: string | null;
             title: string;
             type: string;
             /** @description Activity since the actor last opened the issue. */
@@ -1405,10 +1632,11 @@ export interface components {
             work_item_count: number;
         };
         /**
-         * @description The four issue types (`issue_type.code`).
+         * @description The three issue types (`issue_type.code`). Reports are actions made
+         *     from the Report template.
          * @enum {string}
          */
-        IssueType: "ticket" | "report" | "event" | "action";
+        IssueType: "ticket" | "event" | "action";
         LoginRequest: {
             email: string;
             password: components["schemas"]["Password"];
@@ -1449,6 +1677,14 @@ export interface components {
             /** Format: int64 */
             unread_notifications: number;
             upcoming_events: components["schemas"]["UpcomingEvent"][];
+        };
+        /** @description Absent fields stay as they are; `"bio": null` (or blank) clears the bio. */
+        MyProfilePatch: {
+            bio?: string | null;
+            /** @description Super admins only. */
+            first_name?: string | null;
+            /** @description Super admins only. */
+            last_name?: string | null;
         };
         NewBranch: {
             code: string;
@@ -1492,10 +1728,18 @@ export interface components {
             priority?: components["schemas"]["Priority"];
             /**
              * Format: date-time
-             * @description Actions and Reports only; defaults to now + the type's default SLA.
+             * @description Actions only; defaults to now + the template's or the type's default SLA.
              */
             sla_due_at?: string | null;
+            /** @description Free tags, on top of the template's. */
+            tags?: string[];
             targets?: components["schemas"]["TargetInput"][];
+            /**
+             * Format: uuid
+             * @description Make it from this template: it must be of the same type. Its tag is
+             *     added and its rules (a written report per piece of work) apply.
+             */
+            template_id?: string | null;
             title: string;
             type: string;
         };
@@ -1520,6 +1764,16 @@ export interface components {
              * @description For new work items; defaults to the issue's existing SLA, else the type default.
              */
             sla_due_at?: string | null;
+        };
+        NewTemplate: {
+            /** Format: int32 */
+            default_sla_hours?: number | null;
+            description?: string | null;
+            name: string;
+            requires_report?: boolean;
+            tag?: string | null;
+            /** @description `ticket`, `action` or `event`; can't change later. */
+            type: string;
         };
         Notification: {
             /**
@@ -1713,6 +1967,9 @@ export interface components {
                 number: number;
                 priority: components["schemas"]["Priority"];
                 state: components["schemas"]["IssueState"];
+                tags: string[];
+                /** Format: uuid */
+                template_id?: string | null;
                 title: string;
                 type: string;
                 /** @description Activity since the actor last opened the issue. */
@@ -1872,6 +2129,22 @@ export interface components {
             first_name?: string | null;
             last_name?: string | null;
         };
+        /** @description What others see beside a person's name. */
+        PublicProfile: {
+            /**
+             * @description Changes with every new picture: `GET /api/users/{id}/avatar?v=<avatar_version>`.
+             *     `null`: no picture.
+             */
+            avatar_version?: string | null;
+            bio?: string | null;
+            /**
+             * @description Changes with every new cover: `GET /api/users/{id}/cover?v=<cover_version>`.
+             *     `null`: no cover.
+             */
+            cover_version?: string | null;
+            /** Format: uuid */
+            user_id: string;
+        };
         /**
          * @description A person who can be sent a school-wide item, in one of their branches.
          *     Names only: this list reaches people outside the branch.
@@ -2007,9 +2280,9 @@ export interface components {
         /**
          * @description A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
          *     branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
-         *     issue a person also names their branch: `{"user_id": "...", "branch_id":
-         *     "..."}`. Anything else is `422 invalid_target`. Send one target per
-         *     recipient.
+         *     issue a person or group also names their branch: `{"user_id": "...",
+         *     "branch_id": "..."}`, `{"group_id": "...", "branch_id": "..."}`. Anything
+         *     else is `422 invalid_target`. Send one target per recipient.
          */
         TargetInput: {
             /** Format: uuid */
@@ -2021,6 +2294,52 @@ export interface components {
         };
         /** @enum {string} */
         TargetKind: "branch" | "group" | "user";
+        Template: {
+            /** Format: date-time */
+            archived_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: int32
+             * @description Default due time for its work; falls back to the type's.
+             */
+            default_sla_hours?: number | null;
+            description?: string | null;
+            /** @description Reserved for custom fields. */
+            fields: Record<string, never>[];
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int32 */
+            position: number;
+            /** @description Actions only: each piece of work needs a submitted written report. */
+            requires_report: boolean;
+            /** @description Put on every issue made from it. */
+            tag?: string | null;
+            /** @description The type of the issues it makes. */
+            type: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: int32 */
+            version: number;
+        };
+        TemplatePatch: {
+            /** @description `true` archives (hidden from new issues), `false` restores. */
+            archived?: boolean | null;
+            /** Format: int32 */
+            default_sla_hours?: number | null;
+            description?: string | null;
+            name?: string | null;
+            /** Format: int32 */
+            position?: number | null;
+            requires_report?: boolean | null;
+            tag?: string | null;
+            /**
+             * Format: int32
+             * @description The version the client last saw.
+             */
+            version: number;
+        };
         /** @enum {string} */
         Transition: "start" | "block" | "unblock" | "submit" | "approve" | "reject" | "claim" | "assign" | "cancel" | "pass";
         TransitionInput: {
@@ -2043,8 +2362,6 @@ export interface components {
             /** Format: int64 */
             event: number;
             /** Format: int64 */
-            report: number;
-            /** Format: int64 */
             ticket: number;
         };
         UpcomingEvent: {
@@ -2057,6 +2374,11 @@ export interface components {
             title: string;
         };
         UserProfile: {
+            /** @description `GET /api/users/{id}/avatar?v=<avatar_version>`; `null`: no picture. */
+            avatar_version?: string | null;
+            bio?: string | null;
+            /** @description `GET /api/users/{id}/cover?v=<cover_version>`; `null`: no cover. */
+            cover_version?: string | null;
             email: string;
             first_name: string;
             /** Format: uuid */
@@ -2205,6 +2527,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_avatars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarRef"][];
+                };
             };
             /** @description Error; see the codes in the README */
             "4XX": {
@@ -2816,6 +3166,34 @@ export interface operations {
             };
         };
     };
+    get__api_directory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryBranch"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     put__api_events_id_rsvp: {
         parameters: {
             query?: never;
@@ -3253,6 +3631,8 @@ export interface operations {
                 state?: components["schemas"]["IssueState"];
                 assignee?: string;
                 q?: string;
+                tag?: string;
+                template_id?: string;
             };
             header?: never;
             path?: never;
@@ -3967,6 +4347,156 @@ export interface operations {
             };
         };
     };
+    patch__api_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyProfilePatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_me_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A `file` part: JPEG, PNG or WebP, max 2 MB */
+        requestBody?: {
+            content: {
+                "multipart/form-data": unknown;
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_me_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_me_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A `file` part: JPEG, PNG or WebP, max 5 MB */
+        requestBody?: {
+            content: {
+                "multipart/form-data": unknown;
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_me_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post__api_me_password: {
         parameters: {
             query?: never;
@@ -4156,6 +4686,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogEntry"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_recipient_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientGroup"][];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -4449,6 +5007,104 @@ export interface operations {
             };
         };
     };
+    get__api_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Super admins only. */
+                include_archived: boolean;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTemplate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch__api_templates_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     patch__api_users_id_active: {
         parameters: {
             query?: never;
@@ -4470,6 +5126,101 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_users_id_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_users_id_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_users_id_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
             };
             /** @description Error; see the codes in the README */
             "4XX": {

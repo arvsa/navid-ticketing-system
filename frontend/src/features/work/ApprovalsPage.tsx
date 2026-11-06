@@ -112,7 +112,7 @@ export function ApprovalsPage() {
                               {isAll && <span className="ms-2 text-[13px] font-normal text-text-3">{branchById.get(w.branch_id)?.code}</span>}
                             </>
                           }
-                          meta={`${issue.type === "report" ? t("Handed in {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" }) : t("Sent {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" })}${w.decided_at ? ` · ${t("handed in again")}` : ""}`}
+                          meta={`${issue.requires_report ? t("Handed in {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" }) : t("Sent {when}", { when: w.submitted_at ? timeAgo(w.submitted_at) : "" })}${w.decided_at ? ` · ${t("handed in again")}` : ""}`}
                         />
                         <Button size="sm" variant="success" onClick={() => approveNow([w])}>
                           {t("Approve")}

@@ -19,6 +19,7 @@ use crate::{
         Authenticated,
     },
     authz::{Actor, Grant},
+    domain::profile::{self, MyProfilePatch},
     error::AppResult,
     AppState,
 };
@@ -27,7 +28,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/auth/login", post(login_handler))
         .route("/auth/logout", post(logout))
-        .route("/me", get(me))
+        .route("/me", get(me).patch(update_me))
         .route("/me/password", post(change_password))
 }
 
@@ -65,6 +66,17 @@ async fn me(State(state): State<AppState>, auth: Authenticated) -> AppResult<Jso
     Ok(Json(me_response(&state.db, &auth.actor).await?))
 }
 
+/// PATCH /api/me: your bio, and your name if you're a super admin.
+#[utoipa::path(patch, path = "/api/me", operation_id = "updateMe", tag = "auth", request_body = MyProfilePatch, responses((status = 200, body = MeResponse), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn update_me(
+    State(state): State<AppState>,
+    actor: Actor,
+    ApiJson(patch): ApiJson<MyProfilePatch>,
+) -> AppResult<Json<MeResponse>> {
+    profile::update(&state.db, &actor, patch).await?;
+    Ok(Json(me_response(&state.db, &actor).await?))
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct ChangePasswordRequest {
     current_password: Password,
@@ -99,6 +111,11 @@ pub struct UserProfile {
     pub must_change_password: bool,
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_login_at: Option<OffsetDateTime>,
+    pub bio: Option<String>,
+    /// `GET /api/users/{id}/cover?v=<cover_version>`; `null`: no cover.
+    pub cover_version: Option<String>,
+    /// `GET /api/users/{id}/avatar?v=<avatar_version>`; `null`: no picture.
+    pub avatar_version: Option<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -120,16 +137,28 @@ pub struct BranchRef {
 }
 
 async fn me_response(db: &PgPool, actor: &Actor) -> AppResult<MeResponse> {
-    let user = sqlx::query_as!(
-        UserProfile,
+    let row = sqlx::query!(
         r#"
-        SELECT id, email::text AS "email!", first_name, last_name, is_super_admin, must_change_password, last_login_at
+        SELECT id, email::text AS "email!", first_name, last_name, is_super_admin, must_change_password, last_login_at,
+               bio, cover_key, avatar_key
         FROM app_user WHERE id = $1
         "#,
         actor.user_id
     )
     .fetch_one(db)
     .await?;
+    let user = UserProfile {
+        id: row.id,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        is_super_admin: row.is_super_admin,
+        must_change_password: row.must_change_password,
+        last_login_at: row.last_login_at,
+        bio: row.bio,
+        cover_version: profile::image_version(row.cover_key.as_deref()),
+        avatar_version: profile::image_version(row.avatar_key.as_deref()),
+    };
 
     let rows = sqlx::query!(
         r#"

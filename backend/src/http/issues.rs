@@ -49,6 +49,8 @@ struct ListQuery {
     state: Option<IssueState>,
     assignee: Option<String>,
     q: Option<String>,
+    tag: Option<String>,
+    template_id: Option<Uuid>,
 }
 
 #[utoipa::path(get, path = "/api/issues", operation_id = "listIssues", tag = "issues", params(ListQuery), responses((status = 200, body = Page<IssueSummary>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
@@ -58,8 +60,15 @@ async fn list(
     ApiQuery(q): ApiQuery<ListQuery>,
 ) -> AppResult<Json<Page<IssueSummary>>> {
     let page = PageParams { after: q.after, limit: q.limit };
-    let filter =
-        IssueQuery { branch_id: q.branch_id, issue_type: q.issue_type, state: q.state, assignee: q.assignee, q: q.q };
+    let filter = IssueQuery {
+        branch_id: q.branch_id,
+        issue_type: q.issue_type,
+        state: q.state,
+        assignee: q.assignee,
+        q: q.q,
+        tag: q.tag,
+        template_id: q.template_id,
+    };
     Ok(Json(issues::list(&s.db, &actor, &filter, &page).await?))
 }
 

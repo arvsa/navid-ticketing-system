@@ -1,5 +1,6 @@
 // Basic building blocks, styled with the design tokens.
 import { forwardRef, useId, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Butterfly } from "./brand";
 import * as RDialog from "@radix-ui/react-dialog";
 import * as RMenu from "@radix-ui/react-dropdown-menu";
 import clsx, { type ClassValue } from "clsx";
@@ -113,6 +114,10 @@ export function PageHeader({
         <h1 className="text-[28px] leading-[34px] font-bold tracking-tight break-anywhere sm:text-[34px] sm:leading-[40px]">
           {title}
         </h1>
+        {/* The flourish under the sign-in motto, in the butterfly gold. */}
+        <svg viewBox="0 0 220 14" className="mt-1.5 w-24 text-accent-wing" aria-hidden>
+          <path d="M2 9C40 2 70 13 110 7S180 2 218 8" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+        </svg>
         {subtitle && <p className="mt-1 text-text-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -137,6 +142,7 @@ export function LoadingRows({ rows = 4 }: { rows?: number }) {
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+      <Butterfly className="drift-slow mb-1 w-10 text-accent-wing" />
       <p className="font-semibold">{title}</p>
       {children && <p className="max-w-md text-text-2">{children}</p>}
       {action && <div className="mt-2">{action}</div>}

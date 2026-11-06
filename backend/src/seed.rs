@@ -218,14 +218,14 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         }
 
         // A few reports filed by members for themselves.
+        let report = sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
+            .fetch_optional(db)
+            .await?;
         for n in 0..4 {
             let author = actor(db, b.members[20 + n]).await?;
-            issues::create(
-                db,
-                &author,
-                new_issue(b.id, "report", &format!("Incident report {} ({})", n + 1, b.code), vec![]),
-            )
-            .await?;
+            let mut issue = new_issue(b.id, "action", &format!("Incident report {} ({})", n + 1, b.code), vec![]);
+            issue.template_id = report;
+            issues::create(db, &author, issue).await?;
             seeded.issues += 1;
         }
     }
@@ -301,6 +301,8 @@ fn new_issue(branch: Uuid, ty: &str, title: &str, targets: Vec<TargetInput>) -> 
         targets,
         sla_due_at: None,
         event: None,
+        template_id: None,
+        tags: vec![],
     }
 }
 

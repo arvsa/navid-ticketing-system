@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT requires_report, tag FROM issue_template",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "requires_report",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "requires_report"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_template",
+            "name": "tag"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "f4a15131f61642da1513f7756ebf7776b639916b002eee65ffa11a5c2badef06"
+}

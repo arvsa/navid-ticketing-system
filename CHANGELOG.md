@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Templates.** Super admins keep a school-wide list of templates
+  (Set up → Templates): a name, a kind (ticket, action or event), a tag, and
+  for actions a default due time and whether each person must hand in a
+  written report. They show up as cards next to their kind in the New item
+  form. Room is kept for custom fields later.
+- **Directory.** Everyone can browse every branch, its departments and the
+  people in them, search across the school, and open anyone's profile
+  (cover, picture, bio, where they work). Names link to it.
+- **Profile pictures.** Upload one on your profile (JPEG, PNG or WebP, up to
+  2 MB); it shows beside your name everywhere.
+- **Tags.** Items carry tags: the template's, plus any the sender adds or
+  edits later. The items list filters by them (`?tag=`).
+
+### Changed
+
+- Profiles (bio, cover, picture) are visible to everyone signed in, not only
+  people in a shared branch.
+- **Reports are actions made from the built-in Report template.** Existing
+  reports become actions tagged `report` that still need the written report;
+  report permission grants become action grants, so everyone who could file a
+  report can now create actions (sending them still needs `issue.target`).
+- The New item form no longer has a branch selector: an item goes school-wide
+  on its own when its recipients are in more than one branch.
+- Other branches' people and groups in the recipient picker are folded until
+  you open them or search.
+
+
 ## v1.0.1
 
 ### Changed

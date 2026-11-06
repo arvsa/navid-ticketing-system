@@ -6,10 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shield, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, getAll } from "@/api/client";
-import { useEffectivePermissions, useMembers } from "@/api/hooks";
+import { useEffectivePermissions, useMembers, useUserProfile } from "@/api/hooks";
 import type { Group, Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
-import { Avatar } from "@/components/badges";
+import { Avatar, Cover } from "@/components/badges";
 import { Button, Dialog, Drawer, DrawerClose, Field, LoadingRows, SectionLabel, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { formatDay } from "@/lib/dates";
@@ -89,6 +89,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
 
   const first = m?.first_name ?? person?.first_name ?? t("this person");
   const fullName = m ? `${m.first_name} ${m.last_name}` : people.name(userId);
+  const profile = useUserProfile(userId);
   const singleBranch = branchIds.length <= 1;
 
   const byGroup = new Map<string, { name: string; items: string[] }>();
@@ -100,16 +101,20 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
 
   return (
     <>
-      <div className="flex items-start gap-4 border-b border-border px-6 py-5">
-        <Avatar first={m?.first_name ?? person?.first_name} last={m?.last_name ?? person?.last_name} id={userId} size={52} />
-        <div className="min-w-0 flex-1">
-          <h2 className={cx("text-[22px] font-bold break-anywhere", m && !m.is_active && "line-through")}>{fullName}</h2>
-          <p className="truncate text-text-2">{m?.email ?? person?.email}</p>
-          {m && !m.is_active && <p className="text-[14px] text-text-3">{t("Deactivated")}</p>}
-        </div>
-        <DrawerClose className="rounded-[10px] bg-sunken p-2.5 hover:bg-border" aria-label={t("Close")}>
+      <div className="relative border-b border-border">
+        <Cover userId={userId} version={profile.data?.cover_version} className="relative h-28 w-full" />
+        <DrawerClose className="absolute end-3 top-3 rounded-full bg-black/45 p-2 text-white backdrop-blur hover:bg-black/60" aria-label={t("Close")}>
           <X className="size-5" />
         </DrawerClose>
+        <div className="px-6 pb-5">
+          <span className="relative z-10 -mt-10 inline-block rounded-full bg-surface p-1 shadow-2">
+            <Avatar first={m?.first_name ?? person?.first_name} last={m?.last_name ?? person?.last_name} id={userId} size={72} />
+          </span>
+          <h2 className={cx("mt-2 text-[22px] font-bold break-anywhere", m && !m.is_active && "line-through")}>{fullName}</h2>
+          <p className="truncate text-text-2">{m?.email ?? person?.email}</p>
+          {m && !m.is_active && <p className="text-[14px] text-text-3">{t("Deactivated")}</p>}
+          {profile.data?.bio && <p className="mt-3 whitespace-pre-line text-[15px] break-anywhere">{profile.data.bio}</p>}
+        </div>
       </div>
 
       <div className="flex-1 space-y-7 overflow-y-auto px-6 py-5">

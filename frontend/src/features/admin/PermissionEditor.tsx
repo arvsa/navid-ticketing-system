@@ -22,9 +22,7 @@ const KIND_OPTIONS: { value: string; label: string; kinds: Kinds }[] = [
   { value: "all", label: t("All kinds"), kinds: "all" },
   { value: "ticket", label: t("Tickets only"), kinds: ["ticket"] },
   { value: "action", label: t("Actions only"), kinds: ["action"] },
-  { value: "report", label: t("Reports only"), kinds: ["report"] },
   { value: "event", label: t("Events only"), kinds: ["event"] },
-  { value: "action,report", label: t("Actions and Reports"), kinds: ["action", "report"] },
   { value: "ticket,event", label: t("Tickets and Events"), kinds: ["ticket", "event"] },
 ];
 const kindsValue = (k: Kinds) => (k === "all" ? "all" : [...k].sort().join(","));

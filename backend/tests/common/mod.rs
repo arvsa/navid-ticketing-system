@@ -445,6 +445,17 @@ pub async fn post_multipart(
     file: (&str, &str, &[u8]),
     fields: &[(&str, String)],
 ) -> TestResponse {
+    send_multipart(app, cookie, Method::POST, uri, file, fields).await
+}
+
+pub async fn send_multipart(
+    app: &TestApp,
+    cookie: &str,
+    method: Method,
+    uri: &str,
+    file: (&str, &str, &[u8]),
+    fields: &[(&str, String)],
+) -> TestResponse {
     let boundary = "----test-boundary-7d1a";
     let mut body = Vec::new();
     for (name, value) in fields {
@@ -459,9 +470,17 @@ pub async fn post_multipart(
     );
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    app.req(Method::POST, uri)
+    app.req(method, uri)
         .cookie(cookie)
         .raw(&format!("multipart/form-data; boundary={boundary}"), body)
         .send()
         .await
+}
+
+/// The built-in Report template: an action that needs a written report.
+pub async fn report_template(db: &PgPool) -> Uuid {
+    sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
+        .fetch_one(db)
+        .await
+        .unwrap()
 }

@@ -4,7 +4,8 @@ import { createContext, useContext } from "react";
 import type { IssueType } from "@/api/types";
 
 /** `onlyType` hides the kind picker (the calendar only creates events). */
-export type NewItemOptions = { type?: IssueType; date?: string; group?: string; onlyType?: boolean };
+/** `templateTag`: start from the template with this tag (e.g. "report"). */
+export type NewItemOptions = { type?: IssueType; templateTag?: string; date?: string; group?: string; onlyType?: boolean };
 
 export const NewItemContext = createContext<(opts?: NewItemOptions) => void>(() => {});
 

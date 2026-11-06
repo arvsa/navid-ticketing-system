@@ -1,28 +1,14 @@
 // Sign in, and the forced "Choose your own password" screen (UX_SPEC §4.1).
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { CalendarDays, Eye, EyeOff, Languages, ListChecks, MessageCircleQuestion } from "lucide-react";
 import { ApiError } from "@/api/client";
 import { useChangePassword, useLogin, useLogout, useMe, takeTemporaryPassword } from "@/auth/session";
 import { Button, Field, inputClass } from "@/components/ui";
-import { BrandMark } from "@/components/brand";
+import { BrandMark, Butterfly } from "@/components/brand";
 import { APP_NAME, errorMessage, typePlural } from "@/lib/labels";
 import { useSchoolName } from "@/lib/useSchoolName";
 import { lang, setLang, t } from "@/i18n";
-
-function Butterfly({ className, style }: { className?: string; style?: CSSProperties }) {
-  return (
-    <svg viewBox="-24 -24 48 48" className={className} style={style} aria-hidden>
-      <g fill="currentColor">
-        <path d="M0 -2C-6 -18 -22 -20 -20 -6C-19 2 -8 2 0 0Z" />
-        <path d="M0 -2C6 -18 22 -20 20 -6C19 2 8 2 0 0Z" />
-        <path d="M0 1C-5 4 -16 8 -12 16C-8 20 -2 10 0 3Z" opacity=".75" />
-        <path d="M0 1C5 4 16 8 12 16C8 20 2 10 0 3Z" opacity=".75" />
-        <rect x="-1" y="-6" width="2" height="16" rx="1" />
-      </g>
-    </svg>
-  );
-}
 
 /** The school's side of the page: logo, motto and what the app is for. On
  * phones it shrinks to a band above the form. */

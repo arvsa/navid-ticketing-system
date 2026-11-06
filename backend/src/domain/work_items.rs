@@ -235,7 +235,7 @@ pub async fn transition(
     let cur = sqlx::query!(
         r#"
         SELECT w.status AS "status: WorkStatus", w.version, w.assignee_id, w.branch_id, w.issue_id, w.handoff_chain,
-               i.state AS "state: IssueState", ty.code AS issue_type, i.created_by AS issue_created_by,
+               i.state AS "state: IssueState", ty.code AS issue_type, i.requires_report, i.created_by AS issue_created_by,
                i.completion_mode AS "completion_mode: CompletionMode", t.kind AS "target_kind: TargetKind"
         FROM work_item w
         JOIN issue i ON i.id = w.issue_id
@@ -274,7 +274,7 @@ pub async fn transition(
         Transition::Block if from == InProgress => Blocked,
         Transition::Unblock if from == Blocked => InProgress,
         Transition::Submit if matches!(from, Open | InProgress | Blocked) => {
-            if cur.issue_type == "report" {
+            if cur.requires_report {
                 let has_report = sqlx::query_scalar!(
                     r#"SELECT EXISTS (SELECT 1 FROM issue_report
                                       WHERE work_item_id = $1 AND submitted_at IS NOT NULL) AS "ok!""#,

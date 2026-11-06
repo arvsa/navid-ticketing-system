@@ -43,7 +43,10 @@ impl Modify for SessionCookie {
     components(schemas(ErrorResponse, crate::domain::work_items::Transition)),
     paths(
         super::health::healthz,
-        super::auth::login_handler, super::auth::logout, super::auth::me, super::auth::change_password,
+        super::auth::login_handler, super::auth::logout, super::auth::me, super::auth::update_me, super::auth::change_password,
+        super::profile::set_cover, super::profile::remove_cover, super::profile::public, super::profile::cover,
+        super::profile::set_avatar, super::profile::remove_avatar, super::profile::avatar, super::profile::avatars,
+        super::directory::list,
         super::permissions::catalog,
         super::branches::list, super::branches::create, super::branches::show, super::branches::update,
         super::branches::appoint_admin, super::branches::demote_admin,
@@ -69,6 +72,7 @@ impl Modify for SessionCookie {
         super::notifications::read, super::notifications::read_all, super::notifications::stream,
         super::dashboard::show, super::dashboard::export, super::dashboard::export_people,
         super::settings::show, super::settings::update,
+        super::templates::list, super::templates::create, super::templates::update,
     )
 )]
 pub struct ApiDoc;

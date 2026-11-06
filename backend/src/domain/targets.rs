@@ -66,7 +66,7 @@ pub struct IssueCtx {
 
 impl IssueCtx {
     fn has_work_items(&self) -> bool {
-        matches!(self.issue_type, IssueType::Action | IssueType::Report)
+        self.issue_type == IssueType::Action
     }
 }
 

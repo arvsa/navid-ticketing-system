@@ -3,6 +3,7 @@ mod auth;
 mod branches;
 mod comments;
 mod dashboard;
+mod directory;
 mod events;
 mod groups;
 mod health;
@@ -12,8 +13,10 @@ mod members;
 mod notifications;
 pub mod openapi;
 mod permissions;
+mod profile;
 mod reports;
 mod settings;
+mod templates;
 mod work_items;
 
 use std::time::Duration;
@@ -57,11 +60,15 @@ pub fn router(state: AppState) -> Router {
         // time to the response head.
         .merge(notifications::routes())
         .merge(dashboard::routes())
+        .merge(directory::routes())
         .merge(settings::routes())
+        .merge(templates::routes())
+        .merge(profile::routes())
         .merge(openapi::routes())
         .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, REQUEST_TIMEOUT));
     let uploads = attachments::routes()
         .merge(members::import_routes())
+        .merge(profile::upload_routes())
         .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, UPLOAD_TIMEOUT));
 
     let api = timed

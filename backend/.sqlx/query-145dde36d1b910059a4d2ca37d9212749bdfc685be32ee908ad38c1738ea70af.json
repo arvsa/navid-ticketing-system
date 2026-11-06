@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT title, description, priority AS \"priority: Priority\", state AS \"state: IssueState\", version\n           FROM issue WHERE id = $1 FOR UPDATE",
+  "query": "SELECT title, description, priority AS \"priority: Priority\", state AS \"state: IssueState\", version, tags\n           FROM issue WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -80,6 +80,17 @@
             "name": "version"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "tags",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "issue",
+            "name": "tags"
+          }
+        }
       }
     ],
     "parameters": {
@@ -92,8 +103,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "0709a621626918f841727be5d3d9387ce62f0d4b2019fcb66ef5d58cf78a6826"
+  "hash": "145dde36d1b910059a4d2ca37d9212749bdfc685be32ee908ad38c1738ea70af"
 }

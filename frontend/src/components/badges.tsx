@@ -1,8 +1,10 @@
 // Status visual language (UX_SPEC §6): every badge is a word, never colour alone.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useAvatars } from "@/api/hooks";
 import type { IssueType, Priority, RsvpResponse, WorkStatus } from "@/api/types";
-import { priorityLabel, rsvpLabel, typeLabel, workStatusLabel } from "@/lib/labels";
+import { priorityLabel, rsvpLabel, tagLabel, typeLabel, workStatusLabel } from "@/lib/labels";
 import { initials } from "@/people/usePeople";
+import { Butterfly } from "./brand";
 import { cx } from "./ui";
 import { t } from "@/i18n";
 import { calendarParts, dayNumber, monthName, weekdayShort } from "@/lib/dates";
@@ -14,6 +16,24 @@ export function TypeBadge({ type, className }: { type: IssueType; className?: st
       style={{ color: `var(--${type})`, background: `var(--${type}-soft)` }}
     >
       {typeLabel[type]}
+    </span>
+  );
+}
+
+/** Tags on an item. The report tag keeps the colour reports always had. */
+export function TagList({ tags, className }: { tags: string[]; className?: string }) {
+  if (!tags.length) return null;
+  return (
+    <span className={cx("inline-flex flex-wrap gap-1", className)}>
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex h-6 items-center rounded-md px-2 text-[13px] font-medium"
+          style={tag === "report" ? { color: "var(--report)", background: "var(--report-soft)" } : { color: "var(--text-2)", background: "var(--sunken)" }}
+        >
+          {tagLabel(tag)}
+        </span>
+      ))}
     </span>
   );
 }
@@ -85,6 +105,24 @@ function hash(s: string) {
   return Math.abs(h);
 }
 
+/** A cover image, or a soft gradient in the person's avatar colours. */
+export function Cover({ userId, version, className }: { userId: string; version?: string | null; className?: string }) {
+  const [fg, bg] = AVATAR_TONES[hash(userId) % AVATAR_TONES.length];
+  const [, bg2] = AVATAR_TONES[(hash(userId) + 2) % AVATAR_TONES.length];
+  return version ? (
+    <img src={`/api/users/${userId}/cover?v=${encodeURIComponent(version)}`} alt="" className={cx("object-cover", className)} />
+  ) : (
+    <div
+      aria-hidden
+      className={cx("overflow-hidden", className)}
+      style={{ background: `radial-gradient(120% 140% at 85% 0%, var(${fg}) 0%, transparent 55%), linear-gradient(135deg, var(${bg}) 0%, var(${bg2}) 100%)` }}
+    >
+      <Butterfly className="drift absolute end-[14%] top-[22%] w-12 text-accent-wing opacity-90" />
+      <Butterfly className="drift-slow absolute end-[34%] top-[55%] w-7 text-brand-teal opacity-80" />
+    </div>
+  );
+}
+
 export function Avatar({
   first,
   last,
@@ -98,7 +136,21 @@ export function Avatar({
   size?: number;
   dark?: boolean;
 }) {
+  const avatars = useAvatars();
+  const version = id ? avatars.data?.get(id) : undefined;
+  const [broken, setBroken] = useState<string | null>(null);
   const [fg, bg] = AVATAR_TONES[hash(id ?? `${first}${last}`) % AVATAR_TONES.length];
+  if (id && version && broken !== version)
+    return (
+      <img
+        src={`/api/users/${id}/avatar?v=${encodeURIComponent(version)}`}
+        alt=""
+        aria-hidden
+        onError={() => setBroken(version)}
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
   return (
     <span
       aria-hidden

@@ -179,7 +179,7 @@ export function isMine(v: Viewer, w: WorkItem) {
 
 /** Kinds the viewer may create in a branch (`null` = school-wide). */
 export function creatableTypes(v: Viewer, branchId: string | null): IssueType[] {
-  const all: IssueType[] = ["ticket", "action", "report", "event"];
+  const all: IssueType[] = ["ticket", "action", "event"];
   if (isSuper(v)) return all;
   if (branchId === null) return all.filter((t) => canSendAcross(v, t));
   return all.filter((t) => hasGrant(v, branchId, "issue.create", t));

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, email::text AS \"email!\", first_name, last_name, is_super_admin, must_change_password, last_login_at\n        FROM app_user WHERE id = $1\n        ",
+  "query": "\n        SELECT id, email::text AS \"email!\", first_name, last_name, is_super_admin, must_change_password, last_login_at,\n               bio, cover_key, avatar_key\n        FROM app_user WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -74,6 +74,39 @@
             "name": "last_login_at"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "bio",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "bio"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "cover_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "cover_key"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "avatar_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "avatar_key"
+          }
+        }
       }
     ],
     "parameters": {
@@ -88,8 +121,11 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "c009c89889e627f264ecea8fcdc99cfed37c52ac654fa3a2591eaec9e9633d98"
+  "hash": "9f42142050f132393465a33a68af7b8ce55a580da42930bf314f65daae82fe6e"
 }

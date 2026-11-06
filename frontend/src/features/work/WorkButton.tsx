@@ -52,7 +52,7 @@ export function WorkButton({
     if (work.status === "in_progress")
       return (
         <Button size={size} className={cls} onClick={() => navigate({ to: "/items/$number/mine", params: { number: n } })}>
-          {issue.type === "report" ? t("Continue report") : t("Send for approval")}
+          {issue.requires_report ? t("Continue report") : t("Send for approval")}
         </Button>
       );
     return null;
