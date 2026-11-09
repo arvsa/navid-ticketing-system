@@ -69,9 +69,7 @@ async fn main() -> ExitCode {
     let code = body["error"]["code"].as_str().unwrap_or("");
     let message = body["error"]["message"].as_str().unwrap_or("");
     match (status.as_u16(), code) {
-        (401, _) => {
-            eprintln!("Not signed in: the session has expired or was signed out. Sign in with `cargo run --bin login`.")
-        }
+        (401, _) => eprintln!("Not signed in: the session has expired or was signed out. Sign in with `cargo run --bin login`."),
         (403, "origin_mismatch") => eprintln!("Refused: --origin must match the server's APP_ORIGIN."),
         _ => eprintln!("Password not changed: {code}: {message}"),
     }

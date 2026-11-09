@@ -423,8 +423,7 @@ async fn a_question_can_be_passed_to_someone_else(pool: PgPool) {
 
     let res = call(&app, &manager, Method::POST, &pass, Some(json!({ "user_id": org.multi }))).await;
     assert_status(&res, StatusCode::OK, None);
-    let targets: Vec<&str> =
-        res.body["targets"].as_array().unwrap().iter().filter_map(|t| t["user_id"].as_str()).collect();
+    let targets: Vec<&str> = res.body["targets"].as_array().unwrap().iter().filter_map(|t| t["user_id"].as_str()).collect();
     assert_eq!(targets, [org.multi.to_string().as_str()]);
     assert_eq!(notifications_of(&app.db, org.multi, "ticket_created").await, 1);
     // The new person may pass it on in turn; the old one no longer can.

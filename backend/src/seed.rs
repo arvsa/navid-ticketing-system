@@ -158,7 +158,8 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 1 => (vec![target_group(b.teachers)], CompletionMode::Shared),
                 _ => (vec![target_group(b.teachers)], CompletionMode::PerMember),
             };
-            let mut input = new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), targets);
+            let mut input =
+                new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), targets);
             input.completion_mode = mode;
             input.sla_due_at = Some(now + Duration::hours([-20, 6, 30, 72, 200][n % 5]));
             let issue = issues::create(db, &admin, input).await?;
@@ -217,10 +218,9 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         }
 
         // A few reports filed by members for themselves.
-        let report =
-            sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
-                .fetch_optional(db)
-                .await?;
+        let report = sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
+            .fetch_optional(db)
+            .await?;
         for n in 0..4 {
             let author = actor(db, b.members[20 + n]).await?;
             let mut issue = new_issue(b.id, "action", &format!("Incident report {} ({})", n + 1, b.code), vec![]);

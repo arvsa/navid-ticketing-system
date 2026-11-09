@@ -42,10 +42,7 @@ pub struct DirectoryPerson {
 }
 
 pub async fn list(db: &PgPool, _actor: &Actor) -> AppResult<Vec<DirectoryBranch>> {
-    let branches =
-        sqlx::query!("SELECT id, code, name, email::text, timezone FROM branch WHERE is_active ORDER BY name, id")
-            .fetch_all(db)
-            .await?;
+    let branches = sqlx::query!("SELECT id, code, name, email::text, timezone FROM branch WHERE is_active ORDER BY name, id").fetch_all(db).await?;
     let mut groups: HashMap<Uuid, Vec<DirectoryGroup>> = HashMap::new();
     for g in sqlx::query!(
         r#"

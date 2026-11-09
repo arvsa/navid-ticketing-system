@@ -14,9 +14,7 @@ use crate::{
     domain::{
         groups::{self, EffectivePermissions},
         member_import::{self, ImportReport},
-        members::{
-            self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient, RecipientGroup,
-        },
+        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient, RecipientGroup},
     },
     error::{AppError, AppResult},
     pagination::{Page, PageParams},

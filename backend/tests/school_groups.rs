@@ -196,8 +196,7 @@ async fn everyone_grants_apply_to_every_user_in_every_branch(pool: PgPool) {
 
     // Plain members can't export until Everyone may.
     let can_export = |me: &serde_json::Value, branch: uuid::Uuid| {
-        me["memberships"].as_array().unwrap().iter().find(|m| m["branch"]["id"] == branch.to_string()).unwrap()
-            ["grants"]
+        me["memberships"].as_array().unwrap().iter().find(|m| m["branch"]["id"] == branch.to_string()).unwrap()["grants"]
             .as_array()
             .unwrap()
             .iter()
@@ -239,11 +238,7 @@ async fn everyone_grants_apply_to_every_user_in_every_branch(pool: PgPool) {
     assert_status(&res, StatusCode::CONFLICT, Some("default_group"));
     let res = call(&app, &root, Method::PATCH, &format!("/api/groups/{id}"), Some(json!({ "archived": true }))).await;
     assert_status(&res, StatusCode::CONFLICT, Some("default_group"));
-    assert_status(
-        &call(&app, &root, Method::DELETE, &format!("/api/groups/{id}"), None).await,
-        StatusCode::CONFLICT,
-        None,
-    );
+    assert_status(&call(&app, &root, Method::DELETE, &format!("/api/groups/{id}"), None).await, StatusCode::CONFLICT, None);
     let new_branch = create_branch(&app.db, "CCC", org.admin_a).await;
     let copies = call(&app, &root, Method::GET, &format!("/api/school-groups/{id}/copies"), None).await;
     assert!(copies.body.as_array().unwrap().is_empty());

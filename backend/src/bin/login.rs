@@ -94,9 +94,6 @@ async fn run(cli: &Cli) -> Result<(), String> {
     println!("Saved the session cookie to {}. Use it with curl:", cli.cookie_file);
     println!();
     println!("  curl -b {} {base}/api/me", cli.cookie_file);
-    println!(
-        "  curl -b {} -X POST {base}/api/... -H 'Origin: {}' -H 'Content-Type: application/json' -d '{{...}}'",
-        cli.cookie_file, cli.origin
-    );
+    println!("  curl -b {} -X POST {base}/api/... -H 'Origin: {}' -H 'Content-Type: application/json' -d '{{...}}'", cli.cookie_file, cli.origin);
     Ok(())
 }

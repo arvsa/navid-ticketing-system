@@ -450,11 +450,7 @@ async fn passed_work_is_reviewed_up_the_chain_and_sent_back_down(pool: PgPool) {
     assert_eq!(passed["reviewer_id"], c.org.manager_a.to_string());
     assert_eq!(notifications_of(&c.app.db, c.org.plain_a, "assigned").await, 1);
     // Only the holder passes it on; never back up the chain, nor outside the branch.
-    assert_status(
-        &c.go(&manager, &id, "pass", json!({ "assignee_id": c.org.multi })).await,
-        StatusCode::FORBIDDEN,
-        None,
-    );
+    assert_status(&c.go(&manager, &id, "pass", json!({ "assignee_id": c.org.multi })).await, StatusCode::FORBIDDEN, None);
     let back_up = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.manager_a })).await;
     assert_status(&back_up, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_assignee"));
     let elsewhere = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.admin_b })).await;
@@ -489,14 +485,7 @@ async fn passed_work_is_reviewed_up_the_chain_and_sent_back_down(pool: PgPool) {
     assert_eq!(issue.body["state"], "closed");
 
     // Every pass is in the history.
-    let history = call(
-        &c.app,
-        &c.admin,
-        Method::GET,
-        &format!("/api/issues/{}/history", issue.body["id"].as_str().unwrap()),
-        None,
-    )
-    .await;
+    let history = call(&c.app, &c.admin, Method::GET, &format!("/api/issues/{}/history", issue.body["id"].as_str().unwrap()), None).await;
     let passes = history.body["items"].as_array().unwrap().iter().filter(|h| h["action"] == "pass").count();
     assert_eq!(passes, 2);
 }

@@ -133,10 +133,7 @@ pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) 
 
 /// The account with this email, if there is one.
 pub(super) async fn find_user(db: &PgPool, email: &str) -> AppResult<Option<relations::UserFacts>> {
-    match sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email)
-        .fetch_optional(db)
-        .await?
-    {
+    match sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email).fetch_optional(db).await? {
         Some(id) => relations::load_user(db, id).await,
         None => Ok(None),
     }
@@ -149,10 +146,7 @@ pub(super) enum Join {
     Reactivate(Uuid),
     /// An account from another branch.
     Add(Uuid),
-    Create {
-        first_name: String,
-        last_name: String,
-    },
+    Create { first_name: String, last_name: String },
 }
 
 /// Checks the actor may add `existing` (or a new account) to the branch.

@@ -125,11 +125,10 @@ pub fn forward(actor: &Actor, signal: &Signal) -> Option<SseEvent> {
         signal.branch_ids.iter().copied().filter(|b| actor.branches.contains_key(b)).collect()
     };
     // `settings_changed` (the school's name), `templates_changed` and `avatars_changed` are for everyone.
-    let wanted =
-        matches!(signal.kind.as_str(), "resync" | "settings_changed" | "templates_changed" | "avatars_changed")
-            || actor.is_super_admin
-            || is_recipient
-            || !branch_ids.is_empty();
+    let wanted = matches!(signal.kind.as_str(), "resync" | "settings_changed" | "templates_changed" | "avatars_changed")
+        || actor.is_super_admin
+        || is_recipient
+        || !branch_ids.is_empty();
     if !wanted {
         return None;
     }
