@@ -1048,7 +1048,10 @@ async fn audit_group(
 /// its name; "Everyone" is the school-wide default group.
 fn validate_template_name(name: &str) -> AppResult<()> {
     if name.eq_ignore_ascii_case("all members") || name.eq_ignore_ascii_case("everyone") {
-        return Err(AppError::validation("reserved_group_name", "\"All members\" and \"Everyone\" are built-in groups"));
+        return Err(AppError::validation(
+            "reserved_group_name",
+            "\"All members\" and \"Everyone\" are built-in groups",
+        ));
     }
     Ok(())
 }

@@ -369,12 +369,9 @@ async fn unreadable_issues_are_404_by_id_and_number(pool: PgPool) {
     let boss_like = as_user(&app, "boss_like_a@example.com").await;
     let plain = as_user(&app, "plain_a@example.com").await;
 
-    let res = post_issue(
-        &app,
-        &boss_like,
-        json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter" }),
-    )
-    .await;
+    let res =
+        post_issue(&app, &boss_like, json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter" }))
+            .await;
     assert_status(&res, StatusCode::CREATED, None);
     let (id, number) = (id_of(&res), res.body["number"].as_i64().unwrap());
 
@@ -851,7 +848,9 @@ async fn school_wide_items_go_to_a_group_in_another_branch(pool: PgPool) {
     let groups = call(&app, &admin, Method::GET, "/api/recipient-groups", None).await;
     assert_status(&groups, StatusCode::OK, None);
     let groups = groups.body.as_array().unwrap();
-    assert!(groups.iter().any(|g| g["id"] == it.to_string() && g["branch_id"] == org.branch_b.to_string() && g["member_count"] == 1));
+    assert!(groups
+        .iter()
+        .any(|g| g["id"] == it.to_string() && g["branch_id"] == org.branch_b.to_string() && g["member_count"] == 1));
     assert!(!groups.iter().any(|g| g["name"] == "All members"));
     let plain = as_user(&app, "plain_a@example.com").await;
     assert_status(&call(&app, &plain, Method::GET, "/api/recipient-groups", None).await, StatusCode::FORBIDDEN, None);
@@ -868,7 +867,11 @@ async fn school_wide_items_go_to_a_group_in_another_branch(pool: PgPool) {
     assert!(res.body["branch_id"].is_null());
     assert_eq!(res.body["targets"][0]["group_id"], it.to_string());
     let multi = as_user(&app, "multi@example.com").await;
-    assert_status(&call(&app, &multi, Method::GET, &format!("/api/issues/{}", id_of(&res)), None).await, StatusCode::OK, None);
+    assert_status(
+        &call(&app, &multi, Method::GET, &format!("/api/issues/{}", id_of(&res)), None).await,
+        StatusCode::OK,
+        None,
+    );
 
     // The group must be in the branch named, and the branch named at all.
     for target in [json!({ "group_id": it, "branch_id": org.branch_a }), json!({ "group_id": it })] {

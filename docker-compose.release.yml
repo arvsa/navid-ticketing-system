@@ -1,5 +1,7 @@
-# Runs from images loaded with `docker load`, with no internet access.
-# See instructions/offline-bundle.md.
+# Runs a release from images loaded with `docker load`; nothing is downloaded.
+# See instructions/running-a-release.md.
+# The project name is kept from earlier releases so existing installs keep
+# their data.
 name: navid-offline
 
 services:
@@ -32,6 +34,9 @@ services:
       RUST_LOG: ${RUST_LOG:-backend=info,tower_http=info,sqlx=warn}
     volumes:
       - attachments:/data/attachments
+      # Put a .env file in ./config to override the settings above; the
+      # backend restarts with it whenever it changes.
+      - ./config:/config:ro
     depends_on:
       postgres:
         condition: service_healthy

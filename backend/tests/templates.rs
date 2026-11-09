@@ -22,7 +22,11 @@ async fn super_admins_run_templates_and_everyone_reads_them(pool: PgPool) {
     assert_eq!(listed.body[0]["type"], "action");
 
     let body = json!({ "name": "Field trip", "type": "event", "tag": "  #Trips " });
-    assert_status(&call(&app, &admin, Method::POST, "/api/templates", Some(body.clone())).await, StatusCode::FORBIDDEN, None);
+    assert_status(
+        &call(&app, &admin, Method::POST, "/api/templates", Some(body.clone())).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
     let made = call(&app, &root, Method::POST, "/api/templates", Some(body.clone())).await;
     assert_status(&made, StatusCode::CREATED, None);
     assert_eq!(made.body["tag"], "trips");
@@ -112,13 +116,21 @@ async fn issues_take_their_templates_tag_and_rules(pool: PgPool) {
     assert_status(&edited, StatusCode::OK, None);
     assert_eq!(edited.body["tags"], json!(["report"]));
     let off = json!({ "version": 1, "requires_report": false });
-    assert_status(&call(&app, &root, Method::PATCH, &format!("/api/templates/{report}"), Some(off)).await, StatusCode::OK, None);
+    assert_status(
+        &call(&app, &root, Method::PATCH, &format!("/api/templates/{report}"), Some(off)).await,
+        StatusCode::OK,
+        None,
+    );
     let again = call(&app, &admin, Method::GET, &format!("/api/issues/{id}"), None).await;
     assert_eq!(again.body["requires_report"], true);
 
     // An archived template can't make new issues.
     let archive = json!({ "version": 2, "archived": true });
-    assert_status(&call(&app, &root, Method::PATCH, &format!("/api/templates/{report}"), Some(archive)).await, StatusCode::OK, None);
+    assert_status(
+        &call(&app, &root, Method::PATCH, &format!("/api/templates/{report}"), Some(archive)).await,
+        StatusCode::OK,
+        None,
+    );
     let late = json!({ "branch_id": org.branch_a, "type": "action", "template_id": report, "title": "Late" });
     assert_status(
         &call(&app, &admin, Method::POST, "/api/issues", Some(late)).await,

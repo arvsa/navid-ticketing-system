@@ -4,7 +4,11 @@ Details behind the [README](../README.md).
 
 ## Configuration
 
-Environment variables (`.env` is read in development):
+Environment variables (`.env` is read in development). In Docker, put them
+in `config/.env` next to `docker-compose.yml` instead: its values win over
+the compose file's, and the container restarts the backend with them when
+the file changes, once nothing holds a lock on the database
+(`docker/run-backend.sh`).
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -49,8 +53,17 @@ transactions after 60 s.
   people or to whole branches (`issue.target_other_branches`, which admins
   can also give to others).
 - Everyone else acts through the permissions of their groups.
-- An item is run by its sender: on a school-wide item only they edit, close
-  or resend it. Work is approved by the item's sender or the work's branch
+- **Everyone runs what they created.** While an item is open, its creator
+  may always read, edit, close and cancel it, with or without grants
+  (`issue.edit` and `issue.close` reach other people's items). Sending it to
+  more people (`issue.target`) still follows the grants. On a school-wide
+  item only its sender (and super admins) edit, close or resend it: the
+  receiving branches' admins don't run it.
+- **Comments, the same way.** While the item is open, anyone who may comment
+  writes comments and edits and deletes their own. Once it's closed or
+  cancelled the conversation is read-only (`409 issue_not_open`); moderators
+  (`comment.moderate`, admins) can still remove a comment.
+- Work is approved by the item's sender or the work's branch
   approvers (its admins and holders of `work_item.approve`).
 - Whoever holds work may pass it to anyone in its branch
   (`POST /api/work-items/{id}/pass`, `{version, assignee_id}`). The chain is
@@ -69,6 +82,10 @@ transactions after 60 s.
 - `GET /api/settings` (no sign-in needed) and `PATCH /api/settings`
   `{school_name}` (super admins): the school's name, shown in the header and
   on the sign-in page. Changing it sends `settings_changed` to everyone.
+- These are the app's settings, kept in the database (`app_settings`), not
+  the server's configuration: the response is only
+  `{school_name, updated_at}`. Nothing from `.env` or the environment
+  (database URL, origins, secrets) is ever returned by the API.
 
 ## Profiles and the directory
 
@@ -139,6 +156,12 @@ Each run takes a Postgres advisory lock first, so running several instances is s
 Every error has the shape `{"error": {"code": "snake_case", "message": "human text"}}`.
 Clients should branch on `code`; messages are for people. Responses also carry
 an `x-request-id` header to quote when reporting problems.
+
+The HTTP status is only the kind of problem (401 not signed in, 403 not
+allowed, 404 not there, 409 clashes with the current state, 422 bad input),
+and HTTP has just these few. The `code` says which problem it is, so the app
+can show the right message or fix it (`email_taken` highlights the email
+field; `version_conflict` reloads). That's why one status has many codes.
 
 | Status | Code | Meaning |
 |---|---|---|
@@ -287,5 +310,8 @@ k6 run scripts/loadtest.js                             # BASE_URL / ORIGIN / DUR
   status, latency and request id only; cookies, passwords, tokens and bodies
   never are.
 - **Health:** `GET /api/healthz` (no auth) checks the database; use it for
-  liveness and readiness probes.
+  liveness and readiness probes. `health --db-idle` exits 0 when no other
+  session holds a lock that matters (a job's advisory lock, rows being
+  written, schema changes), 1 while one does and lists them, 2 when the
+  database can't be reached.
 - Never run `seed-demo` against real data (it refuses anyway).

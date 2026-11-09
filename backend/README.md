@@ -23,22 +23,7 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    cp .env.example .env
    ```
 
-3. **Add demo data**, so there's someone to sign in as:
-
-   ```sh
-   cargo run --bin admin -- seed-demo
-   ```
-
-   This creates three branches, about 90 people and some issues. Every demo
-   account has the password `demo-password`, for example:
-
-   | Account | Role |
-   |---|---|
-   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
-   | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
-   | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
-
-4. **Start the server:**
+3. **Start the server:**
 
    ```sh
    cargo run
@@ -51,6 +36,38 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    cargo run --bin health
    # OK: the server and its database are up (http://127.0.0.1:8080)
    ```
+
+4. **Import your school's people from Excel**, so there's someone to sign in
+   as. In a second terminal:
+
+   ```sh
+   # A super admin; prints a temporary password, shown once.
+   cargo run --bin admin -- create-super-admin --email you@your.school --first-name Your --last-name Name
+
+   # Sign in and choose your own password.
+   cargo run --bin login -- --email you@your.school --password <temporary password>
+   cargo run --bin change_password -- --current-password <temporary password> --new-password <new password>
+
+   # A branch to import into; note the "id" it returns.
+   curl -b cookies.txt -H 'Origin: http://localhost:5173' -H 'Content-Type: application/json' \
+     http://127.0.0.1:8080/api/branches -d '{"code": "NORTH", "name": "North", "timezone": "Asia/Tehran"}'
+
+   # An empty workbook with the right columns: email, first_name, last_name
+   # (in English or Farsi, any order).
+   curl -b cookies.txt -o people.xlsx http://127.0.0.1:8080/api/members/import-template
+
+   # Check the file first (nothing is written), then import it.
+   curl -b cookies.txt -H 'Origin: http://localhost:5173' \
+     http://127.0.0.1:8080/api/branches/<branch id>/members/import -F file=@people.xlsx -F dry_run=true
+   curl -b cookies.txt -H 'Origin: http://localhost:5173' \
+     http://127.0.0.1:8080/api/branches/<branch id>/members/import -F file=@people.xlsx
+   ```
+
+   The file can be xlsx, xls, ods or csv, up to 500 people and 2 MB. An import
+   is all or nothing; add `-F skip_errors=true` to leave out the rows with an
+   error and import the rest. The response lists each new person's temporary
+   password; they choose their own on first sign-in. In the web app it's the
+   "Import from Excel" button on the Branches and People pages.
 
 To run the tests: `cargo test` (with the database from step 1 running).
 
@@ -102,10 +119,10 @@ The main endpoints:
 The session cookie is kept in `cookies.txt`: the `login` tool writes it, and
 curl sends it with `-b cookies.txt`.
 
-**1. Sign in** (the password defaults to `demo-password`)
+**1. Sign in** as someone from step 4
 
 ```sh
-cargo run --bin login -- --email member1@north.demo.school
+cargo run --bin login -- --email you@your.school --password <password>
 cargo run --bin whoami
 ```
 
@@ -140,7 +157,7 @@ git push origin v0.0.2
 ```
 
 The [release workflow](../.github/workflows/backend-binaries.yml) then creates
-the GitHub release and attaches the Linux binaries and the offline bundles
-(`navid-offline-0.0.2-amd64.zip`, `-arm64.zip`). Others download a bundle with
-`./get-offline-bundle.sh` (see
-[instructions/offline-bundle.md](../instructions/offline-bundle.md)).
+the GitHub release and attaches the Linux binaries and the release archives
+(`navid-release-0.0.2-amd64.zip`, `-arm64.zip`). Others download one with
+`./get-release.sh` (see
+[instructions/running-a-release.md](../instructions/running-a-release.md)).

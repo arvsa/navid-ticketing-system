@@ -22,6 +22,7 @@ use super::{
     audit::{self, AuditEntry},
     issues,
     notifications::{self, Kind, Notice},
+    types::IssueState,
 };
 use crate::{
     authz::{authorize, policy::can_read, relations, relations::IssueFacts, Action, Actor},
@@ -157,6 +158,7 @@ pub struct NewComment {
 pub async fn create(db: &PgPool, actor: &Actor, issue_id: Uuid, input: NewComment) -> AppResult<Comment> {
     let issue = issues::readable(db, actor, issue_id).await?;
     authorize(actor, Action::CommentOnIssue { issue: &issue })?;
+    ensure_open(db, issue_id).await?;
     if input.is_internal_only {
         authorize(actor, Action::InternalComments { issue: &issue })?;
     }
@@ -251,7 +253,7 @@ pub struct CommentPatch {
     pub body: String,
 }
 
-/// Authors edit their own comments.
+/// Authors edit their own comments while the issue is open.
 pub async fn update(db: &PgPool, actor: &Actor, comment_id: Uuid, patch: CommentPatch) -> AppResult<Comment> {
     let (row, _) = load_visible(db, actor, comment_id).await?;
     if row.author_id != actor.user_id {
@@ -260,6 +262,7 @@ pub async fn update(db: &PgPool, actor: &Actor, comment_id: Uuid, patch: Comment
     if row.deleted {
         return Err(AppError::conflict("comment_deleted", "the comment was deleted"));
     }
+    ensure_open(db, row.issue_id).await?;
     let body = validate_body(&patch.body)?;
     let mut tx = db.begin().await?;
     sqlx::query!("UPDATE issue_comment SET body = $2 WHERE id = $1", comment_id, body).execute(&mut *tx).await?;
@@ -268,7 +271,8 @@ pub async fn update(db: &PgPool, actor: &Actor, comment_id: Uuid, patch: Comment
     fetch_one(db, comment_id).await
 }
 
-/// Soft delete: the author, or a moderator (`comment.moderate`, admins).
+/// Soft delete: the author while the issue is open, or a moderator
+/// (`comment.moderate`, admins) at any time.
 pub async fn delete(db: &PgPool, actor: &Actor, comment_id: Uuid) -> AppResult<()> {
     let (row, issue) = load_visible(db, actor, comment_id).await?;
     if row.deleted {
@@ -277,6 +281,8 @@ pub async fn delete(db: &PgPool, actor: &Actor, comment_id: Uuid) -> AppResult<(
     let moderated = row.author_id != actor.user_id;
     if moderated {
         authorize(actor, Action::ModerateComments { issue: &issue })?;
+    } else {
+        ensure_open(db, row.issue_id).await?;
     }
     let mut tx = db.begin().await?;
     sqlx::query!("UPDATE issue_comment SET deleted_at = now() WHERE id = $1", comment_id).execute(&mut *tx).await?;
@@ -296,6 +302,17 @@ pub async fn delete(db: &PgPool, actor: &Actor, comment_id: Uuid) -> AppResult<(
     .await?;
     issues::emit(&mut tx, "comment_deleted", row.issue_id).await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// Comments are written, edited and withdrawn only while their issue is open.
+async fn ensure_open(db: &PgPool, issue_id: Uuid) -> AppResult<()> {
+    let state = sqlx::query_scalar!(r#"SELECT state AS "state: IssueState" FROM issue WHERE id = $1"#, issue_id)
+        .fetch_one(db)
+        .await?;
+    if state != IssueState::Open {
+        return Err(AppError::conflict("issue_not_open", "the issue is closed or cancelled"));
+    }
     Ok(())
 }
 

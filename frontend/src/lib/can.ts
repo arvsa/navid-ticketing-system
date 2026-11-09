@@ -78,15 +78,17 @@ function itemRule(v: Viewer, issue: IssueDetail, perm: Permission) {
   return v.me.memberships.some((m) => m.is_admin || grantApplies(v, issue, perm, m.branch.id));
 }
 
+/** Everyone runs what they created: edits, closes or cancels it while it's open. */
+const createdByMe = (v: Viewer, issue: IssueDetail) => issue.created_by === v.me.user.id;
+
 export function canEdit(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return itemRule(v, issue, "issue.edit");
+  return createdByMe(v, issue) || itemRule(v, issue, "issue.edit");
 }
 
 export function canClose(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  const ownerClose = issue.created_by === v.me.user.id && issue.type !== "action";
-  return ownerClose || itemRule(v, issue, "issue.close");
+  return createdByMe(v, issue) || itemRule(v, issue, "issue.close");
 }
 
 export function canTarget(v: Viewer, issue: IssueDetail) {

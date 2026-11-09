@@ -1,15 +1,21 @@
-# Offline bundle
+# Running a release
 
-Run the whole app from one archive, with no internet access: nothing is
-downloaded from Docker Hub, npm or crates.io. You only need Docker.
+Run the whole app from one release archive: the images are built already, so
+nothing is compiled and nothing is downloaded from Docker Hub, npm or
+crates.io. You only need Docker, and no internet access once you have the
+archive.
 
-The bundle is a folder, `navid-offline/`, containing:
+Get the archive with `./get-release.sh` (or from the
+[releases](https://github.com/arvsa/navid-ticketing-system/releases) page,
+`navid-release-<version>-<arch>.zip`). It unzips to a folder, `navid-release/`
+(`navid-offline/` in earlier releases), containing:
 
 | File | What |
 |---|---|
 | `navid-images-<version>-<arch>.tar.gz` | The postgres, backend and frontend images, e.g. `navid-images-1.0.1-amd64.tar.gz` |
 | `docker-compose.yml` | Starts the three images |
-| `offline-bundle.md` | This file |
+| `config/.env.example` | Settings you can change; see [Change the settings](#change-the-settings) |
+| `running-a-release.md` | This file |
 
 ## Run it
 
@@ -19,7 +25,7 @@ The bundle is a folder, `navid-offline/`, containing:
    docker load -i navid-images-1.0.1-amd64.tar.gz
    ```
 
-2. **Start everything** from inside `navid-offline/`:
+2. **Start everything** from inside `navid-release/`:
 
    ```sh
    docker compose up -d
@@ -58,13 +64,27 @@ APP_PORT=9000 APP_ORIGIN=http://localhost:9000 docker compose up -d
 
 `APP_ORIGIN` must match the address in the browser, or sign-in fails.
 
-## Build the bundle
+## Change the settings
+
+Copy `config/.env.example` to `config/.env` and edit it. Its values win over
+the ones in `docker-compose.yml`. The backend container watches the file:
+within a few seconds of it being added, changed or removed, it waits until
+nothing holds a lock on the database (a background job or a change being
+saved), then restarts the backend with the new settings. Follow it with
+`docker compose logs -f backend`; lines start with `env watch:`. Settings
+that can't start the backend (say, a missing `APP_ORIGIN`) show up there too:
+fix the file and it restarts again.
+
+`APP_PORT` is the exception: it's the port Docker publishes, so set it when
+starting, as below.
+
+## Build the release archive
 
 The images are built from the checked-out code:
 
 ```sh
-./build-offline-bundle.sh                # amd64, 1.0.1
-./build-offline-bundle.sh -v 1.0.2 arm64
+./build-release.sh                # amd64, 1.0.1
+./build-release.sh -v 1.0.2 arm64
 
 # After shipping for a different architecture
 # docker pull postgres:16

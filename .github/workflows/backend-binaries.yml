@@ -1,5 +1,5 @@
-# Builds a GitHub release: static Linux binaries of the backend and the offline
-# bundles (instructions/offline-bundle.md) for amd64 and arm64, and the built
+# Builds a GitHub release: static Linux binaries of the backend and the release
+# archives (instructions/running-a-release.md) for amd64 and arm64, and the built
 # frontend (static files, the same for every platform). Push a tag like
 # `v0.0.1`, or run it by hand.
 name: Release
@@ -103,7 +103,7 @@ jobs:
 
   # Runs the same script as a local build, on a runner of each architecture so
   # nothing is emulated. Needs the release created by the job above.
-  offline-bundle:
+  release-archive:
     needs: release
     strategy:
       matrix:
@@ -119,11 +119,11 @@ jobs:
       - name: Build
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
-        run: ./build-offline-bundle.sh -v "${TAG#v}" ${{ matrix.arch }}
+        run: ./build-release.sh -v "${TAG#v}" ${{ matrix.arch }}
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag || github.ref_name }}
-        run: gh release upload "$TAG" "navid-offline/navid-offline-${TAG#v}-${{ matrix.arch }}.zip" --clobber
+        run: gh release upload "$TAG" "navid-release/navid-release-${TAG#v}-${{ matrix.arch }}.zip" --clobber

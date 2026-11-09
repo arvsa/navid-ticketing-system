@@ -50,20 +50,29 @@ You only need [Docker](https://www.docker.com) and git.
 
 Stop it with `docker compose down`. Add `-v` to also delete the data.
 
-### In case of MANY, MANY, MANY internet issues (Iranians internet in 2026 :/)
+### Running a release (no build, no downloads)
 
-Download the offline bundle via script or manually from the
-[releases](https://github.com/arvsa/navid-ticketing-system/releases) and start it:
+In case of MANY, MANY, MANY internet issues (Iranians internet in 2026 :/):
+a release has the images built already, so once you have it nothing is
+compiled or downloaded. Get it with the script, or manually from the
+[releases](https://github.com/arvsa/navid-ticketing-system/releases), and start it:
 
 ```sh
-./get-offline-bundle.sh    # or manually
-cd navid-offline
+./get-release.sh    # or manually
+cd navid-release
 docker load -i navid-images-<version>-<arch>.tar.gz
 docker compose up -d
 ```
 
-Then continue from step 3 above.
+It starts empty, with one super admin. See
+[instructions/running-a-release.md](instructions/running-a-release.md) for
+signing in, changing the settings and building a release yourself.
 
-See [instructions/offline-bundle.md](instructions/offline-bundle.md) for more details.
+### Changing the settings
+
+Put a `.env` file in `config/` (copy [`config/.env.example`](config/.env.example)).
+Its values win over `docker-compose.yml`, and the backend restarts with them
+on its own a few seconds after the file changes, once nothing holds a lock on
+the database.
 
 Follow [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for more details on respective services.

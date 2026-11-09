@@ -142,11 +142,8 @@ async fn seed(pool: PgPool) -> Ctx {
     let due = |h: i64| fmt(now + Duration::hours(h));
     let mk = |title: &str, sla: String, targets: Value| json!({ "branch_id": a, "type": "action", "title": title, "sla_due_at": sla, "targets": targets });
     let overdue = c.issue("admin_a", mk("Overdue", due(-5), json!([{ "user_id": c.org.plain_a }]))).await;
-    c.issue(
-        "admin_a",
-        mk("This week", due(50), json!([{ "user_id": c.org.multi }, { "user_id": c.org.manager_a }])),
-    )
-    .await;
+    c.issue("admin_a", mk("This week", due(50), json!([{ "user_id": c.org.multi }, { "user_id": c.org.manager_a }])))
+        .await;
     c.issue("admin_a", mk("Later", due(24 * 30), json!([{ "user_id": c.org.plain_a }]))).await;
     let pending = c
         .issue(
@@ -212,10 +209,7 @@ async fn seed(pool: PgPool) -> Ctx {
                 "event": { "starts_at": fmt(start), "ends_at": fmt(start + Duration::hours(2)), "location": "Hall" } })
     };
     let soon = c
-        .issue(
-            "boss_like_a",
-            ev("Assembly", 3, json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }])),
-        )
+        .issue("boss_like_a", ev("Assembly", 3, json!([{ "user_id": c.org.plain_a }, { "user_id": c.org.multi }])))
         .await;
     let soon_id = soon["id"].as_str().unwrap();
     call(

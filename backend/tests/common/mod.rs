@@ -470,11 +470,7 @@ pub async fn send_multipart(
     );
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    app.req(method, uri)
-        .cookie(cookie)
-        .raw(&format!("multipart/form-data; boundary={boundary}"), body)
-        .send()
-        .await
+    app.req(method, uri).cookie(cookie).raw(&format!("multipart/form-data; boundary={boundary}"), body).send().await
 }
 
 /// The built-in Report template: an action that needs a written report.

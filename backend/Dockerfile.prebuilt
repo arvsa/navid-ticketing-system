@@ -10,6 +10,7 @@ RUN apt-get update \
     && mkdir -p /data/attachments \
     && chown -R app /data
 COPY dist/linux-${TARGETARCH}/ /usr/local/bin/
+COPY --chmod=755 docker/run-backend.sh /usr/local/bin/run-backend
 USER app
 WORKDIR /app
 ENV BIND_ADDR=0.0.0.0:8080 \
@@ -18,4 +19,6 @@ ENV BIND_ADDR=0.0.0.0:8080 \
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=10 \
     CMD ["health", "--url", "http://127.0.0.1:8080"]
-CMD ["backend"]
+# Runs the backend and restarts it when /config/.env changes
+# (docker/run-backend.sh). `backend` runs it without the watch.
+CMD ["run-backend"]

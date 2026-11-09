@@ -898,7 +898,8 @@ async fn importing_members_previews_then_adds_everyone_or_no_one(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let manager = as_user(&app, "manager_a@example.com").await;
-    let users_before = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
+    let users_before =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
 
     // A bad row blocks the whole import.
     let bad = "email,first_name,last_name\nnew1@example.com,New,One\nnot-an-email,X,Y\nNEW1@example.com,Dup,Licate\n";
@@ -965,7 +966,14 @@ async fn a_branch_opens_without_an_admin_then_fills_up_and_gets_one(pool: PgPool
     let root = as_root(&app).await;
 
     // Open it with no one in it.
-    let res = call(&app, &root, Method::POST, "/api/branches", Some(json!({ "code": "TEH", "name": "Tehran", "timezone": "Asia/Tehran" }))).await;
+    let res = call(
+        &app,
+        &root,
+        Method::POST,
+        "/api/branches",
+        Some(json!({ "code": "TEH", "name": "Tehran", "timezone": "Asia/Tehran" })),
+    )
+    .await;
     assert_status(&res, StatusCode::CREATED, None);
     let branch: Uuid = res.body["id"].as_str().unwrap().parse().unwrap();
 
@@ -975,7 +983,10 @@ async fn a_branch_opens_without_an_admin_then_fills_up_and_gets_one(pool: PgPool
     assert_status(&res, StatusCode::OK, None);
     assert_eq!(res.body["imported"], true);
     let id_of = |email: &str| {
-        res.body["rows"].as_array().unwrap().iter().find(|r| r["email"] == email).unwrap()["user_id"].as_str().unwrap().to_owned()
+        res.body["rows"].as_array().unwrap().iter().find(|r| r["email"] == email).unwrap()["user_id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
     };
     let (head, teacher) = (id_of("head@teh.org"), id_of("teacher@teh.org"));
 
