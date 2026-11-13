@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,\n               (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id\n                WHERE c.id = g.id OR c.template_id = g.id) AS \"member_count!\"\n        FROM user_group g\n        WHERE g.branch_id = $1\n          AND ($2 OR g.archived_at IS NULL)\n          AND ($3::text IS NULL OR (lower(g.name), g.id) > ($3, $4))\n        ORDER BY lower(g.name), g.id\n        LIMIT $5\n        ",
+  "query": "\n        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at, g.kind,\n               ARRAY(SELECT h.user_id FROM group_member h WHERE h.group_id = g.id AND h.is_head) AS \"head_ids!\",\n               (SELECT count(*) FROM group_member gm WHERE gm.group_id = g.id) AS \"member_count!\"\n        FROM user_group g JOIN branch b ON b.id = g.branch_id\n        WHERE g.template_id = $1\n        ORDER BY lower(b.name), b.id\n        ",
   "describe": {
     "columns": [
       {
@@ -93,6 +93,23 @@
       },
       {
         "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_group",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "head_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
         "name": "member_count!",
         "type_info": "Int8",
         "origin": "Expression"
@@ -100,11 +117,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Bool",
-        "Text",
-        "Uuid",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -116,8 +129,10 @@
       false,
       true,
       false,
+      false,
+      null,
       null
     ]
   },
-  "hash": "916fcd5aae62f6fcb21fd57ec1090ede1d6e315b448be8f5d2b6735d6afd9257"
+  "hash": "77f54816480ae3fb480660bcf1b1b585d268858af511ac586e1c4f5272282ef3"
 }

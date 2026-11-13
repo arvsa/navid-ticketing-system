@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT g.id, g.branch_id AS \"branch_id!\", g.name, g.description,\n               ARRAY(SELECT gm.user_id FROM group_member gm\n                     JOIN app_user u ON u.id = gm.user_id AND u.is_active\n                     JOIN branch_membership m ON m.user_id = gm.user_id AND m.branch_id = g.branch_id\n                                             AND m.left_at IS NULL\n                     WHERE gm.group_id = g.id\n                     ORDER BY u.first_name, u.last_name, u.id) AS \"member_ids!\"\n        FROM user_group g\n        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL\n        ORDER BY lower(g.name), g.id\n        ",
+  "query": "\n        SELECT g.id, g.branch_id AS \"branch_id!\", g.name, g.description,\n               ARRAY(SELECT gm.user_id FROM group_member gm\n                     JOIN app_user u ON u.id = gm.user_id AND u.is_active\n                     JOIN branch_membership m ON m.user_id = gm.user_id AND m.branch_id = g.branch_id\n                                             AND m.left_at IS NULL\n                     WHERE gm.group_id = g.id\n                     ORDER BY u.first_name, u.last_name, u.id) AS \"member_ids!\",\n               ARRAY(SELECT gm.user_id FROM group_member gm WHERE gm.group_id = g.id AND gm.is_head) AS \"head_ids!\"\n        FROM user_group g\n        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL AND g.kind = 'department'\n        ORDER BY lower(g.name), g.id\n        ",
   "describe": {
     "columns": [
       {
@@ -52,6 +52,12 @@
         "name": "member_ids!",
         "type_info": "UuidArray",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "head_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -62,8 +68,9 @@
       true,
       false,
       true,
+      null,
       null
     ]
   },
-  "hash": "ea300617616d00c7d9a66603e8620486a9e9e309d9c13a6da36829ef3ccff496"
+  "hash": "304547cd7e5e06b994b33e40ccd8205d49a07aad65eda1fdb7780c77fe9534fd"
 }

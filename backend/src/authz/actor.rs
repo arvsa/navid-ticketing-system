@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use sqlx::PgPool;
@@ -16,6 +16,9 @@ pub struct Actor {
     pub is_super_admin: bool,
     /// Current memberships only (`left_at IS NULL`).
     pub branches: HashMap<Uuid, BranchAccess>,
+    /// Active departments the actor heads: they run its members and the
+    /// work and questions sent to it.
+    pub heads: HashSet<Uuid>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,11 +95,26 @@ impl Actor {
             access.grants.dedup();
         }
 
-        Ok(Self { user_id, is_super_admin, branches })
+        let heads = sqlx::query_scalar!(
+            r#"SELECT gm.group_id FROM group_member gm
+               JOIN user_group g ON g.id = gm.group_id AND g.archived_at IS NULL AND g.kind = 'department'
+               WHERE gm.user_id = $1 AND gm.is_head"#,
+            user_id
+        )
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .collect();
+
+        Ok(Self { user_id, is_super_admin, branches, heads })
     }
 
     pub fn branch(&self, branch_id: Uuid) -> Option<&BranchAccess> {
         self.branches.get(&branch_id)
+    }
+
+    pub fn heads(&self, group_id: Uuid) -> bool {
+        self.heads.contains(&group_id)
     }
 
     pub fn is_admin_of(&self, branch_id: Uuid) -> bool {

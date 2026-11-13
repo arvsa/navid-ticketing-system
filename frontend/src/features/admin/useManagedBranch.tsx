@@ -2,15 +2,18 @@
 // show their own branch picker, defaulting to the first branch I may manage.
 import { useState } from "react";
 import { useBranch } from "@/app/BranchContext";
-import { hasGrant, isAdminOf, type Viewer } from "@/lib/can";
+import { hasGrant, isAdminOf, membership, type Viewer } from "@/lib/can";
 import type { Permission } from "@/api/types";
 import { cx, inputClass } from "@/components/ui";
 import { guard } from "@/lib/unsaved";
 import { t } from "@/i18n";
 
-export function useManagedBranch(viewer: Viewer, perm?: Permission, preferred?: string) {
+/** `withHeads`: also branches where the viewer heads a department. */
+export function useManagedBranch(viewer: Viewer, perm?: Permission, preferred?: string, withHeads = false) {
   const { branchId, options } = useBranch();
-  const manageable = options.filter((o) => isAdminOf(viewer, o.id) || (perm && hasGrant(viewer, o.id, perm)));
+  const manageable = options.filter(
+    (o) => isAdminOf(viewer, o.id) || (perm && hasGrant(viewer, o.id, perm)) || (withHeads && !!membership(viewer, o.id)?.heads.length),
+  );
   const [picked, setPicked] = useState<string | undefined>(preferred);
   const current = branchId && manageable.some((o) => o.id === branchId) ? branchId : picked ?? manageable[0]?.id;
   const picker =

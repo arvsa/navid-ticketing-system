@@ -154,6 +154,7 @@ mod tests {
             user_id: ME,
             is_super_admin: super_admin,
             branches: branches.iter().map(|b| (*b, BranchAccess::default())).collect::<HashMap<_, _>>(),
+            heads: Default::default(),
         }
     }
 

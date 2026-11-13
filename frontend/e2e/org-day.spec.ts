@@ -81,7 +81,7 @@ const ANY_ITEM = "Any item in the branch";
 const ANY_WORK = "Any work in the branch";
 
 /** Roles and departments, set up once for every branch. */
-const SCHOOL_GROUPS: { name: string; description: string; grants: Grant[] }[] = [
+const SCHOOL_GROUPS: { name: string; description: string; department?: boolean; grants: Grant[] }[] = [
   {
     name: "CEO Office",
     description: "The CEO and their office, across the school",
@@ -116,6 +116,7 @@ const SCHOOL_GROUPS: { name: string; description: string; grants: Grant[] }[] = 
   {
     name: "IT",
     description: "IT department: computers, labs, projectors and the network",
+    department: true,
     grants: [
       {
         title: "Close or cancel items",
@@ -127,6 +128,7 @@ const SCHOOL_GROUPS: { name: string; description: string; grants: Grant[] }[] = 
   {
     name: "Health",
     description: "Health department: the school nurse and first aid",
+    department: true,
     grants: [
       {
         title: "Close or cancel items",
@@ -169,6 +171,7 @@ test("2. root user sets up roles, departments and templates", async ({ browser }
       const dlg = page.getByRole("dialog");
       await dlg.getByLabel("Name").fill(g.name);
       await dlg.getByLabel(/Description/).fill(g.description);
+      if (g.department) await dlg.getByRole("radiogroup", { name: "Kind of group" }).getByRole("radio", { name: "Department" }).click();
       await dlg.getByRole("button", { name: "Create group" }).click();
       await toast(page, `${g.name} created`);
     }
@@ -237,7 +240,7 @@ const STAFFING: Record<string, string[]> = {
 };
 
 async function openGroup(page: Page, name: string) {
-  await page.getByRole("button", { name: new RegExp(`^(School-wide )?${name} \\d+`) }).click();
+  await page.getByRole("button", { name: new RegExp(`^(School-wide )?${name} (Department )?\\d+`) }).click();
   await expect(page.getByRole("heading", { level: 2, name: new RegExp(`${name}$`) })).toBeVisible();
 }
 
@@ -272,29 +275,15 @@ test("3. each principal signs in for the first time and staffs their branch's gr
     if (b.code === "AZR") {
       await addMembers(page, "CEO Office", [person("AZR", "ceo")]);
       await addMembers(page, "IT", [person("AZR", "ithead")]);
-      // No department-admin role exists: the closest is a branch group whose
-      // members may hand out and sign off IT work.
-      const leads = page.getByRole("button", { name: /^IT Leads \d+/ });
-      if (!(await leads.isVisible())) {
-        await page.getByRole("button", { name: "New group" }).click();
-        const dlg = page.getByRole("dialog");
-        await dlg.getByLabel("Name").fill("IT Leads");
-        await dlg.getByLabel(/Description/).fill("Runs the IT department: hands out and signs off its work");
-        await dlg.getByRole("button", { name: "Create group" }).click();
-        await toast(page, "IT Leads created");
+      // The IT head runs the department: its members and the work sent to it.
+      await openGroup(page, "IT");
+      const row = page.getByRole("listitem").filter({ hasText: person("AZR", "ithead").email, hasNotText: "No one matches" });
+      if (await row.getByRole("button", { name: "Make head" }).isVisible()) {
+        await row.getByRole("button", { name: "Make head" }).click();
+        await toast(page, /^Now a head of/);
       }
-      await openGroup(page, "IT Leads");
-      await setGrants(page, "IT Leads", [
-        { title: "Assign or reassign work", reach: ANY_WORK },
-        { title: "Approve or send back work" },
-        {
-          title: "Close or cancel items",
-          reach: ANY_ITEM,
-          kinds: "Tickets only",
-        },
-      ]);
-      await addMembers(page, "IT Leads", [person("AZR", "ithead")]);
-      await shot(page, "azr-it-leads");
+      await expect(row.getByText("Head", { exact: true })).toBeVisible();
+      await shot(page, "azr-it-head");
     }
     await ctx.close();
   }
@@ -398,7 +387,12 @@ test("6. 11:00 the principal reviews: approves one, sends one back, approves the
   await page.goto("/approvals");
   await expect(page.getByRole("heading", { level: 1, name: /Waiting for your approval/ })).toBeVisible();
   const row = (p: { name: string }) => page.getByRole("listitem").filter({ has: page.getByRole("checkbox", { name: `Select ${p.name}` }) });
-  await expect(page.getByRole("checkbox", { name: /^Select / }).first().or(page.getByText("No work is waiting for your approval."))).toBeVisible();
+  await expect(
+    page
+      .getByRole("checkbox", { name: /^Select / })
+      .first()
+      .or(page.getByText("No work is waiting for your approval.")),
+  ).toBeVisible();
   if (await page.getByText("No work is waiting for your approval.").isVisible()) return principal.ctx.close(); // reviewed on an earlier run
 
   if (await row(t1).isVisible()) {

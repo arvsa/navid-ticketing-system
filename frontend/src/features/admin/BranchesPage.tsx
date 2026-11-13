@@ -115,7 +115,7 @@ function BranchCard({ branch }: { branch: Branch }) {
     onSuccess: () => (toast.success(branch.is_active ? t("Branch closed") : t("Branch reopened")), setClosing(false), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const departments = (groups.data ?? []).filter((g) => !g.is_default && !g.archived_at);
+  const departments = (groups.data ?? []).filter((g) => g.kind === "department" && !g.archived_at);
   const chip = "inline-flex max-w-full items-center gap-1.5 rounded-full bg-sunken py-1 ps-1 pe-3 text-[14px]";
   return (
     <Card className={cx("flex flex-col p-5", !branch.is_active && "opacity-70")}>

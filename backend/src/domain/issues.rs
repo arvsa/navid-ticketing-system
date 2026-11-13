@@ -530,6 +530,7 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         issue_type,
         created_by: actor.user_id,
         target_branch_ids: resolved.iter().map(|t| t.branch_id).collect(),
+        target_group_ids: resolved.iter().filter_map(|t| t.group_id).collect(),
         actor_targeted: false,
     };
     if !resolved.is_empty() {

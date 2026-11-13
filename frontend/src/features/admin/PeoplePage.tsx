@@ -12,7 +12,7 @@ import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
-import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
+import { hasGrant, headsGroup, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
 import { errorMessage, permissionInfo, reachLabel, typePlural } from "@/lib/labels";
@@ -30,7 +30,7 @@ export function PeoplePage() {
   const viewer = useViewer();
   const search = useSearch({ from: "/authed/shell/people" });
   const navigate = useNavigate({ from: "/people" });
-  const { branchId, branch, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch);
+  const { branchId, branch, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch, true);
   const openPerson = (id: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, person: id }) });
   const ctx = useBranch();
   // From a school-wide group to its copy in one branch, and back.
@@ -340,6 +340,7 @@ function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onCl
           <span className="flex items-center gap-1.5 font-semibold">
             {g.template_id && <Globe className="size-3.5 shrink-0 text-text-3" aria-label={t("School-wide")} />}
             {groupName(g)}
+            {g.kind === "department" && <span className="rounded-md bg-sunken px-1.5 text-[12px] font-medium text-text-2">{t("Department")}</span>}
           </span>
           <span className="text-text-2 tabular">{num(g.member_count)}</span>
         </span>
@@ -369,7 +370,8 @@ function GroupDetail({
   onOpenCopy?: (branchId: string, groupId: string) => void;
   onOpenTemplate?: (id: string) => void;
 }) {
-  const [tab, setTab] = useState<"can" | "members" | "branches">("can");
+  const viewer = useViewer();
+  const [tab, setTab] = useState<"can" | "members" | "branches">(() => (!editable && headsGroup(viewer, group.id) ? "members" : "can"));
   const [renaming, setRenaming] = useState(false);
   const title = groupName(group);
   const isCopy = !!group.template_id;
@@ -393,6 +395,7 @@ function GroupDetail({
                 ? tn(group.member_count, "{n} member across branches", "{n} members across branches")
                 : tn(group.member_count, "{n} member", "{n} members")}
             {group.archived_at && ` · ${t("Archived")}`}
+            {group.kind === "department" && ` · ${tn(group.head_ids.length, "{n} head", "{n} heads")}`}
           </p>
         </div>
         {shapeEditable && <GroupActions group={group} onRename={() => setRenaming(true)} />}
@@ -425,7 +428,13 @@ function GroupDetail({
       />
       {tab === "can" && (shapeEditable || (editable && group.is_default) ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
       {tab === "members" && branchId && (
-        <GroupMembers group={group} branchId={branchId} editable={editable && !group.is_default && !group.archived_at} onOpen={onOpen} />
+        <GroupMembers
+          group={group}
+          branchId={branchId}
+          editable={(editable || headsGroup(viewer, group.id)) && !group.is_default && !group.archived_at}
+          admin={editable}
+          onOpen={onOpen}
+        />
       )}
       {tab === "branches" && <GroupCopies group={group} onOpenCopy={onOpenCopy} />}
       <RenameDialog group={group} open={renaming} onOpenChange={setRenaming} />
@@ -480,7 +489,9 @@ function ReadOnlyGrants({ groupId }: { groupId: string }) {
   );
 }
 
-function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; branchId: string; editable: boolean; onOpen?: (id: string) => void }) {
+/** `editable`: may choose members (admins, and the department's heads).
+ * `admin`: may also choose its heads. */
+function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Group; branchId: string; editable: boolean; admin: boolean; onOpen?: (id: string) => void }) {
   const qc = useQueryClient();
   const people = usePeople();
   const members = useMembers(branchId, { groupId: group.id });
@@ -502,6 +513,16 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
     onSuccess: () => (toast.success(t("Removed from the group")), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const setHead = useMutation({
+    mutationFn: ({ id, head }: { id: string; head: boolean }) => (head ? api.put : api.del)(`/groups/${group.id}/heads/${id}`),
+    onSuccess: (_, { head }) => (
+      toast.success(head ? t("Now a head of {name}", { name: group.name }) : t("No longer a head of {name}", { name: group.name })),
+      qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] }),
+      qc.invalidateQueries({ queryKey: ["groups"] })
+    ),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const isDept = group.kind === "department";
   const ids = new Set((members.data ?? []).map((m) => m.user_id));
   const term = mq.trim().toLowerCase();
   const shown = (members.data ?? []).filter((m) => !term || `${m.first_name} ${m.last_name} ${m.email}`.toLowerCase().includes(term));
@@ -555,10 +576,23 @@ function GroupMembers({ group, branchId, editable, onOpen }: { group: Group; bra
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">
                     {m.first_name} {m.last_name}
+                    {group.head_ids.includes(m.user_id) && (
+                      <span className="ms-2 rounded-md bg-primary-soft px-1.5 text-[12px] font-semibold text-primary">{t("Head")}</span>
+                    )}
                   </span>
                   <span className="block truncate text-[14px] text-text-3">{m.email}</span>
                 </span>
               </button>
+              {admin && isDept && !group.archived_at && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={setHead.isPending && setHead.variables?.id === m.user_id}
+                  onClick={() => setHead.mutate({ id: m.user_id, head: !group.head_ids.includes(m.user_id) })}
+                >
+                  {group.head_ids.includes(m.user_id) ? t("Remove as head") : t("Make head")}
+                </Button>
+              )}
               {editable && (
                 <Button variant="ghost" size="sm" aria-label={t("Remove {person} from {group}", { person: m.first_name, group: group.name })} onClick={() => remove.mutate(m.user_id)}>
                   <X className="size-4" />
@@ -626,8 +660,9 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
   const qc = useQueryClient();
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description ?? "");
+  const [kind, setKind] = useState(group.kind);
   const save = useMutation({
-    mutationFn: () => api.patch(`/groups/${group.id}`, { name: name.trim(), description: description.trim() || null }),
+    mutationFn: () => api.patch(`/groups/${group.id}`, { name: name.trim(), description: description.trim() || null, kind }),
     onSuccess: () => (
       toast.success(t("Saved")),
       onOpenChange(false),
@@ -641,7 +676,7 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("Rename group")}
+      title={t("Edit group")}
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
@@ -656,8 +691,34 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
         <Field label={t("Description")} optional>
           {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />}
         </Field>
+        <KindChoice value={kind} onChange={setKind} />
+        {group.kind === "department" && kind === "team" && group.head_ids.length > 0 && (
+          <p className="text-[14px] text-warning">{t("As a team it has no heads: its heads become ordinary members.")}</p>
+        )}
       </div>
     </Dialog>
+  );
+}
+
+/** Department or team, with what the difference means. */
+function KindChoice({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Segmented
+        label={t("Kind of group")}
+        value={value}
+        onChange={onChange}
+        options={[
+          { value: "team", label: t("Team or role") },
+          { value: "department", label: t("Department") },
+        ]}
+      />
+      <p className="text-[13px] text-text-3">
+        {value === "department"
+          ? t("Handles work for others, like IT or Health. It's listed in the directory, and its heads choose its members and run the work sent to it.")
+          : t("People who share a role or job, like Principals or a committee.")}
+      </p>
+    </div>
   );
 }
 
@@ -666,9 +727,10 @@ function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boo
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [kind, setKind] = useState("team");
   const create = useMutation({
     mutationFn: () =>
-      api.post<Group>(branchId ? `/branches/${branchId}/groups` : "/school-groups", { name: name.trim(), description: description.trim() || null }),
+      api.post<Group>(branchId ? `/branches/${branchId}/groups` : "/school-groups", { name: name.trim(), description: description.trim() || null, kind }),
     onSuccess: (g) => {
       toast.success(t("{name} created", { name: g.name }));
       if (branchId) qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] });
@@ -705,6 +767,7 @@ function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boo
         <Field label={t("Description")} optional>
           {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Heads of year and department coordinators")} className={inputClass} />}
         </Field>
+        <KindChoice value={kind} onChange={setKind} />
       </div>
     </Dialog>
   );

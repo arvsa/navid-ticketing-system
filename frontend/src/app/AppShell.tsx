@@ -80,7 +80,10 @@ function useNav() {
   main.push({ to: "/directory", label: t("Directory"), icon: <BookUser className="size-[18px]" /> });
 
   const manage: NavEntry[] = [];
-  const canPeople = branchId ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") : me.memberships.some((m) => m.is_admin) || superAdmin;
+  // Department heads choose their department's members there too.
+  const canPeople = branchId
+    ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") || !!me.memberships.find((m) => m.branch.id === branchId)?.heads.length
+    : me.memberships.some((m) => m.is_admin || m.heads.length) || superAdmin;
   if (canPeople) manage.push({ to: "/people", label: t("People & groups"), icon: <Users className="size-4" /> });
   if (superAdmin) manage.push({ to: "/branches", label: t("Branches & admins"), icon: <Shield className="size-4" /> });
   if (superAdmin) manage.push({ to: "/templates", label: t("Templates"), icon: <LayoutTemplate className="size-4" /> });

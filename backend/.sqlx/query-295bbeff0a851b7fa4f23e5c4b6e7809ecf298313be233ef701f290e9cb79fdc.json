@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT gm.group_id FROM group_member gm\n               JOIN user_group g ON g.id = gm.group_id AND g.archived_at IS NULL AND g.kind = 'department'\n               WHERE gm.user_id = $1 AND gm.is_head",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "group_member",
+            "name": "group_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "295bbeff0a851b7fa4f23e5c4b6e7809ecf298313be233ef701f290e9cb79fdc"
+}

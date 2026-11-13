@@ -18,7 +18,7 @@ describe("labels", () => {
 
 const me = (id = "me"): MeResponse => ({
   user: { id, email: "a@b.c", first_name: "A", last_name: "B", is_super_admin: false, must_change_password: false },
-  memberships: [{ branch: { id: "br", code: "BR", name: "Branch" }, is_admin: false, joined_at: "", grants: [] }],
+  memberships: [{ branch: { id: "br", code: "BR", name: "Branch" }, is_admin: false, joined_at: "", grants: [], heads: [] }],
 });
 const work = (patch: Partial<WorkItem>): WorkItem => ({
   id: "w", issue_id: "i", target_id: "t", branch_id: "br", assignee_id: "me", status: "open",

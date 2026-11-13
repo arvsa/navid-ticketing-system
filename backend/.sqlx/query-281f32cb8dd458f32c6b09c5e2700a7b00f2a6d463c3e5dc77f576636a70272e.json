@@ -1,16 +1,16 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,\n               CASE WHEN g.is_default THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m\n                                             JOIN app_user u ON u.id = m.user_id\n                                             WHERE m.left_at IS NULL AND u.is_active)\n                    ELSE (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id\n                          WHERE c.id = g.id OR c.template_id = g.id) END AS \"member_count!\"\n        FROM user_group g\n        WHERE g.branch_id IS NULL AND ($1 OR g.archived_at IS NULL)\n        ORDER BY g.is_default DESC, lower(g.name), g.id\n        ",
+  "query": "SELECT kind, branch_id, template_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
-        "type_info": "Uuid",
+        "name": "kind",
+        "type_info": "Text",
         "origin": {
           "Table": {
             "table": "user_group",
-            "name": "id"
+            "name": "kind"
           }
         }
       },
@@ -79,28 +79,11 @@
             "name": "archived_at"
           }
         }
-      },
-      {
-        "ordinal": 7,
-        "name": "created_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "user_group",
-            "name": "created_at"
-          }
-        }
-      },
-      {
-        "ordinal": 8,
-        "name": "member_count!",
-        "type_info": "Int8",
-        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Bool"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -110,10 +93,8 @@
       false,
       true,
       false,
-      true,
-      false,
-      null
+      true
     ]
   },
-  "hash": "3b5f1a7803ec68c42b237fa9f1eef16f17f74a606987d989cd876c15e317ff4f"
+  "hash": "281f32cb8dd458f32c6b09c5e2700a7b00f2a6d463c3e5dc77f576636a70272e"
 }

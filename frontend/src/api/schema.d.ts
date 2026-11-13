@@ -367,6 +367,24 @@ export interface paths {
         patch: operations["patch__api_groups_id_"];
         trace?: never;
     };
+    "/api/groups/{id}/heads/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Make a department member one of its heads (branch admins). */
+        put: operations["put__api_groups_id_heads_user_id_"];
+        post?: never;
+        /** Stop someone being a head of a department (they stay a member). */
+        delete: operations["delete__api_groups_id_heads_user_id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/groups/{id}/members/{user_id}": {
         parameters: {
             query?: never;
@@ -1352,6 +1370,8 @@ export interface components {
         };
         DirectoryGroup: {
             description?: string | null;
+            /** @description Who runs the department (some of `member_ids`). */
+            head_ids: string[];
             /** Format: uuid */
             id: string;
             /** @description Current, active members. */
@@ -1442,9 +1462,16 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             description?: string | null;
+            /** @description A department's heads (members of this group). */
+            head_ids: string[];
             /** Format: uuid */
             id: string;
             is_default: boolean;
+            /**
+             * @description `department` (IT, Health: handles work for others, has heads) or
+             *     `team` (a role or committee: Principals, Teachers).
+             */
+            kind: string;
             /**
              * Format: int64
              * @description For a school-wide group: the members of all its branch copies.
@@ -1473,6 +1500,8 @@ export interface components {
             /** @description `true` archives, `false` restores. */
             archived?: boolean | null;
             description?: string | null;
+            /** @description `team` or `department`. Turning a department into a team removes its heads. */
+            kind?: string | null;
             name?: string | null;
         };
         GroupRef: {
@@ -1686,6 +1715,11 @@ export interface components {
              *     Branch admins can do everything except super admin actions regardless.
              */
             grants: components["schemas"]["Grant"][];
+            /**
+             * @description Departments in this branch the user heads: they run their members and
+             *     the work and questions sent to them.
+             */
+            heads: string[];
             is_admin: boolean;
             /** Format: date-time */
             joined_at: string;
@@ -1734,6 +1768,8 @@ export interface components {
         };
         NewGroup: {
             description?: string | null;
+            /** @description `team` (default) or `department`. */
+            kind?: string | null;
             name: string;
         };
         NewIssue: {
@@ -1898,9 +1934,16 @@ export interface components {
                 /** Format: date-time */
                 created_at: string;
                 description?: string | null;
+                /** @description A department's heads (members of this group). */
+                head_ids: string[];
                 /** Format: uuid */
                 id: string;
                 is_default: boolean;
+                /**
+                 * @description `department` (IT, Health: handles work for others, has heads) or
+                 *     `team` (a role or committee: Principals, Teachers).
+                 */
+                kind: string;
                 /**
                  * Format: int64
                  * @description For a school-wide group: the members of all its branch copies.
@@ -3465,6 +3508,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Group"];
                 };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_groups_id_heads_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_groups_id_heads_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error; see the codes in the README */
             "4XX": {

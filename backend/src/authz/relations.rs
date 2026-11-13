@@ -69,6 +69,8 @@ pub struct IssueFacts {
     pub created_by: Uuid,
     /// Distinct branches of the issue's active targets.
     pub target_branch_ids: Vec<Uuid>,
+    /// The groups among the issue's active targets.
+    pub target_group_ids: Vec<Uuid>,
     /// The actor is a user target, a current member of a group target, a
     /// member of a branch target's branch, or the assignee of a work item,
     /// always as a current member of that branch.
@@ -93,6 +95,8 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         SELECT i.id, i.branch_id, ty.code AS issue_type, i.created_by,
                ARRAY(SELECT DISTINCT t.branch_id FROM issue_target t
                      WHERE t.issue_id = i.id AND t.removed_at IS NULL) AS "target_branch_ids!",
+               ARRAY(SELECT t.group_id FROM issue_target t
+                     WHERE t.issue_id = i.id AND t.removed_at IS NULL AND t.group_id IS NOT NULL) AS "target_group_ids!",
                (EXISTS (SELECT 1 FROM issue_target t
                         WHERE t.issue_id = i.id AND t.removed_at IS NULL AND (
                               (t.user_id = $2 AND t.branch_id = ANY($3))
@@ -121,6 +125,7 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         issue_type,
         created_by: r.created_by,
         target_branch_ids: r.target_branch_ids,
+        target_group_ids: r.target_group_ids,
         actor_targeted: r.targeted,
     }))
 }
@@ -137,6 +142,8 @@ pub struct WorkItemFacts {
     /// The actor belongs to the item's target: is the user target, a current
     /// member of the target group, or a member of the target branch.
     pub actor_in_target: bool,
+    /// The target group, when the work was sent to a group.
+    pub target_group_id: Option<Uuid>,
     pub issue: IssueFacts,
 }
 
@@ -145,6 +152,7 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
     let Some(row) = sqlx::query!(
         r#"
         SELECT w.id, w.issue_id, w.branch_id, w.assignee_id, work_reviewer(w.handoff_chain, w.assignee_id) AS reviewer,
+               t.group_id AS target_group_id,
                -- coalesce: `NULL IN (...)` is NULL, not false, for non-group targets
                coalesce(t.removed_at IS NULL AND (
                     (t.user_id = $2 AND t.branch_id = ANY($3))
@@ -170,6 +178,7 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
         assignee_id: row.assignee_id,
         reviewer: row.reviewer,
         actor_in_target: row.in_target,
+        target_group_id: row.target_group_id,
         issue,
     }))
 }

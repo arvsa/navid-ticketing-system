@@ -119,6 +119,7 @@ function BranchView({ branch, onOpen }: { branch: DirectoryBranch; onOpen: (id: 
             key={g.id}
             title={g.name}
             description={g.description}
+            heads={g.head_ids}
             people={g.member_ids.map((id) => byId.get(id)).filter((p): p is DirectoryPerson => !!p)}
             onOpen={onOpen}
           />
@@ -237,12 +238,15 @@ function DepartmentCard({
   title,
   description,
   people,
+  heads = [],
   muted,
   onOpen,
 }: {
   title: string;
   description?: string | null;
   people: DirectoryPerson[];
+  /** Who runs it: listed first, marked Head. */
+  heads?: string[];
   muted?: boolean;
   onOpen: (id: string) => void;
 }) {
@@ -263,9 +267,9 @@ function DepartmentCard({
       </div>
       {people.length ? (
         <ul className="divide-y divide-border">
-          {people.map((p) => (
+          {[...people].sort((a, b) => Number(heads.includes(b.user_id)) - Number(heads.includes(a.user_id))).map((p) => (
             <li key={p.user_id}>
-              <PersonRow person={p} onOpen={onOpen} />
+              <PersonRow person={p} note={heads.includes(p.user_id) ? `${t("Head")} · ${p.email}` : undefined} onOpen={onOpen} />
             </li>
           ))}
         </ul>

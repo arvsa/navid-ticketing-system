@@ -271,7 +271,6 @@ export const fa: Record<string, string> = {
   "Delete {name}?": "{name} حذف شود؟",
   "If this group was ever sent work it will be archived instead, so its history stays.":
     "اگر تا به حال برای این گروه کاری فرستاده شده باشد، به‌جای حذف بایگانی می‌شود تا سابقه‌اش بماند.",
-  "Rename group": "تغییر نام گروه",
   Description: "توضیح",
   "{name} created": "{name} ساخته شد",
   "Departments, year teams, committees. Choose what it can do after creating it.": "دپارتمان‌ها، تیم‌های پایه، کمیته‌ها. پس از ساختن، تعیین کنید چه کارهایی می‌تواند بکند.",
@@ -424,6 +423,21 @@ export const fa: Record<string, string> = {
 
   // ---- Permissions ----------------------------------------------------------
   "All kinds": "همهٔ انواع",
+  Department: "بخش",
+  Head: "مسئول",
+  "{n} head": "{n} مسئول",
+  "{n} heads": "{n} مسئول",
+  "Now a head of {name}": "اکنون مسئول {name} است",
+  "No longer a head of {name}": "دیگر مسئول {name} نیست",
+  "Make head": "مسئول کردن",
+  "Remove as head": "برداشتن از مسئولیت",
+  "Edit group": "ویرایش گروه",
+  "As a team it has no heads: its heads become ordinary members.": "تیم مسئول ندارد: مسئولانش عضو عادی می‌شوند.",
+  "Kind of group": "نوع گروه",
+  "Team or role": "تیم یا نقش",
+  "Handles work for others, like IT or Health. It's listed in the directory, and its heads choose its members and run the work sent to it.":
+    "کارهای دیگران را انجام می‌دهد، مثل فناوری اطلاعات یا بهداشت. در فهرست کارکنان می‌آید و مسئولانش اعضای آن را انتخاب می‌کنند و کارهای فرستاده‌شده به آن را اداره می‌کنند.",
+  "People who share a role or job, like Principals or a committee.": "کسانی که نقش یا کار مشترکی دارند، مثل مدیران مدارس یا یک کمیته.",
   "All statuses": "همهٔ وضعیت‌ها",
   Undo: "برگرداندن",
   "Not approved": "تأیید نشد",
@@ -1139,7 +1153,6 @@ export const fa: Record<string, string> = {
   "{actor} made a change ({action})": "{actor} تغییری داد ({action})",
   "{n} other branch": "{n} شعبهٔ دیگر",
   "{n} other branches": "{n} شعبهٔ دیگر",
-  "A group": "یک گروه",
   Nobody: "هیچ‌کس",
   "School office": "دفتر مدرسه",
 

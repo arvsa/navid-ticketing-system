@@ -86,7 +86,9 @@ export function canEdit(v: Viewer, issue: IssueDetail) {
 export function canClose(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
   const ownerClose = issue.created_by === v.me.user.id && issue.type !== "action";
-  return ownerClose || itemRule(v, issue, "issue.close");
+  // Heads close the questions sent to their department.
+  const headClose = issue.type === "ticket" && !!issue.branch_id && issue.targets.some((t) => headsGroup(v, t.group_id));
+  return ownerClose || headClose || itemRule(v, issue, "issue.close");
 }
 
 export function canTarget(v: Viewer, issue: IssueDetail) {
@@ -120,6 +122,16 @@ export function canModerate(v: Viewer, issue: IssueDetail) {
   return isAdminOf(v, branchId) || grantApplies(v, issue, "comment.moderate", branchId);
 }
 
+/** The viewer heads a department: they run its members and what's sent to it. */
+export function headsGroup(v: Viewer, groupId?: string | null) {
+  return !!groupId && v.me.memberships.some((m) => m.heads.includes(groupId));
+}
+
+/** Work sent to a department the viewer heads. */
+function headsWork(v: Viewer, issue: IssueDetail, w: WorkItem) {
+  return headsGroup(v, issue.targets.find((t) => t.id === w.target_id)?.group_id);
+}
+
 export function canApprove(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.status !== "pending_approval") return false;
   if (w.assignee_id === v.me.user.id) return false;
@@ -127,7 +139,7 @@ export function canApprove(v: Viewer, issue: IssueDetail, w: WorkItem) {
   // Passed along: reviewed one level up the chain first (or by the branch's admins).
   if (w.reviewer_id) return w.reviewer_id === v.me.user.id || isAdminOf(v, w.branch_id);
   // The sender approves what they sent, and so do the branch's approvers.
-  if (issue.created_by === v.me.user.id) return true;
+  if (issue.created_by === v.me.user.id || headsWork(v, issue, w)) return true;
   return isAdminOf(v, w.branch_id) || grantApplies(v, issue, "work_item.approve", w.branch_id);
 }
 
@@ -142,17 +154,17 @@ export function waitsHere(v: Viewer, issue: IssueDetail, w: WorkItem, branchId: 
 
 /** Approve without the item loaded (approvals queue), used before the issue arrives. */
 export function mayApproveIn(v: Viewer, branchId: string) {
-  return isAdminOf(v, branchId) || hasGrant(v, branchId, "work_item.approve");
+  return isAdminOf(v, branchId) || hasGrant(v, branchId, "work_item.approve") || !!membership(v, branchId)?.heads.length;
 }
 
 export function canAssign(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.status === "approved" || w.status === "cancelled" || !isOpen(issue)) return false;
-  return isAdminOf(v, w.branch_id) || grantApplies(v, issue, "work_item.assign", w.branch_id);
+  return isAdminOf(v, w.branch_id) || headsWork(v, issue, w) || grantApplies(v, issue, "work_item.assign", w.branch_id);
 }
 
 export function canCancelWork(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.status === "approved" || w.status === "cancelled" || !isOpen(issue)) return false;
-  return adminCanManage(v, w.branch_id) || issue.created_by === v.me.user.id;
+  return adminCanManage(v, w.branch_id) || issue.created_by === v.me.user.id || headsWork(v, issue, w);
 }
 
 export function canClaim(v: Viewer, issue: IssueDetail, w: WorkItem) {

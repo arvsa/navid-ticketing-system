@@ -1,5 +1,5 @@
-//! The school directory: every active branch, its departments (groups other
-//! than "All members") and its people, for everyone signed in. Names, emails
+//! The school directory: every active branch, its departments (groups of
+//! kind `department`) and its people, for everyone signed in. Names, emails
 //! and who runs what only; bios and pictures come from the profile endpoints.
 
 use std::collections::HashMap;
@@ -29,6 +29,8 @@ pub struct DirectoryGroup {
     pub description: Option<String>,
     /// Current, active members.
     pub member_ids: Vec<Uuid>,
+    /// Who runs the department (some of `member_ids`).
+    pub head_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -52,9 +54,10 @@ pub async fn list(db: &PgPool, _actor: &Actor) -> AppResult<Vec<DirectoryBranch>
                      JOIN branch_membership m ON m.user_id = gm.user_id AND m.branch_id = g.branch_id
                                              AND m.left_at IS NULL
                      WHERE gm.group_id = g.id
-                     ORDER BY u.first_name, u.last_name, u.id) AS "member_ids!"
+                     ORDER BY u.first_name, u.last_name, u.id) AS "member_ids!",
+               ARRAY(SELECT gm.user_id FROM group_member gm WHERE gm.group_id = g.id AND gm.is_head) AS "head_ids!"
         FROM user_group g
-        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL
+        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL AND g.kind = 'department'
         ORDER BY lower(g.name), g.id
         "#
     )
@@ -66,6 +69,7 @@ pub async fn list(db: &PgPool, _actor: &Actor) -> AppResult<Vec<DirectoryBranch>
             name: g.name,
             description: g.description,
             member_ids: g.member_ids,
+            head_ids: g.head_ids,
         });
     }
     let mut people: HashMap<Uuid, Vec<DirectoryPerson>> = HashMap::new();

@@ -55,7 +55,7 @@ impl Modify for SessionCookie {
         super::members::effective_permissions, super::members::reset_password, super::members::set_active,
         super::members::recipients, super::members::recipient_groups, super::members::import, super::members::import_template,
         super::groups::list, super::groups::create, super::groups::update, super::groups::remove,
-        super::groups::add_member, super::groups::remove_member,
+        super::groups::add_member, super::groups::remove_member, super::groups::make_head, super::groups::remove_head,
         super::groups::list_grants, super::groups::grant, super::groups::revoke,
         super::groups::list_school, super::groups::create_school, super::groups::copies, super::groups::apply_grants,
         super::issues::list, super::issues::create, super::issues::show, super::issues::by_number,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT b.id, b.code, b.name, m.joined_at\n        FROM branch_membership m\n        JOIN branch b ON b.id = m.branch_id\n        WHERE m.user_id = $1 AND m.left_at IS NULL\n        ORDER BY b.name\n        ",
+  "query": "\n        SELECT b.id, b.code, b.name, m.joined_at,\n               ARRAY(SELECT gm.group_id FROM group_member gm WHERE gm.user_id = m.user_id\n                       AND gm.branch_id = b.id AND gm.is_head) AS \"heads!\"\n        FROM branch_membership m\n        JOIN branch b ON b.id = m.branch_id\n        WHERE m.user_id = $1 AND m.left_at IS NULL\n        ORDER BY b.name\n        ",
   "describe": {
     "columns": [
       {
@@ -46,6 +46,12 @@
             "name": "joined_at"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "heads!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -57,8 +63,9 @@
       false,
       false,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "1b8371fd338a09808c9f8a39e32f5c53468519c62579821cd96c85a21c0f7157"
+  "hash": "3e6d85f953a0e04fe0c1fdd5c1d5453334011b6d3d1d1ae6ede72719973d1430"
 }

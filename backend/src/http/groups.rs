@@ -25,6 +25,7 @@ pub fn routes() -> Router<AppState> {
         .route("/groups/{id}", patch(update).delete(remove))
         .route("/school-groups/{id}/copies", get(copies))
         .route("/groups/{id}/members/{user_id}", put(add_member).delete(remove_member))
+        .route("/groups/{id}/heads/{user_id}", put(make_head).delete(remove_head))
         .route("/groups/{id}/permissions", get(list_grants).post(grant).put(apply_grants))
         .route("/group-permissions/{id}", delete(revoke))
 }
@@ -132,6 +133,28 @@ async fn remove_member(
     ApiPath((id, user_id)): ApiPath<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
     groups::remove_member(&s.db, &actor, id, user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Make a department member one of its heads (branch admins).
+#[utoipa::path(put, path = "/api/groups/{id}/heads/{user_id}", operation_id = "makeDepartmentHead", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id"), ("user_id" = uuid::Uuid, Path, description = "User id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn make_head(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath((id, user_id)): ApiPath<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    groups::set_head(&s.db, &actor, id, user_id, true).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Stop someone being a head of a department (they stay a member).
+#[utoipa::path(delete, path = "/api/groups/{id}/heads/{user_id}", operation_id = "removeDepartmentHead", tag = "groups", params(("id" = uuid::Uuid, Path, description = "id"), ("user_id" = uuid::Uuid, Path, description = "User id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn remove_head(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath((id, user_id)): ApiPath<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    groups::set_head(&s.db, &actor, id, user_id, false).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

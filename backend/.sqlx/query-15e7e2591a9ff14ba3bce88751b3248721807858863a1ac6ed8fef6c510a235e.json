@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO user_group (branch_id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING id",
+  "query": "INSERT INTO user_group (branch_id, name, description, created_by, kind) VALUES ($1, $2, $3, $4, $5) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,13 @@
         "Uuid",
         "Text",
         "Text",
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "1decdf1f4445dfdbfe06fc6f696477d8e07efbb04164acc085cfbbe6ef49117c"
+  "hash": "15e7e2591a9ff14ba3bce88751b3248721807858863a1ac6ed8fef6c510a235e"
 }

@@ -29,6 +29,11 @@ pub struct Group {
     pub name: String,
     pub description: Option<String>,
     pub is_default: bool,
+    /// `department` (IT, Health: handles work for others, has heads) or
+    /// `team` (a role or committee: Principals, Teachers).
+    pub kind: String,
+    /// A department's heads (members of this group).
+    pub head_ids: Vec<Uuid>,
     /// For a school-wide group: the members of all its branch copies.
     pub member_count: i64,
     #[serde(with = "time::serde::rfc3339::option")]
@@ -39,6 +44,7 @@ pub struct Group {
 
 /// The row facts every group operation starts from.
 struct GroupRow {
+    kind: String,
     branch_id: Option<Uuid>,
     template_id: Option<Uuid>,
     name: String,
@@ -60,7 +66,7 @@ fn authorize_manage(actor: &Actor, branch_id: Option<Uuid>) -> AppResult<()> {
 async fn load_managed(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<GroupRow> {
     let group = sqlx::query_as!(
         GroupRow,
-        "SELECT branch_id, template_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
+        "SELECT kind, branch_id, template_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
         group_id
     )
     .fetch_optional(db)
@@ -68,6 +74,27 @@ async fn load_managed(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<G
     .ok_or(AppError::NotFound)?;
     authorize_manage(actor, group.branch_id)?;
     Ok(group)
+}
+
+/// Like [`load_managed`], but a department's heads may also choose its members.
+async fn load_for_members(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<GroupRow> {
+    if !actor.heads(group_id) {
+        return load_managed(db, actor, group_id).await;
+    }
+    Ok(sqlx::query_as!(
+        GroupRow,
+        "SELECT kind, branch_id, template_id, name, description, is_default, archived_at FROM user_group WHERE id = $1",
+        group_id
+    )
+    .fetch_one(db)
+    .await?)
+}
+
+fn validate_kind(kind: &str) -> AppResult<()> {
+    match kind {
+        "team" | "department" => Ok(()),
+        _ => Err(AppError::validation("invalid_value", "a group's kind is team or department")),
+    }
 }
 
 fn managed_by_template() -> AppError {
@@ -97,7 +124,8 @@ pub async fn list(
     let rows = sqlx::query_as!(
         Group,
         r#"
-        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
+        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at, g.kind,
+               ARRAY(SELECT h.user_id FROM group_member h WHERE h.group_id = g.id AND h.is_head) AS "head_ids!",
                (SELECT count(*) FROM group_member gm JOIN user_group c ON c.id = gm.group_id
                 WHERE c.id = g.id OR c.template_id = g.id) AS "member_count!"
         FROM user_group g
@@ -124,7 +152,8 @@ pub async fn list_school(db: &PgPool, actor: &Actor, query: &GroupQuery) -> AppR
     Ok(sqlx::query_as!(
         Group,
         r#"
-        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
+        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at, g.kind,
+               ARRAY(SELECT h.user_id FROM group_member h WHERE h.group_id = g.id AND h.is_head) AS "head_ids!",
                CASE WHEN g.is_default THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m
                                              JOIN app_user u ON u.id = m.user_id
                                              WHERE m.left_at IS NULL AND u.is_active)
@@ -144,7 +173,8 @@ async fn fetch(tx: &mut Tx, group_id: Uuid) -> AppResult<Group> {
     Ok(sqlx::query_as!(
         Group,
         r#"
-        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
+        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at, g.kind,
+               ARRAY(SELECT h.user_id FROM group_member h WHERE h.group_id = g.id AND h.is_head) AS "head_ids!",
                CASE WHEN g.is_default AND g.branch_id IS NULL
                     THEN (SELECT count(DISTINCT m.user_id) FROM branch_membership m
                           JOIN app_user u ON u.id = m.user_id
@@ -163,6 +193,8 @@ async fn fetch(tx: &mut Tx, group_id: Uuid) -> AppResult<Group> {
 pub struct NewGroup {
     pub name: String,
     pub description: Option<String>,
+    /// `team` (default) or `department`.
+    pub kind: Option<String>,
 }
 
 /// `branch_id` `None` creates a school-wide group, and its copy in every
@@ -174,14 +206,17 @@ pub async fn create(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>, input: 
         validate_template_name(&name)?;
     }
     let description = input.description.map(|d| d.trim().to_owned()).filter(|d| !d.is_empty());
+    let kind = input.kind.unwrap_or_else(|| "team".into());
+    validate_kind(&kind)?;
 
     let mut tx = db.begin().await?;
     let group_id = sqlx::query_scalar!(
-        "INSERT INTO user_group (branch_id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING id",
+        "INSERT INTO user_group (branch_id, name, description, created_by, kind) VALUES ($1, $2, $3, $4, $5) RETURNING id",
         branch_id,
         name,
         description,
-        actor.user_id
+        actor.user_id,
+        kind
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -192,7 +227,7 @@ pub async fn create(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>, input: 
         group_id,
         "create",
         None,
-        json!({ "name": name, "description": description }),
+        json!({ "name": name, "description": description, "kind": kind }),
     )
     .await?;
     emit_group_event(&mut tx, "group_changed", branch_id, vec![]).await?;
@@ -229,6 +264,8 @@ pub struct GroupPatch {
     pub description: Option<Option<String>>,
     /// `true` archives, `false` restores.
     pub archived: Option<bool>,
+    /// `team` or `department`. Turning a department into a team removes its heads.
+    pub kind: Option<String>,
 }
 
 /// On a school-wide group, the change carries over to every branch copy.
@@ -257,18 +294,24 @@ pub async fn update(db: &PgPool, actor: &Actor, group_id: Uuid, patch: GroupPatc
     };
     let was_archived = group.archived_at.is_some();
     let archived = patch.archived.unwrap_or(was_archived);
+    let new_kind = patch.kind.clone().unwrap_or_else(|| group.kind.clone());
+    validate_kind(&new_kind)?;
+    if group.is_default && new_kind != group.kind {
+        return Err(AppError::conflict("default_group", "a built-in group stays a team"));
+    }
 
     let mut tx = db.begin().await?;
     sqlx::query!(
         r#"
-        UPDATE user_group SET name = $2, description = $3,
+        UPDATE user_group SET name = $2, description = $3, kind = $5,
                archived_at = CASE WHEN $4 THEN coalesce(archived_at, now()) ELSE NULL END
         WHERE id = $1
         "#,
         group_id,
         new_name,
         new_description,
-        archived
+        archived,
+        new_kind
     )
     .execute(&mut *tx)
     .await?;
@@ -286,6 +329,10 @@ pub async fn update(db: &PgPool, actor: &Actor, group_id: Uuid, patch: GroupPatc
     if archived != was_archived {
         old_v.insert("archived".into(), json!(was_archived));
         new_v.insert("archived".into(), json!(archived));
+    }
+    if new_kind != group.kind {
+        old_v.insert("kind".into(), json!(group.kind));
+        new_v.insert("kind".into(), json!(new_kind));
     }
     if !new_v.is_empty() {
         let action = match (was_archived, archived) {
@@ -312,7 +359,7 @@ pub async fn update(db: &PgPool, actor: &Actor, group_id: Uuid, patch: GroupPatc
         if group.branch_id.is_none() {
             let copies = sqlx::query!(
                 r#"
-                UPDATE user_group SET name = $2, description = $3,
+                UPDATE user_group SET name = $2, description = $3, kind = $5,
                        archived_at = CASE WHEN $4 THEN coalesce(archived_at, now()) ELSE NULL END
                 WHERE template_id = $1
                 RETURNING id, branch_id AS "branch_id!"
@@ -320,7 +367,8 @@ pub async fn update(db: &PgPool, actor: &Actor, group_id: Uuid, patch: GroupPatc
                 group_id,
                 new_name,
                 new_description,
-                archived
+                archived,
+                new_kind
             )
             .fetch_all(&mut *tx)
             .await?;
@@ -427,7 +475,7 @@ pub async fn delete(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<Del
 // ---------------------------------------------------------------------------
 
 pub async fn add_member(db: &PgPool, actor: &Actor, group_id: Uuid, user_id: Uuid) -> AppResult<()> {
-    let group = load_managed(db, actor, group_id).await?;
+    let group = load_for_members(db, actor, group_id).await?;
     if group.is_default {
         return Err(AppError::conflict("default_group", "membership of All members is automatic"));
     }
@@ -510,7 +558,8 @@ pub async fn copies(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<Vec
     Ok(sqlx::query_as!(
         Group,
         r#"
-        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at,
+        SELECT g.id, g.branch_id, g.template_id, g.name, g.description, g.is_default, g.archived_at, g.created_at, g.kind,
+               ARRAY(SELECT h.user_id FROM group_member h WHERE h.group_id = g.id AND h.is_head) AS "head_ids!",
                (SELECT count(*) FROM group_member gm WHERE gm.group_id = g.id) AS "member_count!"
         FROM user_group g JOIN branch b ON b.id = g.branch_id
         WHERE g.template_id = $1
@@ -523,7 +572,7 @@ pub async fn copies(db: &PgPool, actor: &Actor, group_id: Uuid) -> AppResult<Vec
 }
 
 pub async fn remove_member(db: &PgPool, actor: &Actor, group_id: Uuid, user_id: Uuid) -> AppResult<()> {
-    let group = load_managed(db, actor, group_id).await?;
+    let group = load_for_members(db, actor, group_id).await?;
     if group.is_default {
         return Err(AppError::conflict("default_group", "membership of All members is automatic"));
     }
@@ -553,6 +602,50 @@ pub async fn remove_member(db: &PgPool, actor: &Actor, group_id: Uuid, user_id: 
         actor,
         group.branch_id,
         json!({ "group_id": group_id, "group_name": group.name, "user_id": user_id, "removed": true }),
+    )
+    .await?;
+    emit_group_event(&mut tx, "permissions_changed", group.branch_id, vec![user_id]).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Makes a member of a department one of its heads, or not (branch admins).
+pub async fn set_head(db: &PgPool, actor: &Actor, group_id: Uuid, user_id: Uuid, head: bool) -> AppResult<()> {
+    let group = load_managed(db, actor, group_id).await?;
+    if group.kind != "department" {
+        return Err(AppError::conflict("not_a_department", "only departments have heads"));
+    }
+    let mut tx = db.begin().await?;
+    let changed = sqlx::query!(
+        "UPDATE group_member SET is_head = $3 WHERE group_id = $1 AND user_id = $2 AND is_head <> $3",
+        group_id,
+        user_id,
+        head
+    )
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+    if changed == 0 {
+        let member = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM group_member WHERE group_id = $1 AND user_id = $2) AS "m!""#,
+            group_id,
+            user_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        return if member { Ok(()) } else { Err(AppError::conflict("not_a_member", "make them a member of the department first")) };
+    }
+    audit::record(
+        &mut tx,
+        AuditEntry {
+            entity_type: "group_member",
+            entity_id: format!("{group_id}:{user_id}"),
+            branch_id: group.branch_id,
+            actor_id: Some(actor.user_id),
+            action: if head { "make_head" } else { "remove_head" },
+            old_value: Some(json!({ "is_head": !head })),
+            new_value: Some(json!({ "is_head": head })),
+        },
     )
     .await?;
     emit_group_event(&mut tx, "permissions_changed", group.branch_id, vec![user_id]).await?;

@@ -338,6 +338,11 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
         }
     }
 
+    // 2f. A department's heads run what's sent to it.
+    if runs_department_work(actor, &action) {
+        return Ok(());
+    }
+
     // 3. The resource's branch(es). Not a member of any: it isn't visible.
     let mut ids = action.branches();
     // A school-wide item: its sender works on the item itself under the rules
@@ -427,6 +432,22 @@ fn across_branches(actor: &Actor, action: &Action<'_>) -> Option<bool> {
         }
         Action::TargetIssue { issue, whole_branch: true } => whole_own_branch(issue.branch_id?, issue.issue_type),
         _ => None,
+    }
+}
+
+/// Work sent to a department the actor heads (hand it out, approve or send
+/// it back, cancel it), and closing a question sent to it.
+fn runs_department_work(actor: &Actor, action: &Action<'_>) -> bool {
+    match *action {
+        Action::AssignWorkItem { item } | Action::ApproveWorkItem { item } | Action::CancelWorkItem { item } => {
+            item.target_group_id.is_some_and(|g| actor.heads(g))
+        }
+        Action::CloseIssue { issue } => {
+            issue.issue_type == IssueType::Ticket
+                && issue.branch_id.is_some()
+                && issue.target_group_ids.iter().any(|g| actor.heads(*g))
+        }
+        _ => false,
     }
 }
 
@@ -597,11 +618,12 @@ mod tests {
                 .iter()
                 .map(|(b, is_admin, grants)| (*b, BranchAccess { is_admin: *is_admin, grants: grants.clone() }))
                 .collect(),
+            heads: Default::default(),
         }
     }
 
     fn super_admin() -> Actor {
-        Actor { user_id: uid(0), is_super_admin: true, branches: HashMap::new() }
+        Actor { user_id: uid(0), is_super_admin: true, branches: HashMap::new(), heads: Default::default() }
     }
 
     fn member(n: u128) -> Actor {
@@ -635,6 +657,7 @@ mod tests {
             issue_type: ty,
             created_by,
             target_branch_ids: vec![A],
+            target_group_ids: vec![],
             actor_targeted: false,
         }
     }
@@ -646,6 +669,7 @@ mod tests {
             assignee_id: assignee,
             reviewer: None,
             actor_in_target,
+            target_group_id: None,
             issue,
         }
     }
@@ -1105,5 +1129,29 @@ mod tests {
         ok(&admin_like(2), Action::ViewBranchDashboard { branch_id: A });
         ok(&admin_like(2), Action::Export { branch_ids: &[A] });
         denied(&admin_like(2), Action::Export { branch_ids: &[B] }, NotFound);
+    }
+
+    #[test]
+    fn department_heads_run_what_is_sent_to_their_department() {
+        const DEPT: Uuid = Uuid::from_u128(0xD);
+        let mut head = actor(5, &[(A, false, baseline())]);
+        head.heads.insert(DEPT);
+        let plain = actor(6, &[(A, false, baseline())]);
+
+        let ticket = IssueFacts { target_group_ids: vec![DEPT], actor_targeted: true, ..issue(uid(1), IssueType::Ticket) };
+        assert_eq!(authorize(&head, Action::CloseIssue { issue: &ticket }), Ok(()));
+        assert_eq!(authorize(&plain, Action::CloseIssue { issue: &ticket }), Err(Forbidden));
+
+        let task = IssueFacts { actor_targeted: true, ..issue(uid(1), IssueType::Action) };
+        let work = WorkItemFacts { target_group_id: Some(DEPT), ..item(task.clone(), Some(uid(7)), true) };
+        for action in [Action::AssignWorkItem { item: &work }, Action::ApproveWorkItem { item: &work }, Action::CancelWorkItem { item: &work }] {
+            assert_eq!(authorize(&head, action), Ok(()));
+        }
+        assert_eq!(authorize(&plain, Action::ApproveWorkItem { item: &work }), Err(Forbidden));
+        // Never their own work, and only their department's.
+        let own = WorkItemFacts { assignee_id: Some(head.user_id), ..work.clone() };
+        assert_eq!(authorize(&head, Action::ApproveWorkItem { item: &own }), Err(Forbidden));
+        let elsewhere = WorkItemFacts { target_group_id: Some(Uuid::from_u128(0xE)), ..work };
+        assert_eq!(authorize(&head, Action::ApproveWorkItem { item: &elsewhere }), Err(Forbidden));
     }
 }

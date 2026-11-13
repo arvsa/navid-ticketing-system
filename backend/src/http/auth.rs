@@ -127,6 +127,9 @@ pub struct MembershipView {
     /// Effective grants in this branch (union over the user's groups).
     /// Branch admins can do everything except super admin actions regardless.
     pub grants: Vec<Grant>,
+    /// Departments in this branch the user heads: they run their members and
+    /// the work and questions sent to them.
+    pub heads: Vec<Uuid>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -162,7 +165,9 @@ async fn me_response(db: &PgPool, actor: &Actor) -> AppResult<MeResponse> {
 
     let rows = sqlx::query!(
         r#"
-        SELECT b.id, b.code, b.name, m.joined_at
+        SELECT b.id, b.code, b.name, m.joined_at,
+               ARRAY(SELECT gm.group_id FROM group_member gm WHERE gm.user_id = m.user_id
+                       AND gm.branch_id = b.id AND gm.is_head) AS "heads!"
         FROM branch_membership m
         JOIN branch b ON b.id = m.branch_id
         WHERE m.user_id = $1 AND m.left_at IS NULL
@@ -184,6 +189,7 @@ async fn me_response(db: &PgPool, actor: &Actor) -> AppResult<MeResponse> {
                 is_admin: access.is_admin,
                 joined_at: r.joined_at,
                 grants: access.grants.clone(),
+                heads: r.heads.into_iter().filter(|g| actor.heads(*g)).collect(),
             })
         })
         .collect();

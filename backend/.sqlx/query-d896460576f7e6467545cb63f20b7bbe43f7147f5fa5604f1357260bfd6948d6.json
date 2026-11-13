@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE group_member SET is_head = $3 WHERE group_id = $1 AND user_id = $2 AND is_head <> $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d896460576f7e6467545cb63f20b7bbe43f7147f5fa5604f1357260bfd6948d6"
+}
