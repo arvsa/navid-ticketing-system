@@ -1,6 +1,6 @@
 // People & groups (UX_SPEC §4.11–4.12).
 import { useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Building2, ChevronDown, ChevronRight, Copy, FileSpreadsheet, Globe, Lock, Pencil, Plus, Shield, ShieldCheck, Trash2, UserPlus, UserRound, Users, X } from "lucide-react";
 import { toast } from "sonner";
@@ -46,7 +46,21 @@ export function PeoplePage() {
   const superAdmin = isSuper(viewer);
   const schoolGroups = useSchoolGroups(superAdmin);
   const tab = search.tab === "school" && !superAdmin ? "groups" : (search.tab ?? "groups");
-  if (!branchId) return <EmptyState title={t("You don't manage a branch.")} />;
+  if (!branchId)
+    return superAdmin ? (
+      <EmptyState
+        title={t("No branches yet.")}
+        action={
+          <Link to="/branches" className="font-semibold text-primary hover:underline">
+            {t("Open the first branch")}
+          </Link>
+        }
+      >
+        {t("People belong to branches: open one, then add its people here.")}
+      </EmptyState>
+    ) : (
+      <EmptyState title={t("You don't manage a branch.")} />
+    );
   const activeGroups = groups.data?.filter((g) => !g.archived_at).length;
   const openBranch = (id: string) =>
     guard(() => {

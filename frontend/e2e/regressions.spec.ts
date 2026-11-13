@@ -1,7 +1,7 @@
 // Checks for the bugs the school-day run found. Needs the data org-day.spec.ts
 // leaves (run it first).
 import { expect, test } from "@playwright/test";
-import { as, newItem, person, recall, toast } from "./helpers";
+import { ROOT, as, newItem, person, recall, toast } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -150,4 +150,11 @@ test("several people join a group at once", async ({ browser }) => {
     await toast(page, "Added 3 people");
   }
   await expect(page.getByRole("tab", { name: /^Members 3/ })).toBeVisible();
+});
+
+test("root users are listed, and no developer notes show", async ({ browser }) => {
+  const { page } = await as(browser, ROOT.email);
+  await page.goto("/branches");
+  await expect(page.getByText(ROOT.email, { exact: true })).toBeVisible();
+  await expect(page.getByText(/gap G-\d+/)).toHaveCount(0);
 });

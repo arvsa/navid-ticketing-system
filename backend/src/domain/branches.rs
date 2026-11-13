@@ -315,6 +315,29 @@ pub async fn set_admin(db: &PgPool, actor: &Actor, branch_id: Uuid, user_id: Uui
 }
 
 /// PUT / DELETE /users/{id}/super-admin.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct RootUser {
+    pub id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub is_active: bool,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_login_at: Option<OffsetDateTime>,
+}
+
+/// Every root user (super admin), for root users.
+pub async fn root_users(db: &PgPool, actor: &Actor) -> AppResult<Vec<RootUser>> {
+    authorize(actor, Action::SetSuperAdmin)?;
+    Ok(sqlx::query_as!(
+        RootUser,
+        r#"SELECT id, first_name, last_name, email::text AS "email!", is_active, last_login_at
+           FROM app_user WHERE is_super_admin ORDER BY first_name, last_name, id"#
+    )
+    .fetch_all(db)
+    .await?)
+}
+
 pub async fn set_super_admin(db: &PgPool, actor: &Actor, user_id: Uuid, is_super_admin: bool) -> AppResult<()> {
     authorize(actor, Action::SetSuperAdmin)?;
     let mut tx = db.begin().await?;

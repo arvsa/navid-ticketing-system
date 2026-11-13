@@ -21,6 +21,7 @@ pub fn routes() -> Router<AppState> {
         .route("/branches/{id}", patch(update).get(show))
         .route("/branches/{id}/admins/{user_id}", put(appoint_admin).delete(demote_admin))
         .route("/users/{id}/super-admin", put(grant_super_admin).delete(revoke_super_admin))
+        .route("/root-users", get(root_users))
 }
 
 #[utoipa::path(get, path = "/api/branches", operation_id = "listBranches", tag = "branches", params(PageParams), responses((status = 200, body = Page<Branch>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
@@ -84,6 +85,12 @@ async fn grant_super_admin(
 ) -> AppResult<StatusCode> {
     branches::set_super_admin(&s.db, &actor, id, true).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Every root user (root users only).
+#[utoipa::path(get, path = "/api/root-users", operation_id = "listRootUsers", tag = "users", responses((status = 200, body = Vec<branches::RootUser>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn root_users(State(s): State<AppState>, actor: Actor) -> AppResult<Json<Vec<branches::RootUser>>> {
+    Ok(Json(branches::root_users(&s.db, &actor).await?))
 }
 
 #[utoipa::path(delete, path = "/api/users/{id}/super-admin", operation_id = "revokeSuperAdmin", tag = "users", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]

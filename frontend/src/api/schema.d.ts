@@ -942,6 +942,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/root-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every root user (root users only). */
+        get: operations["get__api_root_users"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/school-groups": {
         parameters: {
             query?: never;
@@ -2263,6 +2280,17 @@ export interface components {
             title?: string | null;
             /** Format: int32 */
             version: number;
+        };
+        /** @description PUT / DELETE /users/{id}/super-admin. */
+        RootUser: {
+            email: string;
+            first_name: string;
+            /** Format: uuid */
+            id: string;
+            is_active: boolean;
+            /** Format: date-time */
+            last_login_at?: string | null;
+            last_name: string;
         };
         RowError: {
             code: string;
@@ -5006,6 +5034,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Report"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_root_users: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootUser"][];
                 };
             };
             /** @description Error; see the codes in the README */

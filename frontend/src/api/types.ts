@@ -45,6 +45,7 @@ export type ImportOutcome = S["ImportOutcome"];
 export type ImportRow = Omit<S["ImportRow"], "error"> & { error?: { code: string; message: string } | null };
 export type ImportReport = Omit<S["ImportReport"], "rows"> & { rows: ImportRow[] };
 export type Group = S["Group"];
+export type RootUser = S["RootUser"];
 export type GroupGrant = Omit<S["GroupGrant"], "permission" | "issue_type"> & {
   permission: Permission;
   issue_type?: IssueType | null;

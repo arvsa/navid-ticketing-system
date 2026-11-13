@@ -191,9 +191,6 @@ export const fa: Record<string, string> = {
   "Make root user": "کاربر ریشه کردن",
   "Make someone a root user": "کسی را کاربر ریشه کنید",
   "Stop being a root user yourself?": "خودتان دیگر کاربر ریشه نباشید؟",
-  "Remove my own root user role": "برداشتن نقش کاربر ریشه خودم",
-  "The app can't list every root user yet; ask for the backend to add it (gap G-12).":
-    "برنامه هنوز نمی‌تواند همهٔ کاربران ریشه را فهرست کند؛ از تیم سرور بخواهید آن را اضافه کند (کمبود G-12).",
 
   // ---- Export ---------------------------------------------------------------
   "You can't export from any branch.": "از هیچ شعبه‌ای نمی‌توانید خروجی بگیرید.",
@@ -423,6 +420,12 @@ export const fa: Record<string, string> = {
 
   // ---- Permissions ----------------------------------------------------------
   "All kinds": "همهٔ انواع",
+  "Open the first branch": "باز کردن نخستین شعبه",
+  "People belong to branches: open one, then add its people here.": "افراد عضو شعبه‌ها هستند: یک شعبه باز کنید، سپس افرادش را اینجا اضافه کنید.",
+  "(you)": "(شما)",
+  "Remove root role": "برداشتن نقش کاربر ریشه",
+  "Remove {name}'s root role?": "نقش کاربر ریشهٔ {name} برداشته شود؟",
+  "They keep their account and branches, but no longer run the school.": "حساب و شعبه‌هایشان می‌ماند، اما دیگر مدرسه را اداره نمی‌کنند.",
   "Select everyone shown ({n})": "انتخاب همهٔ نمایش‌داده‌شده‌ها ({n})",
   "Select everyone ({n})": "انتخاب همه ({n})",
   "Everyone here is in it already.": "همهٔ افراد اینجا از قبل عضو آن هستند.",

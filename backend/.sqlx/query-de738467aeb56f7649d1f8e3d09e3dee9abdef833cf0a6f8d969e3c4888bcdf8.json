@@ -1,0 +1,81 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, first_name, last_name, email::text AS \"email!\", is_active, last_login_at\n           FROM app_user WHERE is_super_admin ORDER BY first_name, last_name, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "is_active"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_login_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "app_user",
+            "name": "last_login_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "de738467aeb56f7649d1f8e3d09e3dee9abdef833cf0a6f8d969e3c4888bcdf8"
+}

@@ -50,7 +50,7 @@ impl Modify for SessionCookie {
         super::permissions::catalog,
         super::branches::list, super::branches::create, super::branches::show, super::branches::update,
         super::branches::appoint_admin, super::branches::demote_admin,
-        super::branches::grant_super_admin, super::branches::revoke_super_admin,
+        super::branches::grant_super_admin, super::branches::revoke_super_admin, super::branches::root_users,
         super::members::list, super::members::add, super::members::update, super::members::remove,
         super::members::effective_permissions, super::members::reset_password, super::members::set_active,
         super::members::recipients, super::members::recipient_groups, super::members::import, super::members::import_template,

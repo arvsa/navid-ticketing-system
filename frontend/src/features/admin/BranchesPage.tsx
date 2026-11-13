@@ -2,12 +2,12 @@
 // person search (gap G-12), so pickers merge every branch's member list.
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Ban, FileSpreadsheet, Hash, Mail, MoreHorizontal, Pencil, Plus, RotateCcw, Shield, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useBranches, useGroups } from "@/api/hooks";
-import type { Branch } from "@/api/types";
+import type { Branch, RootUser } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PersonSelect } from "@/components/pickers";
@@ -364,26 +364,57 @@ function SuperAdmins() {
   const viewer = useViewer();
   const qc = useQueryClient();
   const people = usePeople();
+  const roots = useQuery({ queryKey: ["root-users"], queryFn: () => api.get<RootUser[]>("/root-users") });
   const [pick, setPick] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<RootUser | null>(null);
+  const refresh = () => (qc.invalidateQueries({ queryKey: ["root-users"] }), qc.invalidateQueries({ queryKey: ["people"] }), qc.invalidateQueries({ queryKey: ["me"] }));
   const grant = useMutation({
     mutationFn: (id: string) => api.put(`/users/${id}/super-admin`),
-    onSuccess: () => (toast.success(t("{name} is now a root user", { name: people.name(pick) })), setAdding(false), setPick(null), qc.invalidateQueries({ queryKey: ["people"] })),
+    onSuccess: () => (toast.success(t("{name} is now a root user", { name: people.name(pick) })), setAdding(false), setPick(null), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.del(`/users/${id}/super-admin`),
-    onSuccess: () => (toast.success(t("Root user role removed")), qc.invalidateQueries({ queryKey: ["me"] })),
+    onSuccess: () => (toast.success(t("Root user role removed")), setRemoving(null), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const list = roots.data ?? [];
+  const me = viewer.me.user.id;
   return (
     <Card className="p-6">
       <h2 className="text-[20px] font-semibold">{t("Root users")}</h2>
       <p className="mt-1 text-text-2">{t("Root users see every branch, send work school-wide and approve it. There must always be at least one.")}</p>
-      <div className="mt-4 flex flex-wrap gap-2">
+      {roots.isLoading ? (
+        <LoadingRows rows={2} />
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {list.map((u) => (
+            <li key={u.id} className="flex items-center gap-3 py-3">
+              <Avatar first={u.first_name} last={u.last_name} id={u.id} size={36} />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">
+                  {u.first_name} {u.last_name}
+                  {u.id === me && <span className="text-text-3">{" "}{t("(you)")}</span>}
+                  {!u.is_active && <span className="ms-2 rounded-md bg-sunken px-1.5 text-[12px] text-text-2">{t("Deactivated")}</span>}
+                </span>
+                <span className="block truncate text-[14px] text-text-3" dir="ltr">
+                  {u.email}
+                </span>
+              </span>
+              {list.length > 1 && (
+                <Button variant="ghost-danger" size="sm" onClick={() => setRemoving(u)}>
+                  {t("Remove root role")}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3">
         {adding ? (
           <div className="w-full space-y-3 rounded-[12px] border border-border p-4">
-            <PersonSelect people={people.all} value={pick} onChange={setPick} />
+            <PersonSelect people={people.all} value={pick} onChange={setPick} exclude={list.map((u) => u.id)} />
             <div className="flex gap-2">
               <Button variant="primary" disabled={!pick} loading={grant.isPending} onClick={() => pick && grant.mutate(pick)}>
                 {t("Make root user")}
@@ -392,17 +423,21 @@ function SuperAdmins() {
             </div>
           </div>
         ) : (
-          <>
-            <Button icon={<Shield className="size-4" />} onClick={() => setAdding(true)}>
-              {t("Make someone a root user")}
-            </Button>
-            <Button variant="ghost-danger" loading={revoke.isPending} onClick={() => confirm(t("Stop being a root user yourself?")) && revoke.mutate(viewer.me.user.id)}>
-              {t("Remove my own root user role")}
-            </Button>
-          </>
+          <Button icon={<Shield className="size-4" />} onClick={() => setAdding(true)}>
+            {t("Make someone a root user")}
+          </Button>
         )}
       </div>
-      <p className="mt-3 text-[13px] text-text-3">{t("The app can't list every root user yet; ask for the backend to add it (gap G-12).")}</p>
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        title={removing?.id === me ? t("Stop being a root user yourself?") : t("Remove {name}'s root role?", { name: `${removing?.first_name} ${removing?.last_name}` })}
+        body={t("They keep their account and branches, but no longer run the school.")}
+        confirm={t("Remove root role")}
+        danger
+        loading={revoke.isPending}
+        onConfirm={() => removing && revoke.mutate(removing.id)}
+      />
     </Card>
   );
 }
