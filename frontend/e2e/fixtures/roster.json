@@ -1,0 +1,285 @@
+{
+ "branches": [
+  {
+   "code": "AZR",
+   "name": "Azar Campus",
+   "file": "roster-AZR.xlsx",
+   "people": [
+    {
+     "role": "principal",
+     "email": "principal@azr.rnn.school",
+     "first_name": "مریم",
+     "last_name": "حسینی"
+    },
+    {
+     "role": "vice",
+     "email": "vice@azr.rnn.school",
+     "first_name": "علی",
+     "last_name": "رضایی"
+    },
+    {
+     "role": "teacher1",
+     "email": "teacher1@azr.rnn.school",
+     "first_name": "فاطمه",
+     "last_name": "محمدی"
+    },
+    {
+     "role": "teacher2",
+     "email": "teacher2@azr.rnn.school",
+     "first_name": "حسین",
+     "last_name": "کریمی"
+    },
+    {
+     "role": "teacher3",
+     "email": "teacher3@azr.rnn.school",
+     "first_name": "زهرا",
+     "last_name": "احمدی"
+    },
+    {
+     "role": "teacher4",
+     "email": "teacher4@azr.rnn.school",
+     "first_name": "رضا",
+     "last_name": "موسوی"
+    },
+    {
+     "role": "it",
+     "email": "it@azr.rnn.school",
+     "first_name": "سارا",
+     "last_name": "جعفری"
+    },
+    {
+     "role": "nurse",
+     "email": "nurse@azr.rnn.school",
+     "first_name": "محمد",
+     "last_name": "صادقی"
+    },
+    {
+     "role": "counselor",
+     "email": "counselor@azr.rnn.school",
+     "first_name": "نرگس",
+     "last_name": "نوری"
+    },
+    {
+     "role": "accountant",
+     "email": "accounts@azr.rnn.school",
+     "first_name": "امیر",
+     "last_name": "کاظمی"
+    },
+    {
+     "role": "ceo",
+     "email": "ceo@rnn.school",
+     "first_name": "کامران",
+     "last_name": "نویدی"
+    },
+    {
+     "role": "ithead",
+     "email": "it.head@rnn.school",
+     "first_name": "بهروز",
+     "last_name": "فنی"
+    }
+   ]
+  },
+  {
+   "code": "MTH",
+   "name": "Motahari Campus",
+   "file": "roster-MTH.xlsx",
+   "people": [
+    {
+     "role": "principal",
+     "email": "principal@mth.rnn.school",
+     "first_name": "حسین",
+     "last_name": "احمدی"
+    },
+    {
+     "role": "vice",
+     "email": "vice@mth.rnn.school",
+     "first_name": "زهرا",
+     "last_name": "موسوی"
+    },
+    {
+     "role": "teacher1",
+     "email": "teacher1@mth.rnn.school",
+     "first_name": "رضا",
+     "last_name": "جعفری"
+    },
+    {
+     "role": "teacher2",
+     "email": "teacher2@mth.rnn.school",
+     "first_name": "سارا",
+     "last_name": "صادقی"
+    },
+    {
+     "role": "teacher3",
+     "email": "teacher3@mth.rnn.school",
+     "first_name": "محمد",
+     "last_name": "نوری"
+    },
+    {
+     "role": "teacher4",
+     "email": "teacher4@mth.rnn.school",
+     "first_name": "نرگس",
+     "last_name": "کاظمی"
+    },
+    {
+     "role": "it",
+     "email": "it@mth.rnn.school",
+     "first_name": "امیر",
+     "last_name": "رحیمی"
+    },
+    {
+     "role": "nurse",
+     "email": "nurse@mth.rnn.school",
+     "first_name": "لیلا",
+     "last_name": "یزدانی"
+    },
+    {
+     "role": "counselor",
+     "email": "counselor@mth.rnn.school",
+     "first_name": "مهدی",
+     "last_name": "حسینی"
+    },
+    {
+     "role": "accountant",
+     "email": "accounts@mth.rnn.school",
+     "first_name": "مریم",
+     "last_name": "رضایی"
+    }
+   ]
+  },
+  {
+   "code": "SDR",
+   "name": "Sadra Campus",
+   "file": "roster-SDR.xlsx",
+   "people": [
+    {
+     "role": "principal",
+     "email": "principal@sdr.rnn.school",
+     "first_name": "سارا",
+     "last_name": "نوری"
+    },
+    {
+     "role": "vice",
+     "email": "vice@sdr.rnn.school",
+     "first_name": "محمد",
+     "last_name": "کاظمی"
+    },
+    {
+     "role": "teacher1",
+     "email": "teacher1@sdr.rnn.school",
+     "first_name": "نرگس",
+     "last_name": "رحیمی"
+    },
+    {
+     "role": "teacher2",
+     "email": "teacher2@sdr.rnn.school",
+     "first_name": "امیر",
+     "last_name": "یزدانی"
+    },
+    {
+     "role": "teacher3",
+     "email": "teacher3@sdr.rnn.school",
+     "first_name": "لیلا",
+     "last_name": "حسینی"
+    },
+    {
+     "role": "teacher4",
+     "email": "teacher4@sdr.rnn.school",
+     "first_name": "مهدی",
+     "last_name": "رضایی"
+    },
+    {
+     "role": "it",
+     "email": "it@sdr.rnn.school",
+     "first_name": "مریم",
+     "last_name": "محمدی"
+    },
+    {
+     "role": "nurse",
+     "email": "nurse@sdr.rnn.school",
+     "first_name": "علی",
+     "last_name": "کریمی"
+    },
+    {
+     "role": "counselor",
+     "email": "counselor@sdr.rnn.school",
+     "first_name": "فاطمه",
+     "last_name": "احمدی"
+    },
+    {
+     "role": "accountant",
+     "email": "accounts@sdr.rnn.school",
+     "first_name": "حسین",
+     "last_name": "موسوی"
+    }
+   ]
+  },
+  {
+   "code": "FRZ",
+   "name": "Farzan Campus",
+   "file": "roster-FRZ.xlsx",
+   "people": [
+    {
+     "role": "principal",
+     "email": "principal@frz.rnn.school",
+     "first_name": "امیر",
+     "last_name": "حسینی"
+    },
+    {
+     "role": "vice",
+     "email": "vice@frz.rnn.school",
+     "first_name": "لیلا",
+     "last_name": "رضایی"
+    },
+    {
+     "role": "teacher1",
+     "email": "teacher1@frz.rnn.school",
+     "first_name": "مهدی",
+     "last_name": "محمدی"
+    },
+    {
+     "role": "teacher2",
+     "email": "teacher2@frz.rnn.school",
+     "first_name": "مریم",
+     "last_name": "کریمی"
+    },
+    {
+     "role": "teacher3",
+     "email": "teacher3@frz.rnn.school",
+     "first_name": "علی",
+     "last_name": "احمدی"
+    },
+    {
+     "role": "teacher4",
+     "email": "teacher4@frz.rnn.school",
+     "first_name": "فاطمه",
+     "last_name": "موسوی"
+    },
+    {
+     "role": "it",
+     "email": "it@frz.rnn.school",
+     "first_name": "حسین",
+     "last_name": "جعفری"
+    },
+    {
+     "role": "nurse",
+     "email": "nurse@frz.rnn.school",
+     "first_name": "زهرا",
+     "last_name": "صادقی"
+    },
+    {
+     "role": "counselor",
+     "email": "counselor@frz.rnn.school",
+     "first_name": "رضا",
+     "last_name": "نوری"
+    },
+    {
+     "role": "accountant",
+     "email": "accounts@frz.rnn.school",
+     "first_name": "سارا",
+     "last_name": "کاظمی"
+    }
+   ]
+  }
+ ],
+ "ceo": null
+}
