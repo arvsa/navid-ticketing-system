@@ -209,6 +209,86 @@ pub struct IssueQuery {
     pub tag: Option<String>,
     /// Only issues made from this template.
     pub template_id: Option<Uuid>,
+    /// Only issues with one of these priorities (empty: any).
+    #[serde(default)]
+    pub priorities: Vec<Priority>,
+    /// Only issues with at least one of these tags (empty: any).
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Only issues created at or after this time.
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub from: Option<OffsetDateTime>,
+    /// Only issues created before this time.
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub to: Option<OffsetDateTime>,
+}
+
+/// A comma-separated list of priorities, as in `?priority=high,critical`.
+pub fn parse_priorities(raw: Option<&str>) -> AppResult<Vec<Priority>> {
+    let Some(raw) = raw else { return Ok(vec![]) };
+    raw.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            serde_json::from_value(serde_json::Value::String(p.to_owned()))
+                .map_err(|_| AppError::validation("invalid_query", "priorities are low, medium, high, critical"))
+        })
+        .collect()
+}
+
+/// A comma-separated list of tags, normalized as tags are when saved.
+pub fn parse_tags(raw: Option<&str>) -> AppResult<Vec<String>> {
+    let mut out = Vec::new();
+    for t in raw.unwrap_or_default().split(',') {
+        if let Some(t) = templates::normalize_tag(t)? {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn priority_codes(priorities: &[Priority]) -> Option<Vec<String>> {
+    (!priorities.is_empty()).then(|| {
+        priorities
+            .iter()
+            .map(|p| serde_json::to_value(p).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default())
+            .collect()
+    })
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct TagCount {
+    pub tag: String,
+    /// Issues the actor can see with this tag.
+    pub count: i64,
+}
+
+/// The tags on issues the actor can see (in a branch, as [`list`] counts
+/// them), most used first.
+pub async fn tags(db: &PgPool, actor: &Actor, branch_id: Option<Uuid>) -> AppResult<Vec<TagCount>> {
+    let filter = IssueFilter::for_actor(actor).into_json();
+    Ok(sqlx::query_as!(
+        TagCount,
+        r#"
+        SELECT tag AS "tag!", count(*) AS "count!"
+        FROM issue i, unnest(i.tags) AS tag
+        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
+          AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND (
+                EXISTS (SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $3 AND t.removed_at IS NULL)
+                OR i.created_by = $2
+                OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id
+                             AND (w.assignee_id = $2 OR $2 = ANY(w.handoff_chain))))))
+        GROUP BY tag
+        ORDER BY count(*) DESC, tag
+        "#,
+        filter,
+        actor.user_id,
+        branch_id,
+    )
+    .fetch_all(db)
+    .await?)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -231,6 +311,12 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
     }
     let pattern = query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()).map(like_pattern);
     let tag = query.tag.as_deref().map(templates::normalize_tag).transpose()?.flatten();
+    if let (Some(from), Some(to)) = (query.from, query.to) {
+        if to <= from {
+            return Err(AppError::validation("invalid_range", "`to` must be after `from`"));
+        }
+    }
+    let any_tags = (!query.tags.is_empty()).then_some(&query.tags);
     let filter = IssueFilter::for_actor(actor).into_json();
 
     let rows = sqlx::query!(
@@ -276,6 +362,10 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
           AND ($8::timestamptz IS NULL OR (i.created_at, i.id) < ($8, $9))
           AND ($11::text IS NULL OR i.tags @> ARRAY[$11])
           AND ($12::uuid IS NULL OR i.template_id = $12)
+          AND ($13::text[] IS NULL OR i.priority::text = ANY($13))
+          AND ($14::text[] IS NULL OR i.tags && $14)
+          AND ($15::timestamptz IS NULL OR i.created_at >= $15)
+          AND ($16::timestamptz IS NULL OR i.created_at < $16)
         ORDER BY i.created_at DESC, i.id DESC
         LIMIT $10
         "#,
@@ -291,6 +381,10 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         limit + 1,
         tag,
         query.template_id,
+        priority_codes(&query.priorities) as Option<Vec<String>>,
+        any_tags as Option<&Vec<String>>,
+        query.from,
+        query.to,
     )
     .fetch_all(db)
     .await?;

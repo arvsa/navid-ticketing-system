@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, endOfDay, startOfDay } from "date-fns";
-import { ApiError, qs } from "@/api/client";
+import { qs } from "@/api/client";
 import type { ExportSheet } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Button, Card, Chip, EmptyState, Field, PageHeader, Segmented, cx } from "@/components/ui";
@@ -14,6 +14,7 @@ import { useViewer } from "@/lib/useViewer";
 import { calendar, t } from "@/i18n";
 import { addMonthsTo, dateIn, monthOf } from "@/lib/dates";
 import { DateInput } from "@/components/DateInput";
+import { downloadFile, localDay } from "@/lib/download";
 
 type Range = "this" | "last" | "three" | "sept" | "custom";
 
@@ -29,7 +30,7 @@ function rangeOf(r: Range, from: string, to: string): [Date, Date] {
     const y = month.m >= startMonth ? month.y : month.y - 1;
     return [dateIn({ y, m: startMonth }, 1), now];
   }
-  return [startOfDay(new Date(from)), endOfDay(new Date(to))];
+  return [startOfDay(localDay(from)), endOfDay(localDay(to))];
 }
 
 export function ExportPage() {
@@ -56,7 +57,7 @@ export function ExportPage() {
     const branchIds = wholeSchool ? undefined : chosen.join(",");
     setBusy(true);
     try {
-      const res = await fetch(
+      await downloadFile(
         people
           ? `/api/exports/people${qs({ branch_ids: branchIds })}`
           : `/api/exports${qs({
@@ -65,25 +66,8 @@ export function ExportPage() {
               from: a.toISOString(),
               to: b.toISOString(),
             })}`,
-        { credentials: "same-origin" },
+        "export.xlsx",
       );
-      if (!res.ok) {
-        let code = "internal_error";
-        try {
-          code = (await res.json()).error.code;
-        } catch {
-          // not JSON
-        }
-        throw new ApiError(res.status, code, "", res.headers.get("x-request-id"));
-      }
-      const blob = await res.blob();
-      const name = res.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "export.xlsx";
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t("Export downloaded"));
     } catch (e) {
       toast.error(errorMessage(e));

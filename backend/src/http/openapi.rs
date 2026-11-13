@@ -62,7 +62,7 @@ impl Modify for SessionCookie {
         super::issues::update, super::issues::close, super::issues::cancel,
         super::issues::add_target, super::issues::remove_target,
         super::issues::mark_read, super::issues::watch, super::issues::unwatch, super::issues::history,
-        super::issues::mute, super::issues::unmute, super::issues::pass,
+        super::issues::mute, super::issues::unmute, super::issues::pass, super::issues::tags,
         super::work_items::list, super::work_items::show, super::work_items::transition,
         super::comments::list, super::comments::create, super::comments::update, super::comments::remove,
         super::reports::list, super::reports::create, super::reports::update, super::reports::submit,

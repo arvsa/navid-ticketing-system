@@ -18,7 +18,10 @@ use time::OffsetDateTime;
 use time_tz::OffsetDateTimeExt;
 use uuid::Uuid;
 
-use super::audit::{self, AuditEntry};
+use super::{
+    audit::{self, AuditEntry},
+    types::{IssueState, Priority},
+};
 use crate::{
     authz::{authorize, Action, Actor, IssueFilter},
     error::{AppError, AppResult},
@@ -35,6 +38,23 @@ pub struct ExportQuery {
     pub types: Vec<Sheet>,
     pub from: Option<OffsetDateTime>,
     pub to: Option<OffsetDateTime>,
+    /// The items list's filters, so an export matches what's on screen.
+    pub items: ItemFilters,
+}
+
+/// Narrower exports, as filtered on the items page. Each applies to the
+/// issue behind a row (the one a report or piece of work belongs to).
+#[derive(Debug, Clone, Default)]
+pub struct ItemFilters {
+    pub state: Option<IssueState>,
+    pub priorities: Vec<Priority>,
+    /// At least one of these tags.
+    pub tags: Vec<String>,
+    /// Case-insensitive substring of the title.
+    pub q: Option<String>,
+    /// The date range is on when each issue was created, for every sheet,
+    /// instead of each sheet's main date.
+    pub by_created: bool,
 }
 
 /// The sheets to export. `Report` is the written reports (on actions made
@@ -102,6 +122,15 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
     let want = |t: Sheet| types.contains(&t);
     let filter = IssueFilter::for_actor(actor).into_json();
     let fetch_limit = (MAX_ROWS + 1) as i64;
+    let f = &q.items;
+    let state = f.state.and_then(|s| serde_json::to_value(s).ok().and_then(|v| v.as_str().map(str::to_owned)));
+    let priorities: Option<Vec<String>> = (!f.priorities.is_empty()).then(|| {
+        f.priorities.iter().filter_map(|p| serde_json::to_value(p).ok().and_then(|v| v.as_str().map(str::to_owned))).collect()
+    });
+    let tags: Option<Vec<String>> = (!f.tags.is_empty()).then(|| f.tags.clone());
+    let pattern: Option<String> = f.q.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(|t| {
+        format!("%{}%", t.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"))
+    });
 
     let tickets = if want(Sheet::Ticket) {
         sqlx::query!(
@@ -129,6 +158,10 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
                     SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))
               AND ($3::timestamptz IS NULL OR i.created_at >= $3)
               AND ($4::timestamptz IS NULL OR i.created_at < $4)
+              AND ($6::text IS NULL OR i.state::text = $6)
+              AND ($7::text[] IS NULL OR i.priority::text = ANY($7))
+              AND ($8::text[] IS NULL OR i.tags && $8)
+              AND ($9::text IS NULL OR i.title ILIKE $9)
             ORDER BY i.number
             LIMIT $5
             "#,
@@ -137,6 +170,10 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             q.from,
             q.to,
             fetch_limit,
+            state.as_deref(),
+            priorities.as_deref(),
+            tags.as_deref(),
+            pattern.as_deref(),
         )
         .fetch_all(db)
         .await?
@@ -161,6 +198,10 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
               AND w.branch_id = ANY($2)
               AND ($3::timestamptz IS NULL OR i.created_at >= $3)
               AND ($4::timestamptz IS NULL OR i.created_at < $4)
+              AND ($6::text IS NULL OR i.state::text = $6)
+              AND ($7::text[] IS NULL OR i.priority::text = ANY($7))
+              AND ($8::text[] IS NULL OR i.tags && $8)
+              AND ($9::text IS NULL OR i.title ILIKE $9)
             ORDER BY i.number, w.created_at, w.id
             LIMIT $5
             "#,
@@ -169,6 +210,10 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             q.from,
             q.to,
             fetch_limit,
+            state.as_deref(),
+            priorities.as_deref(),
+            tags.as_deref(),
+            pattern.as_deref(),
         )
         .fetch_all(db)
         .await?
@@ -191,8 +236,12 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             WHERE r.submitted_at IS NOT NULL
               AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND coalesce(w.branch_id, i.branch_id) = ANY($2)
-              AND ($3::timestamptz IS NULL OR r.submitted_at >= $3)
-              AND ($4::timestamptz IS NULL OR r.submitted_at < $4)
+              AND ($3::timestamptz IS NULL OR (CASE WHEN $11 THEN i.created_at ELSE r.submitted_at END) >= $3)
+              AND ($4::timestamptz IS NULL OR (CASE WHEN $11 THEN i.created_at ELSE r.submitted_at END) < $4)
+              AND ($7::text IS NULL OR i.state::text = $7)
+              AND ($8::text[] IS NULL OR i.priority::text = ANY($8))
+              AND ($9::text[] IS NULL OR i.tags && $9)
+              AND ($10::text IS NULL OR i.title ILIKE $10)
             ORDER BY i.number, r.submitted_at, r.id
             LIMIT $5
             "#,
@@ -202,6 +251,11 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             q.to,
             fetch_limit,
             MAX_BODY_CHARS as i32,
+            state.as_deref(),
+            priorities.as_deref(),
+            tags.as_deref(),
+            pattern.as_deref(),
+            f.by_created,
         )
         .fetch_all(db)
         .await?
@@ -228,8 +282,12 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
               AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (
                     SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))
-              AND ($3::timestamptz IS NULL OR e.starts_at >= $3)
-              AND ($4::timestamptz IS NULL OR e.starts_at < $4)
+              AND ($3::timestamptz IS NULL OR (CASE WHEN $10 THEN i.created_at ELSE e.starts_at END) >= $3)
+              AND ($4::timestamptz IS NULL OR (CASE WHEN $10 THEN i.created_at ELSE e.starts_at END) < $4)
+              AND ($6::text IS NULL OR i.state::text = $6)
+              AND ($7::text[] IS NULL OR i.priority::text = ANY($7))
+              AND ($8::text[] IS NULL OR i.tags && $8)
+              AND ($9::text IS NULL OR i.title ILIKE $9)
             GROUP BY i.id, e.issue_id, b.id
             ORDER BY e.starts_at, i.number
             LIMIT $5
@@ -239,6 +297,11 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
             q.from,
             q.to,
             fetch_limit,
+            state.as_deref(),
+            priorities.as_deref(),
+            tags.as_deref(),
+            pattern.as_deref(),
+            f.by_created,
         )
         .fetch_all(db)
         .await?

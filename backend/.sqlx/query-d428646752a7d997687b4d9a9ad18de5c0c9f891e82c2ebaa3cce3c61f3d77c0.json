@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT i.number, ty.code AS \"issue_type!\", i.title, b.code AS \"branch?\", coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   u.first_name || ' ' || u.last_name AS \"author!\", r.submitted_at AS \"submitted_at!\",\n                   coalesce(w.status::text, 'self_filed') AS \"approval!\", left(r.body, $6) AS \"body!\"\n            FROM issue_report r\n            JOIN issue i ON i.id = r.issue_id\n            JOIN issue_type ty ON ty.id = i.type_id\n            LEFT JOIN work_item w ON w.id = r.work_item_id\n            LEFT JOIN branch b ON b.id = coalesce(w.branch_id, i.branch_id)\n            JOIN app_user u ON u.id = r.author_id\n            WHERE r.submitted_at IS NOT NULL\n              AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND coalesce(w.branch_id, i.branch_id) = ANY($2)\n              AND ($3::timestamptz IS NULL OR r.submitted_at >= $3)\n              AND ($4::timestamptz IS NULL OR r.submitted_at < $4)\n            ORDER BY i.number, r.submitted_at, r.id\n            LIMIT $5\n            ",
+  "query": "\n            SELECT i.number, ty.code AS \"issue_type!\", i.title, b.code AS \"branch?\", coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   u.first_name || ' ' || u.last_name AS \"author!\", r.submitted_at AS \"submitted_at!\",\n                   coalesce(w.status::text, 'self_filed') AS \"approval!\", left(r.body, $6) AS \"body!\"\n            FROM issue_report r\n            JOIN issue i ON i.id = r.issue_id\n            JOIN issue_type ty ON ty.id = i.type_id\n            LEFT JOIN work_item w ON w.id = r.work_item_id\n            LEFT JOIN branch b ON b.id = coalesce(w.branch_id, i.branch_id)\n            JOIN app_user u ON u.id = r.author_id\n            WHERE r.submitted_at IS NOT NULL\n              AND issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND coalesce(w.branch_id, i.branch_id) = ANY($2)\n              AND ($3::timestamptz IS NULL OR (CASE WHEN $11 THEN i.created_at ELSE r.submitted_at END) >= $3)\n              AND ($4::timestamptz IS NULL OR (CASE WHEN $11 THEN i.created_at ELSE r.submitted_at END) < $4)\n              AND ($7::text IS NULL OR i.state::text = $7)\n              AND ($8::text[] IS NULL OR i.priority::text = ANY($8))\n              AND ($9::text[] IS NULL OR i.tags && $9)\n              AND ($10::text IS NULL OR i.title ILIKE $10)\n            ORDER BY i.number, r.submitted_at, r.id\n            LIMIT $5\n            ",
   "describe": {
     "columns": [
       {
@@ -90,7 +90,12 @@
         "Timestamptz",
         "Timestamptz",
         "Int8",
-        "Int4"
+        "Int4",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -105,5 +110,5 @@
       null
     ]
   },
-  "hash": "f733060a4a825d2bfbc0899ff3962a836ef1d3a54044956540a6db944606432e"
+  "hash": "d428646752a7d997687b4d9a9ad18de5c0c9f891e82c2ebaa3cce3c61f3d77c0"
 }

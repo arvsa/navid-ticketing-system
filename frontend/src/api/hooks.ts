@@ -163,7 +163,23 @@ export type IssueFilters = {
   assignee?: "me";
   q?: string;
   tag?: string;
+  /** Comma-separated: any of these tags. */
+  tags?: string;
+  /** Comma-separated priorities. */
+  priority?: string;
+  /** Created at or after / before (RFC 3339). */
+  from?: string;
+  to?: string;
 };
+
+/** Tags on items the viewer can see, most used first. */
+export function useIssueTags(branchId?: string) {
+  return useQuery({
+    queryKey: ["issues", "tags", branchId ?? ""],
+    queryFn: () => api.get<{ tag: string; count: number }[]>("/issues/tags", { branch_id: branchId }),
+    staleTime: 60_000,
+  });
+}
 
 export function useIssueList(filters: IssueFilters, limit = 25) {
   return useInfiniteQuery({

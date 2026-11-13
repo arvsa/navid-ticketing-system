@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT i.number, i.title, b.code AS branch, b.timezone, w.status AS \"status!: String\",\n                   w.sla_due_at, w.is_overdue AS \"is_overdue!\", w.submitted_at, w.decided_at,\n                   a.first_name || ' ' || a.last_name AS assignee,\n                   d.first_name || ' ' || d.last_name AS decided_by\n            FROM work_item_overview w\n            JOIN issue i ON i.id = w.issue_id\n            JOIN issue_type ty ON ty.id = i.type_id AND ty.code = 'action'\n            JOIN branch b ON b.id = w.branch_id\n            LEFT JOIN app_user a ON a.id = w.assignee_id\n            LEFT JOIN app_user d ON d.id = w.decided_by\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND w.branch_id = ANY($2)\n              AND ($3::timestamptz IS NULL OR i.created_at >= $3)\n              AND ($4::timestamptz IS NULL OR i.created_at < $4)\n            ORDER BY i.number, w.created_at, w.id\n            LIMIT $5\n            ",
+  "query": "\n            SELECT i.number, i.title, b.code AS branch, b.timezone, w.status AS \"status!: String\",\n                   w.sla_due_at, w.is_overdue AS \"is_overdue!\", w.submitted_at, w.decided_at,\n                   a.first_name || ' ' || a.last_name AS assignee,\n                   d.first_name || ' ' || d.last_name AS decided_by\n            FROM work_item_overview w\n            JOIN issue i ON i.id = w.issue_id\n            JOIN issue_type ty ON ty.id = i.type_id AND ty.code = 'action'\n            JOIN branch b ON b.id = w.branch_id\n            LEFT JOIN app_user a ON a.id = w.assignee_id\n            LEFT JOIN app_user d ON d.id = w.decided_by\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND w.branch_id = ANY($2)\n              AND ($3::timestamptz IS NULL OR i.created_at >= $3)\n              AND ($4::timestamptz IS NULL OR i.created_at < $4)\n              AND ($6::text IS NULL OR i.state::text = $6)\n              AND ($7::text[] IS NULL OR i.priority::text = ANY($7))\n              AND ($8::text[] IS NULL OR i.tags && $8)\n              AND ($9::text IS NULL OR i.title ILIKE $9)\n            ORDER BY i.number, w.created_at, w.id\n            LIMIT $5\n            ",
   "describe": {
     "columns": [
       {
@@ -135,7 +135,11 @@
         "UuidArray",
         "Timestamptz",
         "Timestamptz",
-        "Int8"
+        "Int8",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Text"
       ]
     },
     "nullable": [
@@ -152,5 +156,5 @@
       null
     ]
   },
-  "hash": "6b8831ffee80bfa74d1e7e01e9bfedf978269024de897a58fea99b057d3af9a9"
+  "hash": "e956518f0018cb0283340055135c45a5e20b0fbbd8739f23ae1136db84e67e83"
 }

@@ -15,7 +15,9 @@ use crate::{
     authz::Actor,
     domain::{
         dashboard::{self, Dashboard},
-        exports::{self, ExportQuery},
+        exports::{self, ExportQuery, ItemFilters},
+        issues,
+        types::IssueState,
     },
     error::{AppError, AppResult},
     AppState,
@@ -53,6 +55,17 @@ struct ExportParams {
     types: Option<String>,
     from: Option<String>,
     to: Option<String>,
+    /// The items list's filters: only issues in this state.
+    state: Option<IssueState>,
+    /// Comma-separated: any of these priorities.
+    priority: Option<String>,
+    /// Comma-separated: issues with at least one of these tags.
+    tags: Option<String>,
+    /// Title contains this text.
+    q: Option<String>,
+    /// `created`: `from`/`to` are on when each issue was created, on every
+    /// sheet (as on the items list), not each sheet's main date.
+    dates: Option<String>,
 }
 
 fn invalid(msg: &'static str) -> AppError {
@@ -69,7 +82,7 @@ fn parse_time(raw: Option<&str>) -> AppResult<Option<OffsetDateTime>> {
         .transpose()
 }
 
-/// GET /api/exports?branch_ids=&types=ticket,report,event,action&from=&to=
+/// GET /api/exports?branch_ids=&types=ticket,report,event,action&from=&to=&state=&priority=&tags=&q=&dates=created
 #[utoipa::path(get, path = "/api/exports", operation_id = "exportIssues", tag = "dashboard", params(ExportParams), responses((status = 200, description = "An Excel workbook", content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
 async fn export(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<ExportParams>) -> AppResult<Response> {
     let query = ExportQuery {
@@ -78,6 +91,17 @@ async fn export(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<E
             .unwrap_or_default(),
         from: parse_time(q.from.as_deref())?,
         to: parse_time(q.to.as_deref())?,
+        items: ItemFilters {
+            state: q.state,
+            priorities: issues::parse_priorities(q.priority.as_deref())?,
+            tags: issues::parse_tags(q.tags.as_deref())?,
+            q: q.q,
+            by_created: match q.dates.as_deref() {
+                None => false,
+                Some("created") => true,
+                Some(_) => return Err(invalid("`dates` is only `created`")),
+            },
+        },
     };
     xlsx(exports::run(&s.db, &actor, query).await?)
 }

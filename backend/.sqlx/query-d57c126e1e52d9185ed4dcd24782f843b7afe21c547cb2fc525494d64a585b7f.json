@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT i.number, i.title, e.starts_at, e.ends_at, e.location,\n                   coalesce(b.code, (SELECT string_agg(DISTINCT bb.code, ', ') FROM issue_target t\n                                     JOIN branch bb ON bb.id = t.branch_id\n                                     WHERE t.issue_id = i.id AND t.removed_at IS NULL)) AS branch,\n                   coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'going') AS \"going!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'maybe') AS \"maybe!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'declined') AS \"declined!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'pending') AS \"pending!\"\n            FROM issue_event e\n            JOIN issue i ON i.id = e.issue_id\n            LEFT JOIN branch b ON b.id = i.branch_id\n            LEFT JOIN event_rsvp r ON r.issue_id = i.id\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (\n                    SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))\n              AND ($3::timestamptz IS NULL OR e.starts_at >= $3)\n              AND ($4::timestamptz IS NULL OR e.starts_at < $4)\n            GROUP BY i.id, e.issue_id, b.id\n            ORDER BY e.starts_at, i.number\n            LIMIT $5\n            ",
+  "query": "\n            SELECT i.number, i.title, e.starts_at, e.ends_at, e.location,\n                   coalesce(b.code, (SELECT string_agg(DISTINCT bb.code, ', ') FROM issue_target t\n                                     JOIN branch bb ON bb.id = t.branch_id\n                                     WHERE t.issue_id = i.id AND t.removed_at IS NULL)) AS branch,\n                   coalesce(b.timezone, 'UTC') AS \"timezone!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'going') AS \"going!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'maybe') AS \"maybe!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'declined') AS \"declined!\",\n                   count(r.user_id) FILTER (WHERE r.response = 'pending') AS \"pending!\"\n            FROM issue_event e\n            JOIN issue i ON i.id = e.issue_id\n            LEFT JOIN branch b ON b.id = i.branch_id\n            LEFT JOIN event_rsvp r ON r.issue_id = i.id\n            WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n              AND (i.branch_id = ANY($2) OR (i.branch_id IS NULL AND EXISTS (\n                    SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = ANY($2) AND t.removed_at IS NULL)))\n              AND ($3::timestamptz IS NULL OR (CASE WHEN $10 THEN i.created_at ELSE e.starts_at END) >= $3)\n              AND ($4::timestamptz IS NULL OR (CASE WHEN $10 THEN i.created_at ELSE e.starts_at END) < $4)\n              AND ($6::text IS NULL OR i.state::text = $6)\n              AND ($7::text[] IS NULL OR i.priority::text = ANY($7))\n              AND ($8::text[] IS NULL OR i.tags && $8)\n              AND ($9::text IS NULL OR i.title ILIKE $9)\n            GROUP BY i.id, e.issue_id, b.id\n            ORDER BY e.starts_at, i.number\n            LIMIT $5\n            ",
   "describe": {
     "columns": [
       {
@@ -101,7 +101,12 @@
         "UuidArray",
         "Timestamptz",
         "Timestamptz",
-        "Int8"
+        "Int8",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -118,5 +123,5 @@
       null
     ]
   },
-  "hash": "161b1b2ee629d1463080d972d554b7aac10f8332d2265e5968222b390d79dd1c"
+  "hash": "d57c126e1e52d9185ed4dcd24782f843b7afe21c547cb2fc525494d64a585b7f"
 }

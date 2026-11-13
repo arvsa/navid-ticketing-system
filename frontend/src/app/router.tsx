@@ -75,8 +75,15 @@ export type ItemsSearch = {
   type?: IssueType;
   state?: IssueState;
   q?: string;
-  tag?: string;
+  /** Comma-separated: items with any of these tags. */
+  tags?: string;
+  /** Comma-separated priorities. */
+  priority?: string;
+  /** Created from / to, inclusive days ("2026-10-24"). */
+  from?: string;
+  to?: string;
 };
+const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
 const items = createRoute({
   getParentRoute: () => shell,
   path: "/items",
@@ -85,8 +92,14 @@ const items = createRoute({
     type: ["ticket", "action", "event"].includes(s.type as string) ? (s.type as IssueType) : undefined,
     state: ["open", "closed", "cancelled"].includes(s.state as string) ? (s.state as IssueState) : undefined,
     q: typeof s.q === "string" && s.q ? s.q : undefined,
-    // Old links to reports: reports are actions with the report tag now.
-    tag: typeof s.tag === "string" && s.tag ? s.tag : s.type === "report" ? "report" : undefined,
+    // Old links: one `tag`, and reports, which are actions with the report tag now.
+    tags: typeof s.tags === "string" && s.tags ? s.tags : typeof s.tag === "string" && s.tag ? s.tag : s.type === "report" ? "report" : undefined,
+    priority:
+      typeof s.priority === "string"
+        ? s.priority.split(",").filter((p) => ["low", "medium", "high", "critical"].includes(p)).join(",") || undefined
+        : undefined,
+    from: day(s.from),
+    to: day(s.to),
   }),
   component: lazyRouteComponent(() => import("@/features/items/ItemsPage"), "ItemsPage"),
 });

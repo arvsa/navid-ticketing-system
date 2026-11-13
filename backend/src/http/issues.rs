@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
 use super::json::{ApiJson, ApiPath, ApiQuery};
@@ -13,10 +14,11 @@ use crate::{
     domain::{
         issues::{
             self, HistoryEntry, IssueDetail, IssuePatch, IssueQuery, IssueSummary, NewIssue, NewTarget, PassTicket,
+            TagCount,
         },
         types::IssueState,
     },
-    error::AppResult,
+    error::{AppError, AppResult},
     pagination::{Page, PageParams},
     AppState,
 };
@@ -25,6 +27,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/issues", get(list).post(create))
         .route("/issues/by-number/{n}", get(by_number))
+        .route("/issues/tags", get(tags))
         .route("/issues/{id}", get(show).patch(update))
         .route("/issues/{id}/close", post(close))
         .route("/issues/{id}/cancel", post(cancel))
@@ -51,6 +54,34 @@ struct ListQuery {
     q: Option<String>,
     tag: Option<String>,
     template_id: Option<Uuid>,
+    /// Comma-separated: any of these priorities.
+    priority: Option<String>,
+    /// Comma-separated: issues with at least one of these tags.
+    tags: Option<String>,
+    /// Created at or after (RFC 3339).
+    from: Option<String>,
+    /// Created before (RFC 3339).
+    to: Option<String>,
+}
+
+fn parse_time(raw: Option<&str>) -> AppResult<Option<OffsetDateTime>> {
+    raw.map(|t| {
+        OffsetDateTime::parse(t, &Rfc3339)
+            .map_err(|_| AppError::validation("invalid_query", "`from` and `to` are RFC 3339 times"))
+    })
+    .transpose()
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+struct TagsQuery {
+    branch_id: Option<Uuid>,
+}
+
+/// The tags in use on issues the viewer can see, for filtering.
+#[utoipa::path(get, path = "/api/issues/tags", operation_id = "listIssueTags", tag = "issues", params(TagsQuery), responses((status = 200, body = Vec<TagCount>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn tags(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<TagsQuery>) -> AppResult<Json<Vec<TagCount>>> {
+    Ok(Json(issues::tags(&s.db, &actor, q.branch_id).await?))
 }
 
 #[utoipa::path(get, path = "/api/issues", operation_id = "listIssues", tag = "issues", params(ListQuery), responses((status = 200, body = Page<IssueSummary>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
@@ -68,6 +99,10 @@ async fn list(
         q: q.q,
         tag: q.tag,
         template_id: q.template_id,
+        priorities: issues::parse_priorities(q.priority.as_deref())?,
+        tags: issues::parse_tags(q.tags.as_deref())?,
+        from: parse_time(q.from.as_deref())?,
+        to: parse_time(q.to.as_deref())?,
     };
     Ok(Json(issues::list(&s.db, &actor, &filter, &page).await?))
 }

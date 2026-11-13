@@ -308,7 +308,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** GET /api/exports?branch_ids=&types=ticket,report,event,action&from=&to= */
+        /** GET /api/exports?branch_ids=&types=ticket,report,event,action&from=&to=&state=&priority=&tags=&q=&dates=created */
         get: operations["get__api_exports"];
         put?: never;
         post?: never;
@@ -444,6 +444,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get__api_issues_by_number_n_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tags in use on issues the viewer can see, for filtering. */
+        get: operations["get__api_issues_tags"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2270,6 +2287,14 @@ export interface components {
             /** Format: int64 */
             pending_approval: number;
         };
+        TagCount: {
+            /**
+             * Format: int64
+             * @description Issues the actor can see with this tag.
+             */
+            count: number;
+            tag: string;
+        };
         Target: {
             /** Format: uuid */
             branch_id: string;
@@ -3278,6 +3303,19 @@ export interface operations {
                 types?: string;
                 from?: string;
                 to?: string;
+                /** @description The items list's filters: only issues in this state. */
+                state?: components["schemas"]["IssueState"];
+                /** @description Comma-separated: any of these priorities. */
+                priority?: string;
+                /** @description Comma-separated: issues with at least one of these tags. */
+                tags?: string;
+                /** @description Title contains this text. */
+                q?: string;
+                /**
+                 * @description `created`: `from`/`to` are on when each issue was created, on every
+                 *     sheet (as on the items list), not each sheet's main date.
+                 */
+                dates?: string;
             };
             header?: never;
             path?: never;
@@ -3639,6 +3677,14 @@ export interface operations {
                 q?: string;
                 tag?: string;
                 template_id?: string;
+                /** @description Comma-separated: any of these priorities. */
+                priority?: string;
+                /** @description Comma-separated: issues with at least one of these tags. */
+                tags?: string;
+                /** @description Created at or after (RFC 3339). */
+                from?: string;
+                /** @description Created before (RFC 3339). */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -3715,6 +3761,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueDetail"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get__api_issues_tags: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCount"][];
                 };
             };
             /** @description Error; see the codes in the README */

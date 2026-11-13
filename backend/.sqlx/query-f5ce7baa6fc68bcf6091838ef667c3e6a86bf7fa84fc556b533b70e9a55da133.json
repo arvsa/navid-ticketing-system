@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT tag AS \"tag!\", count(*) AS \"count!\"\n        FROM issue i, unnest(i.tags) AS tag\n        WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)\n          AND ($3::uuid IS NULL OR i.branch_id = $3 OR (i.branch_id IS NULL AND (\n                EXISTS (SELECT 1 FROM issue_target t WHERE t.issue_id = i.id AND t.branch_id = $3 AND t.removed_at IS NULL)\n                OR i.created_by = $2\n                OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id\n                             AND (w.assignee_id = $2 OR $2 = ANY(w.handoff_chain))))))\n        GROUP BY tag\n        ORDER BY count(*) DESC, tag\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tag!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f5ce7baa6fc68bcf6091838ef667c3e6a86bf7fa84fc556b533b70e9a55da133"
+}
