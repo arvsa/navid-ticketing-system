@@ -16,6 +16,11 @@
   2 MB); it shows beside your name everywhere.
 - **Tags.** Items carry tags: the template's, plus any the sender adds or
   edits later. The items list filters by them (`?tag=`).
+- **Settings without a rebuild.** Put a `.env` in `config/` next to
+  `docker-compose.yml` (see `config/.env.example`): its values win over the
+  compose file's, and the backend container restarts the backend with them
+  a few seconds after the file is added, changed or removed, waiting until
+  nothing holds a lock on the database. `health --db-idle` is that check.
 
 ### Changed
 
@@ -29,6 +34,17 @@
   on its own when its recipients are in more than one branch.
 - Other branches' people and groups in the recipient picker are folded until
   you open them or search.
+- **Everyone runs what they created.** While an item is open its creator can
+  always edit, close and cancel it, actions included, whatever their grants.
+- **Comments lock when their item closes.** Writing, editing and deleting
+  your own comments works only while the item is open
+  (`409 issue_not_open` after); moderators can still remove comments.
+- **"Offline bundle" is now "release".** `get-release.sh`,
+  `build-release.sh`, `docker-compose.release.yml` and
+  `instructions/running-a-release.md`; the archive is
+  `navid-release-<version>-<arch>.zip` and unzips to `navid-release/`.
+  `get-release.sh` still fetches earlier `navid-offline` archives. The compose
+  project stays `navid-offline`, so existing installs keep their data.
 
 
 ## v1.0.1

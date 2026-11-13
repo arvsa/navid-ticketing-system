@@ -463,12 +463,10 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         Export { .. } => has_grant(access, P::ExportRun, None, branch_only),
 
         CreateIssue { issue_type, .. } => has_grant(access, P::IssueCreate, Some(issue_type), branch_only),
-        EditIssue { issue } => has_issue_grant(access, P::IssueEdit, issue, me),
-        CloseIssue { issue } => {
-            // "Anyone can close the tickets and events they created."
-            (issue.created_by == me && issue.issue_type != IssueType::Action)
-                || has_issue_grant(access, P::IssueClose, issue, me)
-        }
+        // Everyone runs what they created: edits it, closes or cancels it,
+        // while it is open (the domain refuses changes to a closed issue).
+        EditIssue { issue } => issue.created_by == me || has_issue_grant(access, P::IssueEdit, issue, me),
+        CloseIssue { issue } => issue.created_by == me || has_issue_grant(access, P::IssueClose, issue, me),
         TargetIssue { issue, .. } => has_issue_grant(access, P::IssueTarget, issue, me),
         CommentOnIssue { issue } => has_grant(access, P::CommentCreate, None, |s| match s {
             Scope::Branch => true,
@@ -885,7 +883,8 @@ mod tests {
         ok(&m, create(IssueType::Event));
         // Reports are actions: the baseline creates them, but can't send them.
         ok(&m, create(IssueType::Action));
-        let ticket_only = actor(4, &[(A, false, vec![grant(Permission::IssueCreate, Some(IssueType::Ticket), Scope::Branch)])]);
+        let ticket_only =
+            actor(4, &[(A, false, vec![grant(Permission::IssueCreate, Some(IssueType::Ticket), Scope::Branch)])]);
         denied(&ticket_only, create(IssueType::Action), Forbidden);
         ok(&admin(2), create(IssueType::Action));
         ok(&admin_like(3), create(IssueType::Action));
@@ -909,13 +908,14 @@ mod tests {
     }
 
     #[test]
-    fn creators_can_always_close_their_tickets_and_events() {
+    fn creators_can_always_edit_and_close_what_they_created() {
         let bare = actor(1, &[(A, false, vec![grant(Permission::IssueRead, None, Scope::Branch)])]);
-        for ty in [IssueType::Ticket, IssueType::Event] {
+        for ty in [IssueType::Ticket, IssueType::Action, IssueType::Event] {
+            ok(&bare, Action::EditIssue { issue: &issue(bare.user_id, ty) });
             ok(&bare, Action::CloseIssue { issue: &issue(bare.user_id, ty) });
+            denied(&bare, Action::EditIssue { issue: &issue(uid(9), ty) }, Forbidden);
+            denied(&bare, Action::CloseIssue { issue: &issue(uid(9), ty) }, Forbidden);
         }
-        denied(&bare, Action::CloseIssue { issue: &issue(bare.user_id, IssueType::Action) }, Forbidden);
-        denied(&bare, Action::CloseIssue { issue: &issue(uid(9), IssueType::Ticket) }, Forbidden);
     }
 
     #[test]
@@ -976,7 +976,8 @@ mod tests {
         denied(&member(4), create(IssueType::Action), Forbidden);
         denied(&member(4), Action::FindPeopleInOtherBranches, Forbidden);
         // Whole branches too, with the grant.
-        let whole = Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
+        let whole =
+            Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
         ok(&sender, whole);
     }
 

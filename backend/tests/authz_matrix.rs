@@ -377,13 +377,14 @@ async fn matrix(pool: PgPool) {
         ("g_edit_ticket", "edit", "event_plain_a", Forbidden),
         ("plain_a", "edit", "action_plain_a", Allow),
         ("plain_a", "edit", "action_deputy_a", Forbidden),
-        // ---- issue.close: own, branch (+ creators always close tickets/events) ----
+        // ---- issue.close: own, branch (+ creators always edit and close their own) ----
         ("g_close_own", "close", "own_g_close_own", Allow),
         ("g_close_own", "close", "action_plain_a", Forbidden),
         ("g_close_branch", "close", "action_plain_a", Allow),
         ("g_read_branch", "close", "action_plain_a", Forbidden),
         ("plain_a", "close", "event_plain_a", Allow),
         ("plain_a", "close", "event_admin_a", Forbidden),
+        ("plain_a", "close", "action_plain_a", Allow),
         // ---- issue.target: own, branch ----
         ("g_target_own", "target", "own_g_target_own", Allow),
         ("g_target_own", "target", "ticket_plain_a", Forbidden),
@@ -606,8 +607,9 @@ async fn revocation_is_instant(pool: PgPool) {
     .fetch_one(&f.db)
     .await
     .unwrap();
-    let res = call(&app, &admin, Method::DELETE, &format!("/api/groups/{group}/members/{}", f.user("g_read_branch")), None)
-        .await;
+    let res =
+        call(&app, &admin, Method::DELETE, &format!("/api/groups/{group}/members/{}", f.user("g_read_branch")), None)
+            .await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
     // Same session, next request: gone, and 404 rather than 403.
     assert_status(&call(&app, &reader, Method::GET, &uri, None).await, StatusCode::NOT_FOUND, None);

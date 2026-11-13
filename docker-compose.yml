@@ -28,6 +28,9 @@ services:
       RUST_LOG: ${RUST_LOG:-backend=info,tower_http=info,sqlx=warn}
     volumes:
       - attachments:/data/attachments
+      # Put a .env file in ./config to override the settings above; the
+      # backend restarts with it whenever it changes.
+      - ./config:/config:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -157,6 +157,8 @@ cargo run --bin users -- --search jane</code></pre></div>
   <h3><code>health</code> <span class="needs">server</span></h3>
   <p class="what">Checks <code>GET /api/healthz</code> and prints <code>OK</code> (server and database up), <code>UNHEALTHY</code> (server up, database not) or <code>DOWN</code> (server not reachable). The exit code is non-zero unless it's <code>OK</code>, so scripts can use it.</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin health</code></pre></div>
+  <p class="what">With <code>--db-idle</code> it asks the database instead (needs <code>DATABASE_URL</code>): <code>IDLE</code> and exit 0 when no other session holds a lock that matters (a job's advisory lock, rows being written, schema changes), <code>BUSY</code> with each holder and exit 1 while one does, exit 2 when the database can't be reached. The backend container uses it to restart only at a quiet moment after <code>config/.env</code> changes.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin health -- --db-idle</code></pre></div>
 </section>
 
 <section class="tool" id="login">

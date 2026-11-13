@@ -268,10 +268,33 @@ async fn comment_editing_deleting_and_moderation(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
+async fn comments_lock_when_their_issue_closes(pool: PgPool) {
+    let c = setup(pool).await;
+    let issue = id(&c.issue(&c.plain, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "Q" })).await);
+    let kept = id(&c.comment(&c.plain, &issue, json!({ "body": "kept" })).await.body);
+    let other = id(&c.comment(&c.plain, &issue, json!({ "body": "other" })).await.body);
+    let res =
+        call(&c.app, &c.plain, Method::POST, &format!("/api/issues/{issue}/close"), Some(json!({ "version": 1 })))
+            .await;
+    assert_status(&res, StatusCode::OK, None);
+
+    // The author can no longer write, edit or withdraw.
+    let closed = |res: &TestResponse| assert_status(res, StatusCode::CONFLICT, Some("issue_not_open"));
+    closed(&c.comment(&c.plain, &issue, json!({ "body": "late" })).await);
+    let uri = format!("/api/comments/{kept}");
+    closed(&call(&c.app, &c.plain, Method::PATCH, &uri, Some(json!({ "body": "edited" }))).await);
+    closed(&call(&c.app, &c.plain, Method::DELETE, &uri, None).await);
+    // Moderators still remove comments.
+    let res = call(&c.app, &c.boss_like, Method::DELETE, &format!("/api/comments/{other}"), None).await;
+    assert_status(&res, StatusCode::NO_CONTENT, None);
+}
+
+#[sqlx::test(migrator = "MIGRATOR")]
 async fn comments_on_unreadable_issues_are_404(pool: PgPool) {
     let c = setup(pool).await;
     hide_branch_issues(&c.app.db, c.org.branch_a).await;
-    let hidden = id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
+    let hidden =
+        id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
     assert_status(&c.comment(&c.plain, &hidden, json!({ "body": "hi" })).await, StatusCode::NOT_FOUND, None);
     let res = call(&c.app, &c.plain, Method::GET, &format!("/api/issues/{hidden}/comments"), None).await;
     assert_status(&res, StatusCode::NOT_FOUND, None);
@@ -537,7 +560,8 @@ async fn comment_attachment(c: &Ctx, issue: &str, comment: &str) -> Value {
 async fn an_unreadable_issues_attachment_is_404(pool: PgPool) {
     let c = setup(pool).await;
     hide_branch_issues(&c.app.db, c.org.branch_a).await;
-    let hidden = id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
+    let hidden =
+        id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
     let res = upload(&c.app, &c.boss_like, &hidden, ("contract.pdf", "application/pdf", b"%PDF"), &[]).await;
     assert_status(&res, StatusCode::CREATED, None);
     let uri = format!("/api/attachments/{}", id(&res.body));

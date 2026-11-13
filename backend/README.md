@@ -23,22 +23,7 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    cp .env.example .env
    ```
 
-3. **Add demo data**, so there's someone to sign in as:
-
-   ```sh
-   cargo run --bin admin -- seed-demo
-   ```
-
-   This creates three branches, about 90 people and some issues. Every demo
-   account has the password `demo-password`, for example:
-
-   | Account | Role |
-   |---|---|
-   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
-   | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
-   | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
-
-4. **Start the server:**
+3. **Start the server:**
 
    ```sh
    cargo run
@@ -102,10 +87,10 @@ The main endpoints:
 The session cookie is kept in `cookies.txt`: the `login` tool writes it, and
 curl sends it with `-b cookies.txt`.
 
-**1. Sign in** (the password defaults to `demo-password`)
+**1. Sign in** with your account
 
 ```sh
-cargo run --bin login -- --email member1@north.demo.school
+cargo run --bin login -- --email you@your.school --password <password>
 cargo run --bin whoami
 ```
 
@@ -140,7 +125,7 @@ git push origin v0.0.2
 ```
 
 The [release workflow](../.github/workflows/backend-binaries.yml) then creates
-the GitHub release and attaches the Linux binaries and the offline bundles
-(`navid-offline-0.0.2-amd64.zip`, `-arm64.zip`). Others download a bundle with
-`./get-offline-bundle.sh` (see
-[instructions/offline-bundle.md](../instructions/offline-bundle.md)).
+the GitHub release and attaches the Linux binaries and the release archives
+(`navid-release-0.0.2-amd64.zip`, `-arm64.zip`). Others download one with
+`./get-release.sh` (see
+[instructions/running-a-release.md](../instructions/running-a-release.md)).

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Downloads and unzips an offline bundle from the GitHub releases.
-# See instructions/offline-bundle.md.
-#   ./get-offline-bundle.sh [-v version] [amd64|arm64]
+# Downloads and unzips a release (images and compose file) from the GitHub
+# releases. See instructions/running-a-release.md.
+#   ./get-release.sh [-v version] [amd64|arm64]
 #   -v, --version   release to download (default: the latest release)
 #   architecture    target platform (default: this machine's)
 set -euo pipefail
@@ -30,21 +30,31 @@ if [ -z "$version" ]; then
   [ "$version" != "$latest" ] || { echo "Couldn't find the latest release." >&2; exit 1; }
 fi
 
-zipfile="navid-offline-$version-$arch.zip"
-url="https://github.com/$repo/releases/download/v$version/$zipfile"
+# Check it exists first: curl's exit code can't tell "not found" from a
+# dropped connection. Asks for one byte only.
+http_code() { curl -sL --retry 5 -r 0-0 -o /dev/null -w '%{http_code}' "$1" || true; }
+
+# Earlier releases named the archive and its folder navid-offline.
+folder=
+for name in navid-release navid-offline; do
+  zipfile="$name-$version-$arch.zip"
+  url="https://github.com/$repo/releases/download/v$version/$zipfile"
+  if [ -f "$zipfile" ] && unzip -tq "$zipfile" >/dev/null 2>&1; then
+    folder=$name
+    break
+  fi
+  code=$(http_code "$url")
+  case "$code" in
+    200|206) folder=$name; break ;;
+    404) ;;
+    *) echo "Can't reach GitHub (HTTP $code). Check the connection and try again." >&2; exit 1 ;;
+  esac
+done
+[ -n "$folder" ] || { echo "Not found: $url (check the version and architecture on the releases page)" >&2; exit 1; }
 
 if [ -f "$zipfile" ] && unzip -tq "$zipfile" >/dev/null 2>&1; then
   echo "Already downloaded: $zipfile"
 else
-  # Check it exists first: curl's exit code can't tell "not found" from a
-  # dropped connection. Asks for one byte only.
-  code=$(curl -sL --retry 5 -r 0-0 -o /dev/null -w '%{http_code}' "$url" || true)
-  case "$code" in
-    200|206) ;;
-    404) echo "Not found: $url (check the version and architecture on the releases page)" >&2; exit 1 ;;
-    *) echo "Can't reach GitHub (HTTP $code). Check the connection and try again." >&2; exit 1 ;;
-  esac
-
   echo "Downloading $zipfile"
   # -C - resumes a partial download, so a dropped connection (or re-running
   # the script) continues where it stopped.
@@ -60,6 +70,6 @@ fi
 unzip -o "$zipfile"
 echo
 echo "Done. Next:"
-echo "  cd navid-offline"
+echo "  cd $folder"
 echo "  docker load -i navid-images-$version-$arch.tar.gz"
 echo "  docker compose up -d"
