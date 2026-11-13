@@ -48,3 +48,17 @@ test("groups in other branches are named, with their branch", async ({ browser }
   await expect(page.getByText("Principals · Motahari Campus").first()).toBeVisible();
   await expect(page.getByText("A group")).toHaveCount(0);
 });
+
+test("search finds an item by number, however fast you press Enter", async ({ browser }) => {
+  const { page } = await as(browser, person("AZR", "teacher1").email);
+  const key = recall("midterm");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.keyboard.press("/");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.type(key);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: /Upload your midterm grades/ })).toBeVisible();
+
+  await page.goto(`/items?q=${key}`);
+  await expect(page.getByRole("link", { name: new RegExp(`${key},`) })).toBeVisible();
+});

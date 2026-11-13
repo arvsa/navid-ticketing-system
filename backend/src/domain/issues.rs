@@ -318,6 +318,8 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         IssueType::from_code(t).ok_or_else(|| AppError::validation("invalid_query", "unknown issue type"))?;
     }
     let pattern = query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()).map(like_pattern);
+    // "ISS-12", "#12" or "12" also finds that item by its number.
+    let number = query.q.as_deref().map(str::trim).and_then(item_number);
     let tag = query.tag.as_deref().map(templates::normalize_tag).transpose()?.flatten();
     if let (Some(from), Some(to)) = (query.from, query.to) {
         if to <= from {
@@ -366,7 +368,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
           AND ($4::text IS NULL OR ty.code = $4)
           AND ($5::issue_state IS NULL OR i.state = $5)
           AND (NOT $6 OR EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id AND w.assignee_id = $2))
-          AND ($7::text IS NULL OR i.title ILIKE $7)
+          AND ($7::text IS NULL OR i.title ILIKE $7 OR i.number = $17)
           AND ($8::timestamptz IS NULL OR (i.created_at, i.id) < ($8, $9))
           AND ($11::text IS NULL OR i.tags @> ARRAY[$11])
           AND ($12::uuid IS NULL OR i.template_id = $12)
@@ -393,6 +395,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         any_tags as Option<&Vec<String>>,
         query.from,
         query.to,
+        number,
     )
     .fetch_all(db)
     .await?;
@@ -421,6 +424,13 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         })
         .collect();
     Ok(Page::from_rows(items, limit, |i| IssueCursor { created_at: i.created_at, id: i.id }))
+}
+
+/// The number in "ISS-12", "#12" or "12".
+fn item_number(q: &str) -> Option<i64> {
+    let q = q.trim_start_matches('#');
+    let digits = q.get(..4).filter(|p| p.eq_ignore_ascii_case("iss-")).map_or(q, |_| &q[4..]);
+    digits.parse().ok().filter(|n: &i64| *n > 0)
 }
 
 /// `%term%` with LIKE wildcards in the term escaped.
