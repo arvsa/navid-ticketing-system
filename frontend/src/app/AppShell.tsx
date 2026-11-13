@@ -299,7 +299,9 @@ function QuickSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (number) go(number);
+          // What's typed now, not the debounced term: Enter can beat the debounce.
+          const typed = q.trim().match(/^(?:#|iss-)?(\d+)$/i)?.[1];
+          if (typed) go(typed);
           else if (items[0]) go(numberOf(items[0].key));
           else if (q.trim()) (onOpenChange(false), navigate({ to: "/items", search: { q: q.trim() } }));
         }}
