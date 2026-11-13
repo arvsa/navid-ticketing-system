@@ -10,7 +10,7 @@ import type { IssueDetail, Target } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Pill, PriorityText, TagList, TypeBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
-import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, cx } from "@/components/ui";
+import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, TabPanel, Tabs, cx } from "@/components/ui";
 import { canClose, canEdit, canPassTicket, canTarget, isAdminOf } from "@/lib/can";
 import { formatDateTime, formatDay, timeAgo, zoneSuffix } from "@/lib/dates";
 import { historyLines } from "@/lib/history";
@@ -277,6 +277,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
       )}
 
       <Tabs
+        id="item"
         value={tab}
         onChange={(v) => setSearch({ tab: v })}
         tabs={[
@@ -286,6 +287,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         ]}
       />
 
+      <TabPanel id="item" value={tab}>
       {tab === "people" && hasWork && <PeopleList issue={issue} filter={filter} reviewing={search.review} onReview={(id) => setSearch({ review: id })} />}
       {tab === "discussion" && (
         <Card className="p-6">
@@ -323,6 +325,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
           <p className="mt-6 text-[13px] text-text-3">{t("History can't be edited or deleted.")}</p>
         </Card>
       )}
+      </TabPanel>
 
       <ReviewDrawer issue={issue} workId={search.review} onClose={() => setSearch({ review: undefined })} onSelect={(id) => setSearch({ review: id })} />
       {dialog === "edit" && <EditDialog issue={issue} open onOpenChange={(o) => !o && setDialog(null)} />}

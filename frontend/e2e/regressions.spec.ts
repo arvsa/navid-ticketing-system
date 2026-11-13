@@ -188,3 +188,20 @@ test("closing an import without the passwords says so plainly", async ({ browser
   await confirm.getByRole("button", { name: "Close without passwords" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 });
+
+test("tabs say what they show, and arrow keys move between them", async ({ browser }) => {
+  const { page } = await as(browser, person("AZR", "principal").email);
+  await page.goto(`/items/${recall("midterm").slice(4)}`);
+  const discussion = page.getByRole("tab", { name: /^Discussion/ });
+  await expect(page.getByRole("tabpanel", { name: /^Discussion/ })).toBeVisible();
+  await discussion.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tabpanel", { name: /^People/ })).toBeVisible();
+
+  await page.goto("/people?tab=groups");
+  await page.getByRole("button", { name: /^School-wide Teachers \d+/ }).click();
+  await expect(page.getByRole("tabpanel", { name: "What they can do" })).toBeVisible();
+
+  await page.goto("/directory");
+  await expect(page.getByRole("group", { name: "Branches" }).getByRole("button", { name: /^Azar Campus ?, \d+ people$/ })).toBeVisible();
+});

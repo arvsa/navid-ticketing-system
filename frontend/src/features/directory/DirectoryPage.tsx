@@ -89,11 +89,18 @@ export function DirectoryPage() {
         )
       ) : (
         <>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="tablist" aria-label={t("Branches")}>
+          {/* Toggle buttons (pressed = shown), so a group rather than tabs. */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label={t("Branches")}>
             {branches.map((b) => (
               <Chip key={b.id} active={b.id === selected.id} onClick={() => set({ branch: b.id })}>
                 {b.name}
-                <span className="ms-2 opacity-70">{num(b.people.length)}</span>
+                <span className="ms-2 opacity-70" aria-hidden>
+                  {num(b.people.length)}
+                </span>
+                <span className="sr-only">
+                  {t(", ")}
+                  {tn(b.people.length, "{n} person", "{n} people")}
+                </span>
               </Chip>
             ))}
           </div>

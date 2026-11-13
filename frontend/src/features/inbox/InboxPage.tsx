@@ -4,7 +4,7 @@ import { isThisWeek, isToday, isYesterday } from "date-fns";
 import { useState } from "react";
 import { useMarkRead, useNotifications, useUnreadCount } from "@/api/hooks";
 import type { Notification } from "@/api/types";
-import { Button, Card, EmptyState, ErrorPanel, LoadingRows, PageHeader, Tabs, cx } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorPanel, LoadingRows, PageHeader, TabPanel, Tabs, cx } from "@/components/ui";
 import { timeAgo, weekStartsOn } from "@/lib/dates";
 import { numberOf } from "@/lib/items";
 import { describeNotification } from "@/lib/notifications";
@@ -43,6 +43,7 @@ export function InboxPage() {
         }
       />
       <Tabs
+        id="inbox"
         value={tab}
         onChange={setTab}
         tabs={[
@@ -50,7 +51,7 @@ export function InboxPage() {
           { value: "unread", label: t("Unread"), count: unread.data ?? null, badge: true },
         ]}
       />
-      <div className="mt-6 space-y-6">
+      <TabPanel id="inbox" value={tab} className="mt-6 space-y-6">
         {list.isLoading ? (
           <Card>
             <LoadingRows />
@@ -115,7 +116,7 @@ export function InboxPage() {
           </div>
         )}
         <p className="text-center text-[13px] text-text-3">{t("Read updates are kept for 90 days.")}</p>
-      </div>
+      </TabPanel>
     </div>
   );
 }

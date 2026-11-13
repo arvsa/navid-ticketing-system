@@ -358,25 +358,47 @@ export const MenuLabel = ({ children }: { children: ReactNode }) => (
   <RMenu.Label className="px-3 py-1.5 text-[12px] font-semibold tracking-wide text-text-3 uppercase">{children}</RMenu.Label>
 );
 
+/** With `id`, the tabs control a <TabPanel id={id} value={value}> below:
+ * screen readers announce which panel each tab shows, and the arrow keys
+ * move between tabs (mirrored in right-to-left). */
 export function Tabs<T extends string>({
   value,
   onChange,
   tabs,
   className,
+  id,
 }: {
   value: T;
   onChange: (v: T) => void;
   tabs: { value: T; label: ReactNode; count?: number | null; badge?: boolean }[];
   className?: string;
+  id?: string;
 }) {
+  const move = (e: React.KeyboardEvent, step: number) => {
+    const i = tabs.findIndex((x) => x.value === value);
+    const next = tabs[(i + step + tabs.length) % tabs.length];
+    onChange(next.value);
+    requestAnimationFrame(() => (e.currentTarget.querySelector(`[aria-selected="true"]`) as HTMLElement | null)?.focus());
+  };
   return (
     <div className={cx("max-w-full overflow-x-auto scrollbar-none", className)}>
-      <div role="tablist" className="inline-flex gap-1 rounded-full bg-sunken p-1">
+      <div
+        role="tablist"
+        className="inline-flex gap-1 rounded-full bg-sunken p-1"
+        onKeyDown={(e) => {
+          const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+          if (e.key === "ArrowRight") (e.preventDefault(), move(e, rtl ? -1 : 1));
+          if (e.key === "ArrowLeft") (e.preventDefault(), move(e, rtl ? 1 : -1));
+        }}
+      >
         {tabs.map((t) => (
           <button
             key={t.value}
             role="tab"
+            id={id ? `${id}-tab-${t.value}` : undefined}
+            aria-controls={id ? `${id}-panel` : undefined}
             aria-selected={value === t.value}
+            tabIndex={value === t.value ? 0 : -1}
             onClick={() => onChange(t.value)}
             className={cx(
               "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[15px] whitespace-nowrap transition-colors",
@@ -393,6 +415,15 @@ export function Tabs<T extends string>({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The content a <Tabs id> controls. */
+export function TabPanel({ id, value, className, children }: { id: string; value: string; className?: string; children: ReactNode }) {
+  return (
+    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${value}`} className={className}>
+      {children}
     </div>
   );
 }

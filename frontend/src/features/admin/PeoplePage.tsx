@@ -11,7 +11,7 @@ import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
 import { PeopleChecklist, PersonSelect } from "@/components/pickers";
-import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
+import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, TabPanel, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, headsGroup, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
@@ -426,6 +426,7 @@ function GroupDetail({
         </div>
       )}
       <Tabs
+        id="group"
         className="mx-6 mt-4"
         value={tab}
         onChange={(v) => guard(() => setTab(v))}
@@ -440,6 +441,7 @@ function GroupDetail({
               ]),
         ]}
       />
+      <TabPanel id="group" value={tab}>
       {tab === "can" && (shapeEditable || (editable && group.is_default) ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
       {tab === "members" && branchId && (
         <GroupMembers
@@ -451,6 +453,7 @@ function GroupDetail({
         />
       )}
       {tab === "branches" && <GroupCopies group={group} onOpenCopy={onOpenCopy} />}
+      </TabPanel>
       <RenameDialog group={group} open={renaming} onOpenChange={setRenaming} />
     </Card>
   );
