@@ -158,3 +158,14 @@ test("root users are listed, and no developer notes show", async ({ browser }) =
   await expect(page.getByText(ROOT.email, { exact: true })).toBeVisible();
   await expect(page.getByText(/gap G-\d+/)).toHaveCount(0);
 });
+
+test("the department answering a question can close it from the page", async ({ browser }) => {
+  const teacher = await as(browser, person("AZR", "teacher2").email);
+  const key = await newItem(teacher.page, { kind: "Ticket", title: `Printer in room 9 is out of toner (${Date.now()})`, to: ["IT"], send: /^Ask$/ });
+  const it = await as(browser, person("AZR", "it").email);
+  await it.page.goto(`/items/${key.slice(4)}`);
+  await expect(it.page.getByRole("button", { name: "Reply" })).toBeVisible();
+  await it.page.getByRole("button", { name: "Close question", exact: true }).click();
+  await it.page.getByRole("dialog").getByRole("button", { name: "Close question" }).click();
+  await expect(it.page.getByText("This item is closed, so the conversation is read-only.")).toBeVisible();
+});

@@ -389,11 +389,21 @@ function PrimaryButton({ issue, onClose, onEdit, onReview }: { issue: IssueDetai
   switch (p.kind) {
     case "close-question":
       return btn(t("Close question"), onClose);
-    case "reply":
-      return btn(t("Reply"), () => {
+    case "reply": {
+      const reply = btn(t("Reply"), () => {
         navigate({ to: "/items/$number", params: { number: n }, search: { tab: "discussion" }, replace: true });
         setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea[id^=composer]")?.focus(), 50);
       });
+      // Whoever answers (a department, its head) closes it once it's sorted.
+      return canClose(viewer, issue) ? (
+        <span className="inline-flex gap-2">
+          <Button onClick={onClose}>{t("Close question")}</Button>
+          {reply}
+        </span>
+      ) : (
+        reply
+      );
+    }
     case "start":
       return btn(t("Start"), () => run(p.work, "start", t("Started")));
     case "claim":
