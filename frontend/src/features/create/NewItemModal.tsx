@@ -172,7 +172,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   useEffect(() => {
     if (initial.group && groups.data && !d.recipients.length && createBranch) {
       const g = groups.data.find((x) => x.id === initial.group);
-      if (g) set({ recipients: [{ kind: "group", id: g.id, branchId: createBranch, label: g.name, count: g.member_count }] });
+      if (g) set({ recipients: [{ kind: "group", id: g.id, branchId: createBranch, label: g.name, count: g.member_count, whole: g.is_default }] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial.group, groups.data]);

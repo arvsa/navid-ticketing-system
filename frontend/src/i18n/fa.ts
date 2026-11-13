@@ -485,6 +485,7 @@ export const fa: Record<string, string> = {
   // ---- Person panel ---------------------------------------------------------
   Branch: "شعبه",
   "Removed from {name}": "از {name} حذف شد",
+  "Removed {names}: already included through a group or branch.": "{names} حذف شد: از طریق یک گروه یا شعبه قبلاً شامل شده است.",
   Reactivated: "دوباره فعال شد",
   "Now a super admin": "اکنون مدیر کل است",
   "this person": "این فرد",

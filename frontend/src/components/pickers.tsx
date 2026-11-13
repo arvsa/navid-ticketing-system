@@ -1,8 +1,12 @@
 // Choosing people, groups and branches.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { useQueries } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Building2, ChevronDown, Search, User, Users, X } from "lucide-react";
-import type { BranchGroup, BranchPerson, Group } from "@/api/types";
+import { getAll } from "@/api/client";
+import { keys } from "@/api/keys";
+import type { BranchGroup, BranchPerson, Group, Member } from "@/api/types";
 import type { Person } from "@/people/usePeople";
 import { Avatar } from "./badges";
 import { cx, inputClass } from "./ui";
@@ -11,11 +15,33 @@ import { localeTag, num, quote, t } from "@/i18n";
 export type Recipient =
   /** `note`: the person's or group's branch, when it's another branch. */
   | { kind: "user"; id: string; branchId: string; label: string; note?: string }
-  | { kind: "group"; id: string; branchId: string; label: string; count: number; note?: string }
+  /** `whole`: the branch's All members group. */
+  | { kind: "group"; id: string; branchId: string; label: string; count: number; note?: string; whole?: boolean }
   | { kind: "branch"; id: string; branchId: string; label: string };
 
 // With the branch: on a school-wide item someone in two branches can be picked in either.
 export const recipientKey = (r: Recipient) => `${r.kind}:${r.id}:${r.branchId}`;
+
+/** Which picked people are already reached through a picked branch or group.
+ * Group members are fetched; a group we can't list covers no one. */
+function useCovered(value: Recipient[]) {
+  const groups = value.filter((r): r is Extract<Recipient, { kind: "group" }> => r.kind === "group" && !r.whole);
+  const members = useQueries({
+    queries: groups.map((g) => {
+      const extra = { include_left: false, group_id: g.id };
+      return {
+        queryKey: keys.members(g.branchId, extra),
+        queryFn: () => getAll<Member>(`/branches/${g.branchId}/members`, { group_id: g.id }),
+        staleTime: 5 * 60_000,
+        retry: false,
+      };
+    }),
+  });
+  const wholeBranches = new Set(value.filter((r) => r.kind === "branch" || (r.kind === "group" && r.whole)).map((r) => r.branchId));
+  const inGroups = new Set<string>();
+  members.forEach((m, i) => m.data?.forEach((x) => inGroups.add(`${x.user_id}:${groups[i].branchId}`)));
+  return (r: Recipient) => r.kind === "user" && (wholeBranches.has(r.branchId) || inGroups.has(`${r.id}:${r.branchId}`));
+}
 
 export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => void }) {
   const Icon = r.kind === "user" ? User : r.kind === "group" ? Users : Building2;
@@ -68,6 +94,18 @@ export function RecipientPicker({
   // Other branches start folded, this one open; searching opens them all.
   const [toggled, setToggled] = useState<Set<string>>(new Set());
   const chosen = new Set(value.map(recipientKey));
+  const covered = useCovered(value);
+  // Someone already reached through a picked branch or group is dropped.
+  const redundant = value.filter(covered);
+  const redundantKey = redundant.map(recipientKey).join(",");
+  useEffect(() => {
+    if (!redundant.length) return;
+    onChange(value.filter((r) => !covered(r)));
+    toast.info(
+      t("Removed {names}: already included through a group or branch.", { names: redundant.map((r) => r.label).join(t(", ")) }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redundantKey]);
   const options = useMemo(() => {
     const term = q.trim().toLowerCase();
     const match = (s: string) => !term || s.toLowerCase().includes(term);
@@ -76,7 +114,7 @@ export function RecipientPicker({
     if (branchId) {
       for (const g of groups)
         if (!g.archived_at && match(g.name))
-          out.push({ kind: "group", id: g.id, branchId, label: g.is_default ? t("All members") : g.name, count: g.member_count });
+          out.push({ kind: "group", id: g.id, branchId, label: g.is_default ? t("All members") : g.name, count: g.member_count, whole: g.is_default });
       for (const p of people)
         if (p.is_active && match(`${p.first_name} ${p.last_name} ${p.email}`))
           out.push({ kind: "user", id: p.id, branchId, label: `${p.first_name} ${p.last_name}` });
@@ -88,8 +126,8 @@ export function RecipientPicker({
     for (const p of crossPeople ?? [])
       if (p.branch_id !== branchId && match(`${p.first_name} ${p.last_name} ${p.branch_name}`))
         out.push({ kind: "user", id: p.user_id, branchId: p.branch_id, label: `${p.first_name} ${p.last_name}`, note: p.branch_name });
-    return out.filter((o) => !chosen.has(recipientKey(o)));
-  }, [q, people, groups, branches, crossPeople, crossGroups, branchId, chosen]);
+    return out.filter((o) => !chosen.has(recipientKey(o)) && !covered(o));
+  }, [q, people, groups, branches, crossPeople, crossGroups, branchId, chosen, covered]);
 
   // One section per branch: the branch itself (when it can be picked
   // whole), then its groups, then its people. This branch comes first.
