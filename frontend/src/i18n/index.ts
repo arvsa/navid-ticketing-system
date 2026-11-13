@@ -74,8 +74,11 @@ export function num(v: number | string): string {
  * either language: "Sam S." in a Farsi sentence, "کامران ن." in an English
  * one (Unicode first-strong isolate). */
 export function isolate(s: string): string {
-  return s ? `\u2068${s}\u2069` : s;
+  // In English only right-to-left text needs it; in Farsi anything may.
+  return s && (isRtl || RTL_LETTER.test(s)) ? `\u2068${s}\u2069` : s;
 }
+
+const RTL_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/;
 
 const missing = new Set<string>();
 
