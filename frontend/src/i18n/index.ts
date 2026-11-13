@@ -70,10 +70,11 @@ export function num(v: number | string): string {
   return lang === "fa" ? s.replace(/[0-9]/g, (d) => FA_DIGITS[+d]) : s;
 }
 
-/** Keeps a value's own direction inside text of the other direction, so
- * "Sam S." stays "Sam S." in a Farsi sentence (Unicode first-strong isolate). */
+/** Keeps a value's own direction inside text of the other direction, in
+ * either language: "Sam S." in a Farsi sentence, "کامران ن." in an English
+ * one (Unicode first-strong isolate). */
 export function isolate(s: string): string {
-  return isRtl && s ? `⁨${s}⁩` : s;
+  return s ? `\u2068${s}\u2069` : s;
 }
 
 const missing = new Set<string>();
@@ -121,7 +122,7 @@ export function tx(text: string, vars: Record<string, ReactNode>): ReactNode {
       const v = vars[p];
       if (typeof v === "number") return num(v);
       if (typeof v === "string") return isolate(v);
-      return isRtl && v != null ? createElement("bdi", { key: i }, v) : v;
+      return v != null ? createElement("bdi", { key: i }, v) : v;
     }),
   );
 }

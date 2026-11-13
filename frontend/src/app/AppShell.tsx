@@ -329,7 +329,7 @@ function QuickSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
         {items.map((i) => (
           <button key={i.id} onClick={() => go(numberOf(i.key))} className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-start hover:bg-sunken">
             <TypeBadge type={i.type} />
-            <span className="min-w-0 flex-1 truncate">{i.title}</span>
+            <span dir="auto" className="min-w-0 flex-1 truncate">{i.title}</span>
             <span className="font-mono text-[13px] text-text-3">{i.key}</span>
           </button>
         ))}

@@ -213,7 +213,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
           {issue.description && (
             <Card className="p-6">
               <h2 className="mb-2 text-[20px] font-semibold">{t("About")}</h2>
-              <p className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>
+              <p dir="auto" className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>
             </Card>
           )}
           <WhosComing issue={issue} />
@@ -235,7 +235,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
                   </span>
                 )}
               </div>
-              <h1 className="mt-3 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px]">{issue.title}</h1>
+              <h1 dir="auto" className="mt-3 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px]">{issue.title}</h1>
               <p className="mt-2 text-[17px] text-text-2">{subtitle}</p>
             </div>
             {actions}
@@ -243,7 +243,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
 
           {(issue.description || issue.attachments.some((a) => !a.comment_id && !a.report_id)) && (
             <Card className="space-y-4 px-6 py-5">
-              {issue.description && <p className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>}
+              {issue.description && <p dir="auto" className="text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p>}
               <FileList files={issue.attachments.filter((a) => !a.comment_id && !a.report_id)} />
             </Card>
           )}

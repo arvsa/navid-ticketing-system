@@ -89,7 +89,9 @@ export function RowLink({
     <>
       {leading}
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{title}</span>
+        <span dir="auto" className="block truncate font-medium">
+          {title}
+        </span>
         {meta && <span className="block truncate text-[14px] text-text-2">{meta}</span>}
       </span>
       {trailing}

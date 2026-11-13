@@ -509,7 +509,9 @@ function TagPicker({ branchId, value, onChange }: { branchId?: string; value: st
                       <span className={cx("flex size-4 items-center justify-center rounded border", value.includes(x.tag) ? "border-primary bg-primary text-on-primary" : "border-input")}>
                         {value.includes(x.tag) && <Check className="size-3" aria-hidden />}
                       </span>
-                      <span className="flex-1 truncate">{tagLabel(x.tag)}</span>
+                      <span dir="auto" className="flex-1 truncate text-start">
+                        {tagLabel(x.tag)}
+                      </span>
                       {x.count > 0 && <span className="text-[13px] text-text-3">{num(x.count)}</span>}
                     </button>
                   </li>
@@ -523,7 +525,7 @@ function TagPicker({ branchId, value, onChange }: { branchId?: string; value: st
         <div className="flex flex-wrap gap-1.5">
           {value.map((tag) => (
             <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-sunken py-1 ps-2.5 pe-1.5 text-[13px]">
-              {tagLabel(tag)}
+              <bdi>{tagLabel(tag)}</bdi>
               <button type="button" onClick={() => flip(tag)} aria-label={t("Remove {name}", { name: tagLabel(tag) })} className="text-text-3 hover:text-danger">
                 <X className="size-3.5" />
               </button>
@@ -555,7 +557,7 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
           <span className={cx("size-2.5 shrink-0 rounded-full", item.unread ? "bg-primary" : "bg-transparent")} aria-hidden />
           <TypeBadge type={item.type} />
           <span className="min-w-0">
-            <span className={cx("block break-anywhere", item.unread ? "font-bold" : "font-semibold", item.state === "cancelled" && "line-through")}>
+            <span dir="auto" className={cx("block break-anywhere", item.unread ? "font-bold" : "font-semibold", item.state === "cancelled" && "line-through")}>
               {item.title}
             </span>
             <span className="flex flex-wrap items-center gap-x-2 font-mono text-[14px] text-text-3">

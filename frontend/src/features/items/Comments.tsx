@@ -168,7 +168,7 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
             </div>
           </div>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-anywhere">{renderBody(c.body ?? "", mentioned)}</p>
+          <p dir="auto" className="mt-1 whitespace-pre-wrap break-anywhere">{renderBody(c.body ?? "", mentioned)}</p>
         )}
         {c.attachments.length > 0 && (
           <div className="mt-2">

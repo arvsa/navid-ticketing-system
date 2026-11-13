@@ -28,6 +28,7 @@ export function TagList({ tags, className }: { tags: string[]; className?: strin
       {tags.map((tag) => (
         <span
           key={tag}
+          dir="auto"
           className="inline-flex h-6 items-center rounded-md px-2 text-[13px] font-medium"
           style={tag === "report" ? { color: "var(--report)", background: "var(--report-soft)" } : { color: "var(--text-2)", background: "var(--sunken)" }}
         >

@@ -27,7 +27,7 @@ export function EventHeader({ issue }: { issue: IssueDetail }) {
           <TypeBadge type="event" />
           <span className="font-mono text-text-3">{issue.key}</span>
         </div>
-        <h1 className={`mt-2 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px] ${issue.state === "cancelled" ? "line-through" : ""}`}>
+        <h1 dir="auto" className={`mt-2 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px] ${issue.state === "cancelled" ? "line-through" : ""}`}>
           {issue.title}
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[17px] text-text-2">

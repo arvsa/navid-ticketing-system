@@ -107,7 +107,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
             )}
           </span>
         </div>
-        <h1 className="mt-2 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px]">{issue.title}</h1>
+        <h1 dir="auto" className="mt-2 text-[30px] leading-9 font-bold break-anywhere sm:text-[38px] sm:leading-[46px]">{issue.title}</h1>
       </div>
 
       {sentBack && (
@@ -140,7 +140,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
         <div className="space-y-6">
           <Card className="p-6">
             <h2 className="text-[18px] font-semibold">{t("What was asked")}</h2>
-            {issue.description ? <p className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p> : <p className="mt-3 text-text-2">{t("No details were given.")}</p>}
+            {issue.description ? <p dir="auto" className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p> : <p className="mt-3 text-text-2">{t("No details were given.")}</p>}
             {sentTo && (
               <p className="mt-3 text-[15px] text-text-2">
                 {t("Sent to {name}", { name: targetName(sentTo, people, groups, (id) => branchById.get(id)?.name ?? t("branch"), !issue.branch_id) })}

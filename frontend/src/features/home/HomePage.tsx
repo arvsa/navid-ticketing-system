@@ -408,7 +408,7 @@ function StaffHome() {
                   return (
                     <li key={e.issue_id} className="rounded-[14px] px-3 py-3">
                       <Link to="/items/$number" params={{ number: numberOf(e.key) }} className="block hover:underline">
-                        <span className="font-medium">{e.title}</span>
+                        <span dir="auto" className="font-medium">{e.title}</span>
                         <span className="block text-[14px] text-text-2">
                           {formatDay(e.starts_at, zoneOf(branchId))} · {formatTime(e.starts_at, zoneOf(branchId))}
                         </span>

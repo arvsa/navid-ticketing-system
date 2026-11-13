@@ -32,7 +32,7 @@ export function SelfReport({ issue }: { issue: IssueDetail }) {
           <p className="mt-1 text-[14px] text-text-3">
             {r.submitted_at ? tx("Filed by {who} · {date}", { who: <PersonName id={r.author_id} short={false} />, date: formatDay(r.submitted_at) }) : t("Draft — only you can see it")}
           </p>
-          <p className="mt-4 text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{r.body}</p>
+          <p dir="auto" className="mt-4 text-[17px] leading-7 whitespace-pre-wrap break-anywhere">{r.body}</p>
           {r.attachments.length > 0 && (
             <div className="mt-4">
               <FileList files={r.attachments} />

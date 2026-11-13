@@ -338,7 +338,7 @@ function ReviewBody({
             <div className="space-y-3">
               <div className="rounded-[12px] border border-border bg-surface-2 p-5">
                 <h3 className="text-[18px] font-semibold">{report.title}</h3>
-                <p className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{report.body}</p>
+                <p dir="auto" className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{report.body}</p>
                 {!report.submitted_at && <p className="mt-3 text-[14px] text-text-3">{t("Draft — not handed in yet.")}</p>}
               </div>
               <FileList files={report.attachments} wide />

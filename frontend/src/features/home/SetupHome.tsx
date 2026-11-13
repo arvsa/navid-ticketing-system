@@ -64,7 +64,7 @@ export function SetupHome() {
                 <li key={i.id}>
                   <Link to="/items/$number" params={{ number: numberOf(i.key) }} className="group flex items-center gap-3 px-5 py-3 hover:bg-surface-2">
                     <TypeBadge type={i.type} />
-                    <span className="min-w-0 flex-1 truncate font-medium">{i.title}</span>
+                    <span dir="auto" className="min-w-0 flex-1 truncate font-medium">{i.title}</span>
                     <span className="text-[14px] text-text-3">{formatDay(i.created_at)}</span>
                     <ChevronRight className="size-4 text-text-3 rtl:-scale-x-100" aria-hidden />
                   </Link>

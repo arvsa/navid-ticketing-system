@@ -86,7 +86,7 @@ export function ApprovalsPage() {
               <Card key={issueId}>
                 <div className="flex flex-wrap items-center gap-3 border-b border-border px-6 py-4">
                   <TypeBadge type={issue.type} />
-                  <Link to="/items/$number" params={{ number: n }} className="font-semibold hover:underline">
+                  <Link to="/items/$number" params={{ number: n }} dir="auto" className="font-semibold hover:underline">
                     {issue.title}
                   </Link>
                   <span className="text-text-2">· {t("{n} waiting", { n: items.length })}</span>

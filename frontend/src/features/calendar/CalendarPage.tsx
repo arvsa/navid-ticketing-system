@@ -180,7 +180,7 @@ export function CalendarPage() {
               <Card key={e.issue_id} className={cx("flex flex-wrap items-center gap-4 p-5", e.state === "cancelled" && "opacity-60")}>
                 <DateBlock date={inZone(e.starts_at, z)} size="sm" />
                 <Link to="/items/$number" params={{ number: String(e.number) }} className="min-w-0 flex-1">
-                  <span className={cx("block text-[17px] font-semibold", e.state === "cancelled" && "line-through")}>{e.title}</span>
+                  <span dir="auto" className={cx("block text-[17px] font-semibold", e.state === "cancelled" && "line-through")}>{e.title}</span>
                   <span className="text-text-2">
                     {e.all_day ? t("All day") : `${formatTime(e.starts_at, z)}–${formatTime(e.ends_at, z)}`}
                     {e.location && ` · ${e.location}`}
@@ -216,6 +216,7 @@ function EventChip({ e, zone }: { e: CalendarEntry; zone?: string }) {
     <Link
       to="/items/$number"
       params={{ number: String(e.number) }}
+      dir="auto"
       className={cx("block truncate rounded px-1.5 py-0.5 text-[12px] font-medium", (e.state === "cancelled" || r === "declined") && "line-through")}
       style={style}
       title={`${e.title}${r ? ` · ${r === "pending" ? t("Reply needed") : rsvpLabel[r]}` : ""}`}
