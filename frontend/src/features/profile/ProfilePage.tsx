@@ -158,7 +158,7 @@ function ProfileHero() {
           {u.is_super_admin && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent-on-soft">
               <Shield className="size-3.5" />
-              {t("Super admin")}
+              {t("Root user")}
             </span>
           )}
           {adminOf.map((m) => (
@@ -238,7 +238,7 @@ export function ProfilePage() {
       <Card className="p-6">
         <h2 className="mb-1 text-[20px] font-semibold">{t("Your branches and groups")}</h2>
         <p className="mb-4 text-text-2">{t("Work sent to these groups comes to you. Ask an admin if one is missing.")}</p>
-        {me.memberships.length === 0 && <p className="text-text-2">{u.is_super_admin ? t("As a super admin you work across every branch.") : t("You aren't a member of any branch.")}</p>}
+        {me.memberships.length === 0 && <p className="text-text-2">{u.is_super_admin ? t("As a root user you work across every branch.") : t("You aren't a member of any branch.")}</p>}
         <ul className="space-y-4">
           {me.memberships.map((m) => {
             const mine = (viewer.myGroups?.[m.branch.id] ?? []).map((id) => groups.get(id)).filter(Boolean);

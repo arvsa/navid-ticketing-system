@@ -64,7 +64,7 @@ async fn main() -> ExitCode {
         user["first_name"].as_str().unwrap_or(""),
         user["last_name"].as_str().unwrap_or(""),
         user["email"].as_str().unwrap_or(""),
-        if user["is_super_admin"] == true { " (super admin)" } else { "" },
+        if user["is_super_admin"] == true { " (root user)" } else { "" },
     );
     if user["must_change_password"] == true {
         println!("Note: this account must change its password (POST /api/me/password) before anything else works.");

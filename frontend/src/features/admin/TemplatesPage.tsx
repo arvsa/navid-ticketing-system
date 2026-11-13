@@ -20,7 +20,7 @@ export function TemplatesPage() {
   const viewer = useViewer();
   const templates = useTemplates(true);
   const [editing, setEditing] = useState<Template | "new" | null>(null);
-  if (!isSuper(viewer)) return <EmptyState title={t("Only super admins manage templates.")} />;
+  if (!isSuper(viewer)) return <EmptyState title={t("Only root users manage templates.")} />;
   const list = templates.data ?? [];
   return (
     <div className="space-y-6">

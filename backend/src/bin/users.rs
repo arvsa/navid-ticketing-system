@@ -31,9 +31,9 @@ struct Cli {
     /// Only users whose email or name contains this text.
     #[arg(long, short)]
     search: Option<String>,
-    /// Only super admins.
-    #[arg(long)]
-    super_admins: bool,
+    /// Only root users.
+    #[arg(long, alias = "super-admins")]
+    root_users: bool,
     /// Only branch admins (of --branch, if given).
     #[arg(long)]
     admins: bool,
@@ -103,7 +103,7 @@ async fn main() -> ExitCode {
     )
     .bind(&cli.branch)
     .bind(&cli.search)
-    .bind(cli.super_admins)
+    .bind(cli.root_users)
     .bind(cli.admins)
     .bind(cli.inactive)
     .bind(cli.active)
@@ -130,7 +130,7 @@ async fn main() -> ExitCode {
         .map(|r| {
             let mut status = Vec::new();
             if r.get::<bool, _>("is_super_admin") {
-                status.push("super admin");
+                status.push("root user");
             }
             status.push(if r.get::<bool, _>("is_active") { "active" } else { "deactivated" });
             if r.get::<bool, _>("locked") {

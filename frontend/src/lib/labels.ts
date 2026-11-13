@@ -134,7 +134,7 @@ export const permissionInfo: Record<
   },
   "work_item.approve": {
     title: t("Approve or send back work"),
-    help: t("Never work a super admin sent out, and never their own"),
+    help: t("Never work a root user sent out, and never their own"),
     section: "work",
   },
   "work_item.assign": {
@@ -181,9 +181,9 @@ const errorCopy: Record<string, string> = {
   target_exists: t("It's already sent to them."),
   already_assigned: t("Someone else picked this up a moment ago."),
   already_member: t("They're already a member here."),
-  member_is_admin: t("Remove their admin role first. Super admins can do this."),
+  member_is_admin: t("Remove their admin role first. Root users can do this."),
   last_admin: t("A branch must always have an admin. Appoint another admin first."),
-  last_super_admin: t("There must always be at least one super admin."),
+  last_super_admin: t("There must always be at least one root user."),
   default_group: t("'All members' can't be renamed, archived or changed by hand."),
   not_a_member: t("They aren't a member of this branch."),
   group_archived: t("This group is archived. Restore it first."),

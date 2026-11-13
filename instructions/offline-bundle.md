@@ -26,14 +26,14 @@ The bundle is a folder, `navid-offline/`, containing:
    ```
 
    The database starts empty. On the first start the backend creates one
-   super admin, `superadmin@school.local`. To use your own email instead,
+   root user, `superadmin@school.local`. To use your own email instead,
    start it the first time with
    `FIRST_SUPER_ADMIN_EMAIL=you@your.school docker compose up -d`.
 
 3. **Get the temporary password:**
 
    ```sh
-   docker compose logs backend | grep -A1 "First super admin"
+   docker compose logs backend | grep -A1 "First root user"
    ```
 
    It is shown only on that first start.
@@ -43,7 +43,7 @@ The bundle is a folder, `navid-offline/`, containing:
    there, open the branches, import their people and appoint the admins.
 
 Stop it with `docker compose down`. Add `-v` to also delete the data; the
-next start is then a new, empty school with a new super admin.
+next start is then a new, empty school with a new root user.
 
 Lost the temporary password before signing in? Make a new one:
 `docker compose exec backend admin reset-password --email superadmin@school.local`.

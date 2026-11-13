@@ -184,7 +184,7 @@ fn map_trigger_message(message: &str) -> AppError {
     if has("must have at least one active admin") || has("leaves a branch without an admin") {
         AppError::conflict("last_admin", "a branch must keep at least one active admin")
     } else if has("at least one active super admin is required") {
-        AppError::conflict("last_super_admin", "at least one active super admin is required")
+        AppError::conflict("last_super_admin", "at least one active root user is required")
     } else if has("the default group cannot be deleted") || has("is_default cannot be changed") {
         AppError::conflict("default_group", "the All members group can't be deleted or changed")
     } else if has("has left branch") {
@@ -196,7 +196,7 @@ fn map_trigger_message(message: &str) -> AppError {
     } else if has("target branch must match the issue branch") {
         AppError::validation("invalid_target", "targets must be in the issue's branch")
     } else if has("only super admin issues can target a whole branch") {
-        AppError::validation("invalid_target", "only super admin issues can target a whole branch")
+        AppError::validation("invalid_target", "only root users' issues can target a whole branch")
     } else {
         // Includes "is append-only": that is a bug in our code, not user error.
         AppError::internal(format!("unmapped trigger exception: {message}"))

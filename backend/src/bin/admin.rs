@@ -1,12 +1,12 @@
 //! Operator CLI. Needs only `DATABASE_URL`.
 //!
 //! ```text
-//! cargo run --bin admin -- create-super-admin --email x --first-name y --last-name z
+//! cargo run --bin admin -- create-root-user --email x --first-name y --last-name z
 //! cargo run --bin admin -- reset-password --email x
 //! ```
 //!
 //! In Docker, run it in the backend container, which has `DATABASE_URL` set:
-//! `docker compose exec backend admin create-super-admin ...`.
+//! `docker compose exec backend admin create-root-user ...`.
 
 use std::process::ExitCode;
 
@@ -24,8 +24,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Create a super admin and print a one-time temporary password.
-    CreateSuperAdmin {
+    /// Create a root user (sees and runs every branch) and print a temporary password.
+    #[command(alias = "create-super-admin")]
+    CreateRootUser {
         #[arg(long)]
         email: String,
         #[arg(long)]
@@ -57,10 +58,10 @@ async fn main() -> ExitCode {
     }
 
     let result = match &cli.command {
-        Command::CreateSuperAdmin { email, first_name, last_name } => {
+        Command::CreateRootUser { email, first_name, last_name } => {
             bootstrap::create_super_admin(&pool, email, first_name, last_name)
                 .await
-                .map(|created| (email, created, format!("Created super admin {email}")))
+                .map(|created| (email, created, format!("Created root user {email}")))
         }
         Command::ResetPassword { email } => bootstrap::reset_password(&pool, email)
             .await

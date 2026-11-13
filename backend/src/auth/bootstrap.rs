@@ -86,7 +86,7 @@ pub async fn first_super_admin(db: &PgPool, email: &str) -> AppResult<Option<Cre
     if anyone {
         return Ok(None);
     }
-    create_super_admin(db, email, "Super", "Admin").await.map(Some)
+    create_super_admin(db, email, "Root", "User").await.map(Some)
 }
 
 /// Sets a temporary password, forces a change at next login, clears any

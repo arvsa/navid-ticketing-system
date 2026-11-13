@@ -85,7 +85,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
   });
   const appoint = useMutation({ mutationFn: (b: string) => api.put(`/branches/${b}/admins/${userId}`), onSuccess: ok(t("Admin appointed")), onError: fail });
   const demote = useMutation({ mutationFn: (b: string) => api.del(`/branches/${b}/admins/${userId}`), onSuccess: ok(t("Admin role removed")), onError: fail });
-  const makeSuper = useMutation({ mutationFn: () => api.put(`/users/${userId}/super-admin`), onSuccess: ok(t("Now a super admin")), onError: fail });
+  const makeSuper = useMutation({ mutationFn: () => api.put(`/users/${userId}/super-admin`), onSuccess: ok(t("Now a root user")), onError: fail });
 
   const first = m?.first_name ?? person?.first_name ?? t("this person");
   const fullName = m ? `${m.first_name} ${m.last_name}` : people.name(userId);
@@ -203,7 +203,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       {(manage || superAdmin) && !self && m && !m.left_at && (
         <div className="flex flex-wrap gap-2 border-t border-border px-6 py-4">
           {m.is_admin && !superAdmin ? (
-            <p className="w-full text-[14px] text-text-2">{t("Admins are managed by super admins.")}</p>
+            <p className="w-full text-[14px] text-text-2">{t("Admins are managed by root users.")}</p>
           ) : (
             <>
               <Button onClick={() => setDialog("edit")}>{t("Edit name or email")}</Button>
@@ -220,7 +220,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
               )}
               {superAdmin && (
                 <Button variant="ghost" icon={<Shield className="size-4" />} onClick={() => setDialog("super")}>
-                  {t("Make super admin")}
+                  {t("Make root user")}
                 </Button>
               )}
             </>
@@ -260,9 +260,9 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
       <ConfirmDialog
         open={dialog === "super"}
         onOpenChange={(o) => !o && setDialog(null)}
-        title={t("Make {name} a super admin?", { name: first })}
+        title={t("Make {name} a root user?", { name: first })}
         body={t("{name} will see every branch, send work school-wide and approve it.", { name: first })}
-        confirm={t("Make super admin")}
+        confirm={t("Make root user")}
         loading={makeSuper.isPending}
         onConfirm={() => makeSuper.mutate()}
       />

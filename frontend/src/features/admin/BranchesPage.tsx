@@ -52,7 +52,7 @@ export function BranchesPage() {
   const viewer = useViewer();
   const branches = useBranches();
   const [creating, setCreating] = useState(false);
-  if (!isSuper(viewer)) return <EmptyState title={t("Only super admins manage branches.")} />;
+  if (!isSuper(viewer)) return <EmptyState title={t("Only root users manage branches.")} />;
   return (
     <div className="space-y-8">
       <PageHeader
@@ -368,25 +368,25 @@ function SuperAdmins() {
   const [adding, setAdding] = useState(false);
   const grant = useMutation({
     mutationFn: (id: string) => api.put(`/users/${id}/super-admin`),
-    onSuccess: () => (toast.success(t("{name} is now a super admin", { name: people.name(pick) })), setAdding(false), setPick(null), qc.invalidateQueries({ queryKey: ["people"] })),
+    onSuccess: () => (toast.success(t("{name} is now a root user", { name: people.name(pick) })), setAdding(false), setPick(null), qc.invalidateQueries({ queryKey: ["people"] })),
     onError: (e) => toast.error(errorMessage(e)),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.del(`/users/${id}/super-admin`),
-    onSuccess: () => (toast.success(t("Super admin role removed")), qc.invalidateQueries({ queryKey: ["me"] })),
+    onSuccess: () => (toast.success(t("Root user role removed")), qc.invalidateQueries({ queryKey: ["me"] })),
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
     <Card className="p-6">
-      <h2 className="text-[20px] font-semibold">{t("Super admins")}</h2>
-      <p className="mt-1 text-text-2">{t("Super admins see every branch, send work school-wide and approve it. There must always be at least one.")}</p>
+      <h2 className="text-[20px] font-semibold">{t("Root users")}</h2>
+      <p className="mt-1 text-text-2">{t("Root users see every branch, send work school-wide and approve it. There must always be at least one.")}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {adding ? (
           <div className="w-full space-y-3 rounded-[12px] border border-border p-4">
             <PersonSelect people={people.all} value={pick} onChange={setPick} />
             <div className="flex gap-2">
               <Button variant="primary" disabled={!pick} loading={grant.isPending} onClick={() => pick && grant.mutate(pick)}>
-                {t("Make super admin")}
+                {t("Make root user")}
               </Button>
               <Button onClick={() => setAdding(false)}>{t("Cancel")}</Button>
             </div>
@@ -394,15 +394,15 @@ function SuperAdmins() {
         ) : (
           <>
             <Button icon={<Shield className="size-4" />} onClick={() => setAdding(true)}>
-              {t("Make someone a super admin")}
+              {t("Make someone a root user")}
             </Button>
-            <Button variant="ghost-danger" loading={revoke.isPending} onClick={() => confirm(t("Stop being a super admin yourself?")) && revoke.mutate(viewer.me.user.id)}>
-              {t("Remove my own super admin role")}
+            <Button variant="ghost-danger" loading={revoke.isPending} onClick={() => confirm(t("Stop being a root user yourself?")) && revoke.mutate(viewer.me.user.id)}>
+              {t("Remove my own root user role")}
             </Button>
           </>
         )}
       </div>
-      <p className="mt-3 text-[13px] text-text-3">{t("The app can't list every super admin yet; ask for the backend to add it (gap G-12).")}</p>
+      <p className="mt-3 text-[13px] text-text-3">{t("The app can't list every root user yet; ask for the backend to add it (gap G-12).")}</p>
     </Card>
   );
 }

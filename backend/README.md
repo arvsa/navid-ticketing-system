@@ -23,10 +23,10 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    cp .env.example .env
    ```
 
-3. **Create a super admin**, so there's someone to sign in as:
+3. **Create a root user**, so there's someone to sign in as:
 
    ```sh
-   cargo run --bin admin -- create-super-admin --email you@school.org --first-name Your --last-name Name
+   cargo run --bin admin -- create-root-user --email you@school.org --first-name Your --last-name Name
    ```
 
    It prints a temporary password. `cargo run --bin users` lists every
@@ -58,7 +58,7 @@ To run the tests: `cargo test` (with the database from step 1 running).
 - **Command-line tools:** [`docs/binaries.html`](docs/binaries.html) describes
   every `cargo run --bin ...` tool, and
   [`docs/password-rotation.html`](docs/password-rotation.html) walks through
-  creating the first super admin and rotating passwords.
+  creating the first root user and rotating passwords.
 - **Every endpoint**, with its parameters and responses, is listed in the
   OpenAPI document at
   [`/api/openapi.json`](http://127.0.0.1:8080/api/openapi.json). Paste it into

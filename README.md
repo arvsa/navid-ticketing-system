@@ -32,10 +32,10 @@ You only need [Docker](https://www.docker.com) and git.
 
    The first build compiles the backend and takes a few minutes.
 
-3. **Create the first super admin**:
+3. **Create the first root user**:
 
    ```sh
-   docker compose exec backend admin create-super-admin --email you@school.org --first-name Your --last-name Name
+   docker compose exec backend admin create-root-user --email you@school.org --first-name Your --last-name Name
    ```
 
    It prints a temporary password; you choose your own after signing in.

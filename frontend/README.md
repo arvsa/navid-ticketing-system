@@ -10,7 +10,7 @@ Screens follow the designs in `../School Ticketing UI-png` and the behaviour in
 
 ## Run it
 
-1. Start the backend (see `../backend/README.md`): database, a super admin (`admin create-super-admin`), then
+1. Start the backend (see `../backend/README.md`): database, a root user (`admin create-root-user`), then
    `cargo run`. It must allow the frontend's origin: `APP_ORIGIN=http://localhost:5173`
    and `COOKIE_SECURE=false` (the defaults in `.env.example`).
 2. Install and start the frontend:
@@ -22,7 +22,7 @@ Screens follow the designs in `../School Ticketing UI-png` and the behaviour in
 
 3. Open http://localhost:5173 and sign in with a demo account, password
    `demo-password`:
-   - `superadmin@demo.school` — super admin, runs the app from the Setup page
+   - `superadmin@demo.school` — root user, runs the app from the Setup page
    - `admin@north.demo.school` — North Campus admin
    - `member4@north.demo.school` — a staff member
 
@@ -99,7 +99,7 @@ These follow from what the API can return today (gap numbers are from
 - **Assignments** have no item title (G-1), so their items are fetched and cached
   separately; names come from member lists (G-2); "up for grabs" and "sent to me"
   need the groups you're in, which are worked out from group member lists (G-4).
-- **Super admins card** can't list every super admin (G-12).
+- **Root users card** can't list every root user (G-12).
 - The backend's OpenAPI document references an undefined `Transition` schema and
   repeats operation ids; `scripts/gen-api-types.mjs` patches both before
   generating types.

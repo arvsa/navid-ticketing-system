@@ -15,7 +15,7 @@ use clap::Parser;
 use serde_json::{json, Value};
 
 #[derive(Parser)]
-#[command(about = "Sign in and save the session cookie (default: the demo super admin)")]
+#[command(about = "Sign in and save the session cookie (default: the demo root user)")]
 struct Cli {
     #[arg(long, default_value = backend::seed::DEMO_SUPER_ADMIN)]
     email: String,
@@ -86,7 +86,7 @@ async fn run(cli: &Cli) -> Result<(), String> {
         user["first_name"].as_str().unwrap_or(""),
         user["last_name"].as_str().unwrap_or(""),
         user["email"].as_str().unwrap_or(""),
-        if user["is_super_admin"] == true { " (super admin)" } else { "" },
+        if user["is_super_admin"] == true { " (root user)" } else { "" },
     );
     if user["must_change_password"] == true {
         println!("Note: this account must change its password before anything but /api/me works.");

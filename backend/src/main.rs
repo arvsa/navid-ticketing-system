@@ -14,9 +14,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     permission::verify_catalog(&pool).await?;
     if let Some(email) = &config.first_super_admin_email {
         if let Some(created) = bootstrap::first_super_admin(&pool, email).await? {
-            tracing::info!(%email, "first super admin created");
+            tracing::info!(%email, "first root user created");
             // Plain text so it reads well in `docker compose logs`; shown once.
-            println!("First super admin: {email}");
+            println!("First root user: {email}");
             println!("Temporary password: {}", created.temporary_password.expose());
         }
     }

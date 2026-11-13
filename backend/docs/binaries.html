@@ -123,18 +123,18 @@ td:first-child { white-space: nowrap; }
   <h3><code>admin</code> <span class="needs">database</span></h3>
   <p class="what">Operator tasks that need no sign-in. They're recorded in the audit log as done by the system.</p>
 
-  <h4>create-super-admin</h4>
-  <p>Creates the first super admin (or another one) with a random temporary password, printed once. The account must choose its own password at first sign-in.</p>
-  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- create-super-admin --email you@school.org --first-name Ada --last-name Lovelace</code></pre></div>
+  <h4>create-root-user</h4>
+  <p>Creates the first root user (or another one) with a random temporary password, printed once. The account must choose its own password at first sign-in.</p>
+  <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- create-root-user --email you@school.org --first-name Ada --last-name Lovelace</code></pre></div>
 
   <h4>reset-password</h4>
-  <p>Gives any account a new temporary password (printed once), forces a change at the next sign-in, clears a lockout and signs the account out everywhere. Works for super admins too, including a locked-out one.</p>
+  <p>Gives any account a new temporary password (printed once), forces a change at the next sign-in, clears a lockout and signs the account out everywhere. Works for root users too, including a locked-out one.</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin admin -- reset-password --email jane@school.org</code></pre></div>
 </section>
 
 <section class="tool" id="users">
   <h3><code>users</code> <span class="needs">database</span></h3>
-  <p class="what">Lists the accounts as a table: email, name, branches (with <code>(admin)</code> where they're an admin), status (<em>super admin</em>, <em>active</em>/<em>deactivated</em>, <em>locked</em>), last sign-in, when the account was made, and its password while it's still the temporary one an admin handed out. Read-only.</p>
+  <p class="what">Lists the accounts as a table: email, name, branches (with <code>(admin)</code> where they're an admin), status (<em>root user</em>, <em>active</em>/<em>deactivated</em>, <em>locked</em>), last sign-in, when the account was made, and its password while it's still the temporary one an admin handed out. Read-only.</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin users
 cargo run --bin users -- --branch NTH --admins
 cargo run --bin users -- --search jane --pending
@@ -143,7 +143,7 @@ docker compose exec backend users --inactive --csv</code></pre></div>
     <tr><th>Flag</th><th>Meaning</th></tr>
     <tr><td><code>--branch CODE</code></td><td>Only current members of that branch.</td></tr>
     <tr><td><code>--search TEXT</code>, <code>-s</code></td><td>Only users whose email or name contains the text.</td></tr>
-    <tr><td><code>--super-admins</code></td><td>Only super admins.</td></tr>
+    <tr><td><code>--root-users</code></td><td>Only root users.</td></tr>
     <tr><td><code>--admins</code></td><td>Only branch admins (of <code>--branch</code>, if given).</td></tr>
     <tr><td><code>--active</code> / <code>--inactive</code></td><td>Only active / deactivated accounts.</td></tr>
     <tr><td><code>--locked</code></td><td>Only accounts locked after failed sign-ins.</td></tr>
@@ -165,7 +165,7 @@ docker compose exec backend users --inactive --csv</code></pre></div>
 
 <section class="tool" id="login">
   <h3><code>login</code> <span class="needs">server</span></h3>
-  <p class="what">Signs in and saves the session to the cookie file. Without flags it signs in as the demo super admin.</p>
+  <p class="what">Signs in and saves the session to the cookie file. Without flags it signs in as the demo root user.</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login
 cargo run --bin login -- --email jane@school.org --password 'her-password'</code></pre></div>
   <table>
@@ -179,7 +179,7 @@ cargo run --bin login -- --email jane@school.org --password 'her-password'</code
 
 <section class="tool" id="whoami">
   <h3><code>whoami</code> <span class="needs">server</span></h3>
-  <p class="what">Shows who the saved session belongs to (name, email, super admin or not, branches and roles), or that you're signed out. Non-zero exit code when signed out.</p>
+  <p class="what">Shows who the saved session belongs to (name, email, root user or not, branches and roles), or that you're signed out. Non-zero exit code when signed out.</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin whoami</code></pre></div>
 </section>
 

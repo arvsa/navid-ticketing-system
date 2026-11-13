@@ -203,7 +203,7 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
           <Lock className="size-4" />{" "}{t("What only admins can do")}
         </summary>
         <p className="mt-2 ps-6 text-[14px]">
-          {t("Creating groups and choosing their permissions · adding people to groups · cancelling one person's assignment · appointing admins · approving work a super admin sent out · exporting several branches")}
+          {t("Creating groups and choosing their permissions · adding people to groups · cancelling one person's assignment · appointing admins · approving work a root user sent out · exporting several branches")}
         </p>
       </details>
 

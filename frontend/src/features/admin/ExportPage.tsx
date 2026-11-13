@@ -132,7 +132,7 @@ export function ExportPage() {
               ))}
             </div>
           )}
-          {!superAdmin && allowed.length > 1 && <p className="mt-2 text-[14px] text-text-3">{t("Only super admins can export several branches at once.")}</p>}
+          {!superAdmin && allowed.length > 1 && <p className="mt-2 text-[14px] text-text-3">{t("Only root users can export several branches at once.")}</p>}
         </fieldset>
         {!people && (
           <>
