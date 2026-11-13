@@ -1,7 +1,7 @@
 // Checks for the bugs the school-day run found. Needs the data org-day.spec.ts
 // leaves (run it first).
 import { expect, test } from "@playwright/test";
-import { as, newItem, person, toast } from "./helpers";
+import { as, newItem, person, recall, toast } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -33,4 +33,11 @@ test("an approval survives leaving the page within the Undo window", async ({ br
       return issue.work_items[0].status;
     })
     .toBe("approved");
+});
+
+test("a school-wide event shows school time, not the device's", async ({ browser }) => {
+  const { page } = await as(browser, person("MTH", "principal").email);
+  await page.goto(`/items/${recall("leadership").slice(4)}`);
+  // Stored for 18:00 in Tehran; this must not depend on the browser's zone.
+  await expect(page.getByText(/18:00–20:00/)).toBeVisible();
 });

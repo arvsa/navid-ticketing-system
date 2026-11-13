@@ -20,6 +20,7 @@ type BranchCtx = {
   branchById: Map<string, Branch>;
   canChooseAll: boolean;
   setBranch: (id: string | "all") => void;
+  /** The branch's time zone; without a branch, school time (never the device's). */
   zoneOf: (branchId?: string | null) => string | undefined;
 };
 
@@ -53,6 +54,12 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     if (current && current !== "all" && !options.some((o) => o.id === current)) current = undefined;
     if (!current) current = me.user.is_super_admin ? "all" : options[0]?.id ?? "all";
     const branch = current === "all" ? undefined : options.find((o) => o.id === current);
+    // Times with no branch of their own (school-wide items, "All branches")
+    // are in school time: this branch's, your own, or the school's first.
+    const schoolZone =
+      (branch && branchById.get(branch.id)?.timezone) ??
+      (me.memberships[0] && branchById.get(me.memberships[0].branch.id)?.timezone) ??
+      branches.data?.[0]?.timezone;
     return {
       branchId: branch?.id,
       branch,
@@ -69,7 +76,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
         setStored(id);
         qc.invalidateQueries({ queryKey: ["dashboard"] });
       },
-      zoneOf: (id) => (id ? branchById.get(id)?.timezone : undefined),
+      zoneOf: (id) => (id ? branchById.get(id)?.timezone : undefined) ?? schoolZone,
     };
   }, [me, branches.data, stored, qc]);
 
