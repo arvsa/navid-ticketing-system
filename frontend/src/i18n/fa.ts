@@ -425,6 +425,8 @@ export const fa: Record<string, string> = {
   // ---- Permissions ----------------------------------------------------------
   "All kinds": "همهٔ انواع",
   "All statuses": "همهٔ وضعیت‌ها",
+  Undo: "برگرداندن",
+  "Not approved": "تأیید نشد",
   "Last 7 days": "۷ روز گذشته",
   "Last 30 days": "۳۰ روز گذشته",
   "{from} – {to}": "{from} تا {to}",

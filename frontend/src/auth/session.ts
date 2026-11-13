@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { keys } from "@/api/keys";
+import { flushApprovals } from "@/features/work/approve";
 import type { MeResponse } from "@/api/types";
 
 export function useMe() {
@@ -42,7 +43,8 @@ export function useLogin() {
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post("/auth/logout"),
+    // Approvals still in their Undo window go out first.
+    mutationFn: async () => (await flushApprovals(), api.post("/auth/logout")),
     onSettled: () => {
       clearTemporaryPassword();
       qc.clear();
