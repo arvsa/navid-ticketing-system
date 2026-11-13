@@ -420,6 +420,8 @@ export const fa: Record<string, string> = {
 
   // ---- Permissions ----------------------------------------------------------
   "All kinds": "همهٔ انواع",
+  "Close without passwords": "بستن بدون گذرواژه‌ها",
+  "Close dialog": "بستن پنجره",
   "Open the first branch": "باز کردن نخستین شعبه",
   "People belong to branches: open one, then add its people here.": "افراد عضو شعبه‌ها هستند: یک شعبه باز کنید، سپس افرادش را اینجا اضافه کنید.",
   "(you)": "(شما)",

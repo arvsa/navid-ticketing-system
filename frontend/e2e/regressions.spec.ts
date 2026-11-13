@@ -1,7 +1,7 @@
 // Checks for the bugs the school-day run found. Needs the data org-day.spec.ts
 // leaves (run it first).
 import { expect, test } from "@playwright/test";
-import { ROOT, as, newItem, person, recall, toast } from "./helpers";
+import { ROOT, as, fixture, newItem, person, recall, toast } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -168,4 +168,23 @@ test("the department answering a question can close it from the page", async ({ 
   await it.page.getByRole("button", { name: "Close question", exact: true }).click();
   await it.page.getByRole("dialog").getByRole("button", { name: "Close question" }).click();
   await expect(it.page.getByText("This item is closed, so the conversation is read-only.")).toBeVisible();
+});
+
+test("closing an import without the passwords says so plainly", async ({ browser }) => {
+  const { page } = await as(browser, ROOT.email);
+  await page.goto("/branches");
+  const card = page.getByRole("heading", { name: "Sadra Campus", exact: true }).locator("xpath=ancestor::div[.//button[@aria-label='Add people']][1]");
+  await card.getByRole("button", { name: "Add people" }).click();
+  await page.getByRole("menuitem", { name: "Import from Excel" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.locator('input[type="file"]').setInputFiles(fixture("new-hire-SDR.xlsx"));
+  const importButton = dlg.getByRole("button", { name: /^Import \d+ (person|people)$/ });
+  await expect(importButton).toBeVisible();
+  if (await importButton.isDisabled()) return; // imported on an earlier run
+  await importButton.click();
+  await dlg.getByRole("button", { name: "Done" }).click();
+  const confirm = page.getByRole("dialog", { name: "Close without the passwords?" });
+  await expect(confirm.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
+  await confirm.getByRole("button", { name: "Close without passwords" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 });

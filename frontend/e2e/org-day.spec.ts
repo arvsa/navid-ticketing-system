@@ -45,12 +45,7 @@ test("1. root user opens four branches, imports their people and appoints admins
       const confirm = page.getByRole("dialog", {
         name: "Close without the passwords?",
       });
-      await confirm.waitFor();
-      if ((await confirm.getByRole("button", { name: "Close", exact: true }).count()) > 1)
-        finding(
-          "Import: the 'Close without the passwords?' dialog has two buttons named 'Close' (the X keeps the dialog, the other discards the passwords).",
-        );
-      await confirm.getByRole("button", { name: "Close", exact: true }).last().click();
+      await confirm.getByRole("button", { name: "Close without passwords" }).click();
     } else {
       await dlg.getByRole("button", { name: "Cancel" }).click(); // imported on an earlier run
     }

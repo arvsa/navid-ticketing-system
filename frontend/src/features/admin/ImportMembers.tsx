@@ -242,7 +242,7 @@ export function ImportMembersDialog({ open, onOpenChange, branchId, branchName }
         onOpenChange={setLeaving}
         title={t("Close without the passwords?")}
         body={t("The temporary passwords won't be shown again. You can reset someone's password later from their profile.")}
-        confirm={t("Close")}
+        confirm={t("Close without passwords")}
         cancelText={t("Go back")}
         onConfirm={finish}
       />

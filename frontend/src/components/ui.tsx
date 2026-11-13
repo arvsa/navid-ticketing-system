@@ -253,7 +253,7 @@ export function Dialog({
                 <RDialog.Description className="mt-1 text-text-2">{description}</RDialog.Description>
               )}
             </div>
-            <RDialog.Close className="rounded-md p-1 text-text-3 hover:bg-sunken" aria-label={t("Close")}>
+            <RDialog.Close className="rounded-md p-1 text-text-3 hover:bg-sunken" aria-label={t("Close dialog")}>
               <X className="size-5" />
             </RDialog.Close>
           </div>
