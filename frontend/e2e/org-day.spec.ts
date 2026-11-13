@@ -2,9 +2,10 @@
 // Runs against the dev stack and fills its database; start from an empty one
 // with only the root user (E2E_ROOT_EMAIL / E2E_ROOT_PASSWORD).
 import { expect, test, type Page } from "@playwright/test";
-import { ROOT, as, branchName, chooseBranch, finding, fixture, newItem, once, person, recall, remember, roster, shot, toast } from "./helpers";
+import { ROOT, as, branchName, chooseBranch, closeAll, finding, fixture, newItem, once, person, recall, remember, roster, shot, toast } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
+test.afterEach(closeAll);
 
 test("1. root user opens four branches, imports their people and appoints admins", async ({ browser }) => {
   const { page } = await as(browser, ROOT.email);
@@ -783,9 +784,10 @@ test("13. 16:30 end of the day: inbox, directory, profile and search", async ({ 
   // Global search jumps to an item by number.
   const heading = page.getByRole("heading", { level: 1, name: /Upload your midterm grades/ });
   await page.keyboard.press("/");
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.type(recall("midterm"));
   await page.keyboard.press("Enter");
-  if (!(await heading.isVisible({ timeout: 3000 }).catch(() => false))) {
+  if (!(await heading.waitFor({ timeout: 5000 }).then(() => true, () => false))) {
     finding(
       "Search: typing or pasting a number (ISS-1) and pressing Enter at once runs a title search instead of opening the item: the number is read from a 250 ms debounced copy of the input.",
     );

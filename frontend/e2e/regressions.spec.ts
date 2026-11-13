@@ -1,9 +1,10 @@
 // Checks for the bugs the school-day run found. Needs the data org-day.spec.ts
 // leaves (run it first).
 import { expect, test } from "@playwright/test";
-import { ROOT, as, fixture, newItem, person, recall, toast } from "./helpers";
+import { ROOT, as, closeAll, fixture, newItem, person, recall, toast } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
+test.afterEach(closeAll);
 
 test("an approval survives leaving the page within the Undo window", async ({ browser }) => {
   const principal = await as(browser, person("AZR", "principal").email);
@@ -102,9 +103,9 @@ test("a department head runs their department without being a branch admin", asy
   await expect(h.page.getByRole("button", { name: "Add people" })).toBeVisible();
   await expect(h.page.getByRole("button", { name: "New group" })).toHaveCount(0);
 
-  await h.page.goto("/approvals");
-  const waiting = h.page.getByRole("listitem").filter({ hasText: person("AZR", "it").first_name });
-  await waiting.first().getByRole("button", { name: "Approve" }).click();
+  await h.page.goto(`/items/${n}`);
+  await h.page.getByRole("button", { name: /^Review \d+ waiting$/ }).click();
+  await h.page.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
   await toast(h.page, /^Approved/);
   await h.page.waitForTimeout(5500);
   const issue = await (await h.page.request.get(`/api/issues/by-number/${n}`)).json();
@@ -139,7 +140,7 @@ test("several people join a group at once", async ({ browser }) => {
   }
   await entry.click();
   await page.getByRole("tab", { name: /^Members/ }).click();
-  await expect(page.getByText("No one is in this group yet").or(page.getByText("teacher1@azr.rnn.school"))).toBeVisible();
+  await expect(page.getByText("No one is in this group yet").or(page.getByText("teacher1@azr.rnn.school")).first()).toBeVisible();
   if (await page.getByText("No one is in this group yet").isVisible()) {
     await page.getByRole("button", { name: "Add people" }).click();
     await page.getByRole("textbox", { name: "Search people…" }).fill("teacher");

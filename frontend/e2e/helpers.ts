@@ -52,8 +52,17 @@ export function temporaryPassword(email: string): string | undefined {
 
 // ---- signing in -------------------------------------------------------------
 
+const open: BrowserContext[] = [];
+
+/** Closes every page opened with `as`/`newPage` (call after each test: each
+ * signed-in page keeps a live connection open). */
+export async function closeAll() {
+  await Promise.all(open.splice(0).map((c) => c.close().catch(() => {})));
+}
+
 export async function newPage(browser: Browser, lang: "en" | "fa" = "en"): Promise<{ ctx: BrowserContext; page: Page }> {
   const ctx = await browser.newContext();
+  open.push(ctx);
   await ctx.addInitScript((l) => localStorage.setItem("st.lang", l), lang);
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log(`[page error] ${e.message}`));
