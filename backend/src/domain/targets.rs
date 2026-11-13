@@ -51,6 +51,11 @@ pub struct Target {
     pub branch_id: Uuid,
     pub user_id: Option<Uuid>,
     pub group_id: Option<Uuid>,
+    /// What to call it: the person's full name, the group's ("All members"
+    /// for a branch's default group) or the branch's. Readers of the issue
+    /// may not see the other branches' people and groups.
+    pub name: String,
+    pub branch_name: String,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }

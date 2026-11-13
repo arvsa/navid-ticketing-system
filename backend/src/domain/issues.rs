@@ -155,8 +155,16 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
     let event = events::view(db, actor, issue_id).await?;
     let targets = sqlx::query_as!(
         Target,
-        r#"SELECT id, kind AS "kind: TargetKind", branch_id, user_id, group_id, created_at
-           FROM issue_target WHERE issue_id = $1 AND removed_at IS NULL ORDER BY created_at, id"#,
+        r#"SELECT t.id, t.kind AS "kind: TargetKind", t.branch_id, t.user_id, t.group_id, t.created_at,
+                  coalesce(u.first_name || ' ' || u.last_name,
+                           CASE WHEN g.is_default THEN 'All members' ELSE g.name END,
+                           b.name) AS "name!",
+                  b.name AS branch_name
+           FROM issue_target t
+           JOIN branch b ON b.id = t.branch_id
+           LEFT JOIN app_user u ON u.id = t.user_id
+           LEFT JOIN user_group g ON g.id = t.group_id
+           WHERE t.issue_id = $1 AND t.removed_at IS NULL ORDER BY t.created_at, t.id"#,
         issue_id
     )
     .fetch_all(db)

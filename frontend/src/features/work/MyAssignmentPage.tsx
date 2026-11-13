@@ -143,7 +143,7 @@ function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem })
             {issue.description ? <p className="mt-3 text-[16px] leading-7 whitespace-pre-wrap break-anywhere">{issue.description}</p> : <p className="mt-3 text-text-2">{t("No details were given.")}</p>}
             {sentTo && (
               <p className="mt-3 text-[15px] text-text-2">
-                {t("Sent to {name}", { name: targetName(sentTo, people, groups, (id) => branchById.get(id)?.name ?? t("branch")) })}
+                {t("Sent to {name}", { name: targetName(sentTo, people, groups, (id) => branchById.get(id)?.name ?? t("branch"), !issue.branch_id) })}
                 {issue.work_items.length > 1 && ` · ${modeLabel[issue.completion_mode]}`}
               </p>
             )}

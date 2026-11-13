@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind AS \"kind: TargetKind\", branch_id, user_id, group_id, created_at\n           FROM issue_target WHERE issue_id = $1 AND removed_at IS NULL ORDER BY created_at, id",
+  "query": "SELECT t.id, t.kind AS \"kind: TargetKind\", t.branch_id, t.user_id, t.group_id, t.created_at,\n                  coalesce(u.first_name || ' ' || u.last_name,\n                           CASE WHEN g.is_default THEN 'All members' ELSE g.name END,\n                           b.name) AS \"name!\",\n                  b.name AS branch_name\n           FROM issue_target t\n           JOIN branch b ON b.id = t.branch_id\n           LEFT JOIN app_user u ON u.id = t.user_id\n           LEFT JOIN user_group g ON g.id = t.group_id\n           WHERE t.issue_id = $1 AND t.removed_at IS NULL ORDER BY t.created_at, t.id",
   "describe": {
     "columns": [
       {
@@ -79,6 +79,23 @@
             "name": "created_at"
           }
         }
+      },
+      {
+        "ordinal": 6,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "branch_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "name"
+          }
+        }
       }
     ],
     "parameters": {
@@ -92,8 +109,10 @@
       false,
       true,
       true,
+      false,
+      null,
       false
     ]
   },
-  "hash": "18e60008de43cb317335cdf7bb52e3f3284e49b8af74c06f82d67e6cec061ef2"
+  "hash": "c4b4512428d6afa9c42a29e8513f65399b7a860660b7a5f55ba13af900dd71be"
 }

@@ -47,7 +47,7 @@ describe("primaryAction", () => {
     const ticket = issue({
       type: "ticket",
       branch_id: null,
-      targets: [{ id: "t", kind: "branch", branch_id: "br", created_at: "" }],
+      targets: [{ id: "t", kind: "branch", branch_id: "br", name: "Branch", branch_name: "Branch", created_at: "" }],
     });
     expect(primaryAction(ticket, { me: member }).kind).toBe("reply");
   });

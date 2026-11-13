@@ -91,7 +91,7 @@ export function WhosComing({ issue }: { issue: IssueDetail }) {
   const [all, setAll] = useState(false);
   const c = ev.rsvp_counts;
   const total = c.going + c.maybe + c.declined + c.pending;
-  const invited = issue.targets.map((target) => targetName(target, people, groups, (id) => branchById.get(id)?.name ?? t("Branch"))).join(t(", "));
+  const invited = issue.targets.map((target) => targetName(target, people, groups, (id) => branchById.get(id)?.name ?? t("Branch"), !issue.branch_id)).join(t(", "));
   const going = (rsvps.data?.items ?? []).filter((r) => r.response === "going");
   const tile = (n: number, label: string, fg: string, bg: string, dashed?: boolean) => (
     <div className={`rounded-[12px] px-4 py-3 ${dashed ? "border-2 border-dashed border-border-strong" : ""}`} style={{ background: bg, color: fg }}>

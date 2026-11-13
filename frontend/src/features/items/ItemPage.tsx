@@ -258,13 +258,13 @@ function ItemView({ issue }: { issue: IssueDetail }) {
           <span className="text-text-2">{issue.type === "event" ? t("Invited:") : issue.type === "ticket" ? t("Asked:") : t("Sent to:")}</span>
           {issue.targets.map((target) => (
             <span key={target.id} className="inline-flex items-center gap-1 rounded-full bg-sunken py-1 pe-2 ps-3">
-              {targetName(target, people, groups, branchName)}
+              {targetName(target, people, groups, branchName, !issue.branch_id)}
               <button
                 className="rounded-full p-0.5 text-text-3 hover:text-danger"
-                aria-label={t("Stop sending to {name}", { name: targetName(target, people, groups, branchName) })}
+                aria-label={t("Stop sending to {name}", { name: targetName(target, people, groups, branchName, !issue.branch_id) })}
                 onClick={() => {
                   const open = issue.work_items.filter((w) => w.target_id === target.id && !isDone(w)).length;
-                  const question = t("Stop sending this to {name}?", { name: targetName(target, people, groups, branchName) });
+                  const question = t("Stop sending this to {name}?", { name: targetName(target, people, groups, branchName, !issue.branch_id) });
                   const extra = open ? ` ${tn(open, "{n} unfinished assignment will be cancelled.", "{n} unfinished assignments will be cancelled.")}` : "";
                   if (confirm(question + extra)) removeTarget.mutate(target);
                 }}

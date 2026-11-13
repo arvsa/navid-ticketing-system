@@ -26,13 +26,17 @@ export function useGroupDirectory() {
   return data ?? new Map<string, Group>();
 }
 
-export function targetName(target: Target, people: Directory, groups: Map<string, Group>, branchName: (id: string) => string) {
-  if (target.kind === "user") return people.short(target.user_id);
+/** What a target is called. On a school-wide item, people and groups also
+ * say which branch they're in. */
+export function targetName(target: Target, people: Directory, groups: Map<string, Group>, branchName: (id: string) => string, schoolWide = false) {
+  const where = schoolWide ? ` · ${target.branch_name}` : "";
+  if (target.kind === "user") return (people.get(target.user_id) ? people.short(target.user_id) : target.name) + where;
   if (target.kind === "group") {
     const g = groups.get(target.group_id ?? "");
-    return g ? (g.is_default ? t("All members") : g.name) : t("A group");
+    const name = g ? (g.is_default ? t("All members") : g.name) : target.name === "All members" ? t("All members") : target.name;
+    return name + where;
   }
-  return branchName(target.branch_id);
+  return branchName(target.branch_id) || target.branch_name;
 }
 
 /** Mine first, then by status order. */
@@ -118,7 +122,7 @@ export function useItemLabels(issue: IssueDetail) {
       const n = branchName(target.branch_id);
       if (n) known.push(n);
       else otherBranches++;
-    } else known.push(targetName(target, people, groups, (id) => branchName(id) ?? t("another branch")));
+    } else known.push(targetName(target, people, groups, (id) => branchName(id) ?? t("another branch"), !issue.branch_id));
   }
   if (otherBranches) known.push(tn(otherBranches, "{n} other branch", "{n} other branches"));
   const sentTo = joinList(known);

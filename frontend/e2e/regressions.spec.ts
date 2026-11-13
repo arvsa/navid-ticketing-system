@@ -41,3 +41,10 @@ test("a school-wide event shows school time, not the device's", async ({ browser
   // Stored for 18:00 in Tehran; this must not depend on the browser's zone.
   await expect(page.getByText(/18:00–20:00/)).toBeVisible();
 });
+
+test("groups in other branches are named, with their branch", async ({ browser }) => {
+  const { page } = await as(browser, person("AZR", "ceo").email);
+  await page.goto(`/items/${recall("leadership").slice(4)}`);
+  await expect(page.getByText("Principals · Motahari Campus").first()).toBeVisible();
+  await expect(page.getByText("A group")).toHaveCount(0);
+});

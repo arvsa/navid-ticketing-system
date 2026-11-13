@@ -2298,6 +2298,7 @@ export interface components {
         Target: {
             /** Format: uuid */
             branch_id: string;
+            branch_name: string;
             /** Format: date-time */
             created_at: string;
             /** Format: uuid */
@@ -2305,6 +2306,12 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["TargetKind"];
+            /**
+             * @description What to call it: the person's full name, the group's ("All members"
+             *     for a branch's default group) or the branch's. Readers of the issue
+             *     may not see the other branches' people and groups.
+             */
+            name: string;
             /** Format: uuid */
             user_id?: string | null;
         };
