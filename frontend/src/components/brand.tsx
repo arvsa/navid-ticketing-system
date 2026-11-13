@@ -1,4 +1,4 @@
-// The Navid Schools logo. The artwork has a white background, so it always
+// The Rahe Novin Navid Schools logo. The artwork has a white background, so it always
 // sits on a white tile, which also keeps it readable in the dark theme.
 import type { CSSProperties } from "react";
 import logo from "@/assets/navid-logo.png";

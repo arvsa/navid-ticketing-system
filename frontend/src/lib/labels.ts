@@ -11,8 +11,8 @@ import type {
 } from "@/api/types";
 import { t } from "@/i18n";
 
-export const APP_NAME = t("School Ticketing");
-export const BRAND_NAME = t("Navid Schools");
+export const APP_NAME = t("Unified School System");
+export const BRAND_NAME = t("Rahe Novin Navid Schools");
 
 export const typeLabel: Record<IssueType, string> = {
   ticket: t("Ticket"),

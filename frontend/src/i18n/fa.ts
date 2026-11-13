@@ -7,8 +7,8 @@ export const fa: Record<string, string> = {
   ", ": "، ",
   "; ": "؛ ",
   ".": ".",
-  "School Ticketing": "سامانهٔ تیکت مدرسه",
-  "Navid Schools": "مجموعه مدارس نوید",
+  "Unified School System": "سامانهٔ یکپارچهٔ مدرسه",
+  "Rahe Novin Navid Schools": "مجموعه مدارس راه نوین نوید",
 
   // ---- Dates ----------------------------------------------------------------
   "Today {time}": "امروز {time}",
@@ -540,7 +540,7 @@ export const fa: Record<string, string> = {
   "Welcome back": "خوش آمدید",
   "Sign in with the email and password your school gave you.": "با ایمیل و رمزی که مدرسه به شما داده وارد شوید.",
   "We are all one family.": "ما همه یک خانواده‌ایم.",
-  "Requests, tasks and events for every Navid branch, all in one place.": "درخواست‌ها، کارها و رویدادهای همهٔ شعبه‌های نوید، یک‌جا.",
+  "Requests, tasks and events for every Rahe Novin Navid branch, all in one place.": "درخواست‌ها، کارها و رویدادهای همهٔ شعبه‌های راه نوین نوید، یک‌جا.",
   "You are as beautiful as a butterfly in the making.": "تو به اندازهٔ پروانه شدن زیبایی.",
   Password: "رمز عبور",
   "Signing in…": "در حال ورود…",

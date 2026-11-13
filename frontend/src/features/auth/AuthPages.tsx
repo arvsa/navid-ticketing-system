@@ -51,7 +51,7 @@ function BrandPanel() {
           <path d="M2 9C40 2 70 13 110 7S180 2 218 8" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
         </svg>
         <p className="mt-5 hidden text-[17px] leading-relaxed text-white/85 sm:block">
-          {t("Requests, tasks and events for every Navid branch, all in one place.")}
+          {t("Requests, tasks and events for every Rahe Novin Navid branch, all in one place.")}
         </p>
         <ul className="mt-6 hidden flex-wrap gap-2 sm:flex">
           {features.map((f) => (
