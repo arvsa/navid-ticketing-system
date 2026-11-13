@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import * as Popover from "@radix-ui/react-popover";
-import { endOfDay, startOfDay } from "date-fns";
-import { Check, ChevronDown, Download, SlidersHorizontal, X } from "lucide-react";
+import { addDays, endOfDay, format, startOfDay } from "date-fns";
+import { CalendarDays, Check, ChevronDown, Download, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { qs } from "@/api/client";
 import { useIssueList, useIssueTags, type IssueFilters } from "@/api/hooks";
@@ -16,7 +16,7 @@ import { PriorityText, ProgressBar, TagList, TypeBadge } from "@/components/badg
 import { DateInput } from "@/components/DateInput";
 import { Button, Card, EmptyState, ErrorPanel, Field, Hint, LoadingRows, PageHeader, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
-import { timeAgo } from "@/lib/dates";
+import { addMonthsTo, dateIn, formatDayMonth, monthOf, timeAgo } from "@/lib/dates";
 import { downloadFile, localDay } from "@/lib/download";
 import { numberOf } from "@/lib/items";
 import { errorMessage, priorityLabel, stateLabel, tagLabel, typeLabel, typePlural } from "@/lib/labels";
@@ -25,7 +25,7 @@ import type { ItemsSearch } from "@/app/router";
 import { num, quote, t, tn } from "@/i18n";
 
 const KINDS: IssueType[] = ["ticket", "action", "event"];
-const STATES: IssueState[] = ["open", "closed", "cancelled"];
+const STATES: (IssueState | "all")[] = ["all", "open", "closed", "cancelled"];
 const split = (v?: string) => (v ? v.split(",").filter(Boolean) : []);
 const joined = (v: string[]) => (v.length ? v.join(",") : undefined);
 
@@ -49,7 +49,8 @@ export function ItemsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const state: IssueState = search.state ?? "open";
+  const state = search.state ?? "open";
+  const issueState = state === "all" ? undefined : state;
   const tags = split(search.tags);
   const priorities = split(search.priority) as Priority[];
   // Whole days in the reader's time; `to` includes its day.
@@ -59,7 +60,7 @@ export function ItemsPage() {
   const filters: IssueFilters = {
     branch_id: branchId,
     type: search.type,
-    state,
+    state: issueState,
     assignee: search.view === "mine" ? "me" : undefined,
     q: search.q,
     tags: search.tags,
@@ -69,9 +70,10 @@ export function ItemsPage() {
   };
   const list = useIssueList(filters, 25);
   const rows = list.data?.pages.flatMap((p) => p.items) ?? [];
-  const sideCount = [search.type, search.state, search.from || search.to].filter(Boolean).length + tags.length + priorities.length;
-  const filtered = !!(search.q || search.view) || sideCount > 0;
-  const clearSide = () => set({ type: undefined, state: undefined, tags: undefined, priority: undefined, from: undefined, to: undefined });
+  const sideCount = [search.type, search.state].filter(Boolean).length + tags.length + priorities.length;
+  const filtered = !!(search.q || search.view || search.from || search.to) || sideCount > 0;
+  const clearSide = () => set({ type: undefined, state: undefined, tags: undefined, priority: undefined });
+  const clearAll = () => navigate({ search: search.view ? { view: search.view } : {}, replace: true });
 
   // Export: the branch on screen, or with all branches, the whole school
   // (root users) or the one branch you may export.
@@ -96,7 +98,7 @@ export function ItemsPage() {
           branch_ids: exportBranches?.join(","),
           // Actions come with their written reports.
           types: search.type === "action" ? "action,report" : search.type,
-          state,
+          state: issueState,
           priority: search.priority,
           tags: search.tags,
           q: search.q,
@@ -149,7 +151,6 @@ export function ItemsPage() {
             tags={tags}
             priorities={priorities}
             branchId={branchId}
-            badRange={badRange}
             count={sideCount}
             onClear={clearSide}
           />
@@ -166,14 +167,11 @@ export function ItemsPage() {
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("Search titles…")}
               aria-label={t("Search titles")}
-              className={cx(inputClass, "h-10 min-w-0 flex-1 py-0")}
+              className={cx(inputClass, "h-10 min-w-[180px] flex-1 py-0")}
             />
-            {filtered && (
-              <Button variant="link" onClick={() => navigate({ search: {}, replace: true })}>
-                {t("Clear filters")}
-              </Button>
-            )}
+            <DateRangeMenu from={search.from} to={search.to} badRange={badRange} onChange={(from, to) => set({ from, to })} />
           </div>
+          <AppliedFilters search={search} tags={tags} priorities={priorities} set={set} onClear={clearAll} />
 
           <Card className="mt-5 overflow-hidden">
             {list.isLoading ? (
@@ -209,7 +207,10 @@ export function ItemsPage() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-text-2">
-              {tn(rows.length, "Showing {n} {state} item", "Showing {n} {state} items", { state: stateLabel[state].toLowerCase() })} · {t("a blue dot means something changed since you last looked")}
+              {state === "all"
+                ? tn(rows.length, "Showing {n} item", "Showing {n} items")
+                : tn(rows.length, "Showing {n} {state} item", "Showing {n} {state} items", { state: stateLabel[state].toLowerCase() })}{" "}
+              · {t("a blue dot means something changed since you last looked")}
             </p>
             {list.hasNextPage && (
               <Button onClick={() => list.fetchNextPage()} loading={list.isFetchingNextPage}>
@@ -230,17 +231,15 @@ function FilterSidebar({
   tags,
   priorities,
   branchId,
-  badRange,
   count,
   onClear,
 }: {
   search: ItemsSearch;
   set: (patch: Partial<ItemsSearch>) => void;
-  state: IssueState;
+  state: IssueState | "all";
   tags: string[];
   priorities: Priority[];
   branchId?: string;
-  badRange: boolean;
   count: number;
   onClear: () => void;
 }) {
@@ -267,7 +266,7 @@ function FilterSidebar({
       <FilterGroup legend={t("Status")}>
         {STATES.map((s) => (
           <Option key={s} type="radio" checked={state === s} onChange={() => set({ state: s === "open" ? undefined : s })}>
-            {stateLabel[s]}
+            {s === "all" ? t("All statuses") : stateLabel[s]}
           </Option>
         ))}
       </FilterGroup>
@@ -284,20 +283,150 @@ function FilterSidebar({
         <TagPicker branchId={branchId} value={tags} onChange={(v) => set({ tags: joined(v) })} />
       </FilterGroup>
 
-      <FilterGroup legend={t("Created")}>
-        <div className="space-y-3">
-          <Field label={t("From")}>{(p) => <DateInput {...p} mode="date" value={search.from ?? ""} onChange={(v) => set({ from: v || undefined })} />}</Field>
-          <Field label={t("To")} error={badRange ? t("The end date must be after the start date.") : undefined}>
-            {(p) => <DateInput {...p} mode="date" value={search.to ?? ""} min={search.from} onChange={(v) => set({ to: v || undefined })} />}
-          </Field>
-          {(search.from || search.to) && (
-            <Button variant="link" className="text-[14px]" onClick={() => set({ from: undefined, to: undefined })}>
-              {t("Any date")}
-            </Button>
-          )}
-        </div>
-      </FilterGroup>
     </Card>
+  );
+}
+
+const dayOf = (d: Date) => format(d, "yyyy-MM-dd");
+
+type Preset = { key: string; label: string; range: () => [string, string] };
+// Months follow the reader's calendar (Jalali months in Farsi).
+const PRESETS: Preset[] = [
+  { key: "today", label: t("Today"), range: () => [dayOf(new Date()), dayOf(new Date())] },
+  { key: "7", label: t("Last 7 days"), range: () => [dayOf(addDays(new Date(), -6)), dayOf(new Date())] },
+  { key: "30", label: t("Last 30 days"), range: () => [dayOf(addDays(new Date(), -29)), dayOf(new Date())] },
+  { key: "month", label: t("This month"), range: () => [dayOf(dateIn(monthOf(new Date()), 1)), dayOf(new Date())] },
+  {
+    key: "last-month",
+    label: t("Last month"),
+    range: () => {
+      const m = monthOf(new Date());
+      return [dayOf(dateIn(addMonthsTo(m, -1), 1)), dayOf(addDays(dateIn(m, 1), -1))];
+    },
+  },
+];
+
+function rangeLabel(from?: string, to?: string) {
+  const preset = PRESETS.find((p) => {
+    const [a, b] = p.range();
+    return a === from && b === to;
+  });
+  if (preset) return preset.label;
+  const d = (v: string) => formatDayMonth(localDay(v));
+  if (from && to) return t("{from} – {to}", { from: d(from), to: d(to) });
+  if (from) return t("Since {date}", { date: d(from) });
+  if (to) return t("Until {date}", { date: d(to) });
+  return t("Any time");
+}
+
+/** "Created" in the toolbar: quick ranges, or any two days. */
+function DateRangeMenu({
+  from,
+  to,
+  badRange,
+  onChange,
+}: {
+  from?: string;
+  to?: string;
+  badRange: boolean;
+  onChange: (from?: string, to?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = !!(from || to);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={cx(
+            "inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-[15px] font-medium",
+            active ? "border-selected bg-selected text-on-selected" : "border-border bg-surface hover:bg-sunken",
+          )}
+        >
+          <CalendarDays className="size-4" aria-hidden />
+          <span>{active ? t("Created: {range}", { range: rangeLabel(from, to) }) : t("Created")}</span>
+          <ChevronDown className="size-4 opacity-70" aria-hidden />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="end" sideOffset={6} className="z-[80] w-[320px] rounded-[14px] border border-border bg-surface p-4 shadow-2">
+          <p className="mb-2 text-[13px] font-semibold tracking-[0.06em] text-text-3 uppercase">{t("Created")}</p>
+          <div className="flex flex-wrap gap-2">
+            <RangeChip active={!active} onClick={() => (onChange(undefined, undefined), setOpen(false))}>
+              {t("Any time")}
+            </RangeChip>
+            {PRESETS.map((p) => {
+              const [a, b] = p.range();
+              return (
+                <RangeChip key={p.key} active={from === a && to === b} onClick={() => (onChange(a, b), setOpen(false))}>
+                  {p.label}
+                </RangeChip>
+              );
+            })}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4">
+            <Field label={t("From")}>{(p) => <DateInput {...p} mode="date" value={from ?? ""} onChange={(v) => onChange(v || undefined, to)} />}</Field>
+            <Field label={t("To")}>{(p) => <DateInput {...p} mode="date" value={to ?? ""} min={from} onChange={(v) => onChange(from, v || undefined)} />}</Field>
+          </div>
+          {badRange && <p className="mt-2 text-[13px] text-danger">{t("The end date must be after the start date.")}</p>}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function RangeChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cx("h-8 rounded-full border px-3 text-[14px]", active ? "border-selected bg-selected text-on-selected" : "border-border hover:bg-sunken")}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Every filter in effect, each removable on its own (as on GitHub or Linear). */
+function AppliedFilters({
+  search,
+  tags,
+  priorities,
+  set,
+  onClear,
+}: {
+  search: ItemsSearch;
+  tags: string[];
+  priorities: Priority[];
+  set: (patch: Partial<ItemsSearch>) => void;
+  onClear: () => void;
+}) {
+  const chips: { key: string; label: string; remove: () => void }[] = [];
+  if (search.type) chips.push({ key: "type", label: typePlural[search.type], remove: () => set({ type: undefined }) });
+  if (search.state)
+    chips.push({ key: "state", label: search.state === "all" ? t("All statuses") : stateLabel[search.state], remove: () => set({ state: undefined }) });
+  for (const p of priorities)
+    chips.push({ key: `p:${p}`, label: t("{priority} priority", { priority: priorityLabel[p] }), remove: () => set({ priority: joined(priorities.filter((x) => x !== p)) }) });
+  for (const tag of tags) chips.push({ key: `t:${tag}`, label: tagLabel(tag), remove: () => set({ tags: joined(tags.filter((x) => x !== tag)) }) });
+  if (search.from || search.to)
+    chips.push({ key: "date", label: t("Created: {range}", { range: rangeLabel(search.from, search.to) }), remove: () => set({ from: undefined, to: undefined }) });
+  if (search.q) chips.push({ key: "q", label: quote(search.q), remove: () => set({ q: undefined }) });
+  if (!chips.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={t("Filters in use")}>
+      {chips.map((c) => (
+        <span key={c.key} className="inline-flex h-8 items-center gap-1 rounded-full bg-primary-soft ps-3 pe-1.5 text-[14px]">
+          {c.label}
+          <button type="button" onClick={c.remove} aria-label={t("Remove {name}", { name: c.label })} className="rounded-full p-0.5 text-text-3 hover:text-danger">
+            <X className="size-3.5" />
+          </button>
+        </span>
+      ))}
+      <Button variant="link" className="text-[14px]" onClick={onClear}>
+        {t("Clear all")}
+      </Button>
+    </div>
   );
 }
 

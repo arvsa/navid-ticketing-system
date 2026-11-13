@@ -73,7 +73,8 @@ const myWork = createRoute({
 export type ItemsSearch = {
   view?: "all" | "mine";
   type?: IssueType;
-  state?: IssueState;
+  /** `all`: every state; none given means open. */
+  state?: IssueState | "all";
   q?: string;
   /** Comma-separated: items with any of these tags. */
   tags?: string;
@@ -90,7 +91,7 @@ const items = createRoute({
   validateSearch: (s: Record<string, unknown>): ItemsSearch => ({
     view: s.view === "mine" ? "mine" : undefined,
     type: ["ticket", "action", "event"].includes(s.type as string) ? (s.type as IssueType) : undefined,
-    state: ["open", "closed", "cancelled"].includes(s.state as string) ? (s.state as IssueState) : undefined,
+    state: ["all", "closed", "cancelled"].includes(s.state as string) ? (s.state as IssueState | "all") : undefined,
     q: typeof s.q === "string" && s.q ? s.q : undefined,
     // Old links: one `tag`, and reports, which are actions with the report tag now.
     tags: typeof s.tags === "string" && s.tags ? s.tags : typeof s.tag === "string" && s.tag ? s.tag : s.type === "report" ? "report" : undefined,
