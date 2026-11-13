@@ -43,6 +43,8 @@ pub struct IssueSummary {
     pub template_id: Option<Uuid>,
     pub tags: Vec<String>,
     pub created_by: Uuid,
+    /// The creator's full name, so it shows where their branch isn't visible.
+    pub created_by_name: String,
     pub work_item_count: i64,
     pub done_count: i64,
     pub is_overdue: bool,
@@ -76,6 +78,8 @@ pub struct IssueDetail {
     pub closed_at: Option<OffsetDateTime>,
     pub closed_by: Option<Uuid>,
     pub created_by: Uuid,
+    /// The creator's full name, so it shows where their branch isn't visible.
+    pub created_by_name: String,
     pub version: i32,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -135,6 +139,7 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
                i.priority AS "priority: Priority", i.completion_mode AS "completion_mode: CompletionMode",
                i.state AS "state: IssueState", i.template_id, i.tags, i.requires_report, i.closed_at, i.closed_by,
                i.created_by, i.version, i.created_at, i.updated_at,
+               (SELECT u.first_name || ' ' || u.last_name FROM app_user u WHERE u.id = i.created_by) AS "created_by_name!",
                EXISTS (SELECT 1 FROM issue_watcher w WHERE w.issue_id = i.id AND w.user_id = $2) AS "watching!",
                EXISTS (SELECT 1 FROM issue_mute m WHERE m.issue_id = i.id AND m.user_id = $2) AS "muted!",
                (SELECT r.last_read_at FROM issue_read r WHERE r.issue_id = i.id AND r.user_id = $2) AS last_read_at
@@ -176,6 +181,7 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
         closed_at: r.closed_at,
         closed_by: r.closed_by,
         created_by: r.created_by,
+        created_by_name: r.created_by_name,
         version: r.version,
         created_at: r.created_at,
         updated_at: r.updated_at,
@@ -231,6 +237,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
         r#"
         SELECT i.id, i.number, i.branch_id, ty.code AS issue_type, i.title, i.priority AS "priority: Priority",
                i.state AS "state: IssueState", i.template_id, i.tags, i.created_by, i.created_at,
+               cu.first_name || ' ' || cu.last_name AS "created_by_name!",
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id) AS "work_item_count!",
                (SELECT count(*) FROM work_item w WHERE w.issue_id = i.id
                   AND w.status IN ('approved', 'cancelled')) AS "done_count!",
@@ -252,6 +259,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
                r.last_read_at AS "last_read_at?"
         FROM issue i
         JOIN issue_type ty ON ty.id = i.type_id
+        JOIN app_user cu ON cu.id = i.created_by
         LEFT JOIN issue_read r ON r.issue_id = i.id AND r.user_id = $2
         WHERE issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $1)
           -- A school-wide item shows in the branches it reaches, and in yours
@@ -301,6 +309,7 @@ pub async fn list(db: &PgPool, actor: &Actor, query: &IssueQuery, page: &PagePar
             template_id: r.template_id,
             tags: r.tags,
             created_by: r.created_by,
+            created_by_name: r.created_by_name,
             work_item_count: r.work_item_count,
             done_count: r.done_count,
             is_overdue: r.is_overdue,

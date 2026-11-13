@@ -881,6 +881,7 @@ export const fa: Record<string, string> = {
   "a blue dot means something changed since you last looked": "نقطهٔ آبی یعنی از آخرین بازدیدتان چیزی تغییر کرده",
   unread: "خوانده‌نشده",
   "· unread": "· خوانده‌نشده",
+  "· by {name}": "· از {name}",
   "· overdue": "· دیرکرد",
   Upcoming: "پیش رو",
   "Showing {n} {state} item": "نمایش {n} مورد {state}",

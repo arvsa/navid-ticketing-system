@@ -194,6 +194,7 @@ function ItemRow({ item, branchName }: { item: IssueSummary; branchName?: string
             <span className="flex flex-wrap items-center gap-x-2 font-mono text-[14px] text-text-3">
               {item.key}
               {branchName && <span className="font-sans">· {branchName}</span>}
+              <span className="font-sans">{t("· by {name}", { name: item.created_by_name })}</span>
               {item.unread && <span className="font-sans">{t("· unread")}</span>}
               <TagList tags={item.tags} className="font-sans" />
             </span>

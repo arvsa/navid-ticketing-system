@@ -100,7 +100,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const who = <PersonName id={issue.created_by} label={issue.created_by === viewer.me.user.id ? t("you") : labels.person(issue.created_by)} />;
+  const who = <PersonName id={issue.created_by} label={issue.created_by === viewer.me.user.id ? t("you") : issue.created_by_name} />;
   const subtitle = (
     <>
       {issue.type === "ticket"

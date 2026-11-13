@@ -1555,6 +1555,8 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             created_by: string;
+            /** @description The creator's full name, so it shows where their branch isn't visible. */
+            created_by_name: string;
             description?: string | null;
             event?: components["schemas"]["EventView"] | null;
             /** Format: uuid */
@@ -1608,6 +1610,8 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             created_by: string;
+            /** @description The creator's full name, so it shows where their branch isn't visible. */
+            created_by_name: string;
             /** Format: int64 */
             done_count: number;
             /** Format: uuid */
@@ -1954,6 +1958,8 @@ export interface components {
                 created_at: string;
                 /** Format: uuid */
                 created_by: string;
+                /** @description The creator's full name, so it shows where their branch isn't visible. */
+                created_by_name: string;
                 /** Format: int64 */
                 done_count: number;
                 /** Format: uuid */

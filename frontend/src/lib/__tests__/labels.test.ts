@@ -27,7 +27,7 @@ const work = (patch: Partial<WorkItem>): WorkItem => ({
 const issue = (patch: Partial<IssueDetail>): IssueDetail => ({
   id: "i", key: "ISS-1", number: 1, branch_id: "br", type: "action", title: "T", priority: "medium",
   completion_mode: "per_member", state: "open", tags: [], requires_report: false,
-  created_by: "boss", version: 1, created_at: "", updated_at: "", targets: [], work_items: [], attachments: [],
+  created_by: "boss", created_by_name: "The Boss", version: 1, created_at: "", updated_at: "", targets: [], work_items: [], attachments: [],
   watching: false, muted: false, ...patch,
 });
 
