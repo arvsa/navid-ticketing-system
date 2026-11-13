@@ -36,19 +36,22 @@ pub async fn create_super_admin(db: &PgPool, email: &str, first_name: &str, last
     let temporary_password = password::generate_temporary();
     let hash = password::hash_async(temporary_password.clone()).await?;
     let email = email.to_owned();
+    let temp = temporary_password.expose().to_owned();
 
     let user_id = db::with_tx(db, |tx| {
         Box::pin(async move {
             let user_id = sqlx::query_scalar!(
                 r#"
-                INSERT INTO app_user (email, first_name, last_name, password_hash, is_super_admin, must_change_password)
-                VALUES ($1::text, $2, $3, $4, true, true)
+                INSERT INTO app_user (email, first_name, last_name, password_hash, temporary_password,
+                                      is_super_admin, must_change_password)
+                VALUES ($1::text, $2, $3, $4, $5, true, true)
                 RETURNING id
                 "#,
                 email,
                 first_name,
                 last_name,
                 hash,
+                temp,
             )
             .fetch_one(&mut **tx)
             .await?;
@@ -92,18 +95,21 @@ pub async fn reset_password(db: &PgPool, email: &str) -> AppResult<CreatedUser> 
     let temporary_password = password::generate_temporary();
     let hash = password::hash_async(temporary_password.clone()).await?;
     let email = email.trim().to_owned();
+    let temp = temporary_password.expose().to_owned();
 
     let user_id = db::with_tx(db, |tx| {
         Box::pin(async move {
             let user_id = sqlx::query_scalar!(
                 r#"
                 UPDATE app_user
-                SET password_hash = $2, must_change_password = true, failed_login_count = 0, locked_until = NULL
+                SET password_hash = $2, temporary_password = $3, must_change_password = true,
+                    failed_login_count = 0, locked_until = NULL
                 WHERE email = ($1::text)::citext
                 RETURNING id
                 "#,
                 email,
                 hash,
+                temp,
             )
             .fetch_optional(&mut **tx)
             .await?

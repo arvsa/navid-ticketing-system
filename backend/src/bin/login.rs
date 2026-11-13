@@ -67,7 +67,7 @@ async fn run(cli: &Cli) -> Result<(), String> {
     if !status.is_success() {
         let code = body["error"]["code"].as_str().unwrap_or("unknown");
         let hint = match code {
-            "invalid_credentials" => " (wrong email or password; did you run `cargo run --bin admin -- seed-demo`?)",
+            "invalid_credentials" => " (wrong email or password; `cargo run --bin users` lists accounts and temporary passwords)",
             "origin_mismatch" => " (--origin must match the server's APP_ORIGIN)",
             _ => "",
         };

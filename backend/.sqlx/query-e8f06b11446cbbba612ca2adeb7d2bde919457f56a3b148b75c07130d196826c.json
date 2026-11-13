@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                UPDATE app_user\n                SET password_hash = $2, must_change_password = true, failed_login_count = 0, locked_until = NULL\n                WHERE email = ($1::text)::citext\n                RETURNING id\n                ",
+  "query": "\n                UPDATE app_user\n                SET password_hash = $2, temporary_password = $3, must_change_password = true,\n                    failed_login_count = 0, locked_until = NULL\n                WHERE email = ($1::text)::citext\n                RETURNING id\n                ",
   "describe": {
     "columns": [
       {
@@ -18,6 +18,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Text",
         "Text"
       ]
     },
@@ -25,5 +26,5 @@
       false
     ]
   },
-  "hash": "088bd92251b34f57f42f2aae25df6c94dbcc4b7bb128ec30a10236c2a774895a"
+  "hash": "e8f06b11446cbbba612ca2adeb7d2bde919457f56a3b148b75c07130d196826c"
 }

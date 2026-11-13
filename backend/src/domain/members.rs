@@ -119,7 +119,8 @@ pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) 
     };
 
     let mut tx = db.begin().await?;
-    let user_id = apply_join(&mut tx, actor, branch_id, &email, &join, hash.as_deref()).await?;
+    let password = temp.as_ref().zip(hash.as_deref()).map(|(p, h)| (p.expose(), h));
+    let user_id = apply_join(&mut tx, actor, branch_id, &email, &join, password).await?;
     // The schema trigger has put them in "All members".
     emit_branch_event(&mut tx, "member_changed", branch_id, vec![user_id]).await?;
     tx.commit().await?;
@@ -172,14 +173,15 @@ pub(super) fn plan_join(
     })
 }
 
-/// Writes a planned join. `password_hash` is needed for [`Join::Create`].
+/// Writes a planned join. `password`, the temporary password and its hash,
+/// is needed for [`Join::Create`].
 pub(super) async fn apply_join(
     tx: &mut crate::db::Tx,
     actor: &Actor,
     branch_id: Uuid,
     email: &str,
     join: &Join,
-    password_hash: Option<&str>,
+    password: Option<(&str, &str)>,
 ) -> AppResult<Uuid> {
     match join {
         Join::AlreadyMember => {
@@ -211,17 +213,18 @@ pub(super) async fn apply_join(
             Ok(*user_id)
         }
         Join::Create { first_name, last_name } => {
-            let hash = password_hash.ok_or_else(|| AppError::internal("new account without a password hash"))?;
+            let (temp, hash) = password.ok_or_else(|| AppError::internal("new account without a password"))?;
             let user_id = sqlx::query_scalar!(
                 r#"
-                INSERT INTO app_user (email, first_name, last_name, password_hash, must_change_password)
-                VALUES ($1::text, $2, $3, $4, true)
+                INSERT INTO app_user (email, first_name, last_name, password_hash, temporary_password, must_change_password)
+                VALUES ($1::text, $2, $3, $4, $5, true)
                 RETURNING id
                 "#,
                 email,
                 first_name,
                 last_name,
                 hash,
+                temp,
             )
             .fetch_one(&mut **tx)
             .await?;
@@ -416,11 +419,12 @@ pub async fn reset_password(db: &PgPool, actor: &Actor, user_id: Uuid) -> AppRes
     let hash = password::hash_async(temp.clone()).await?;
     let mut tx = db.begin().await?;
     sqlx::query!(
-        r#"UPDATE app_user SET password_hash = $2, must_change_password = true, failed_login_count = 0,
-                              locked_until = NULL
+        r#"UPDATE app_user SET password_hash = $2, temporary_password = $3, must_change_password = true,
+                              failed_login_count = 0, locked_until = NULL
            WHERE id = $1"#,
         user_id,
-        hash
+        hash,
+        temp.expose()
     )
     .execute(&mut *tx)
     .await?;

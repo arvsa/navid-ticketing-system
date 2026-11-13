@@ -32,21 +32,26 @@ You only need [Docker](https://www.docker.com) and git.
 
    The first build compiles the backend and takes a few minutes.
 
-3. **Add demo data** (optional):
+3. **Create the first super admin**:
 
    ```sh
-   docker compose exec backend admin seed-demo
+   docker compose exec backend admin create-super-admin --email you@school.org --first-name Your --last-name Name
    ```
 
-4. **Open http://localhost:8000** and sign in with a demo account or create an account. Every one
-   has the password `demo-password`:
+   It prints a temporary password; you choose your own after signing in.
 
-   | Account | Role |
-   |---|---|
-   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
-   | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
-   | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
+4. **Open http://localhost:8000** and sign in.
 
+To see every account, with the temporary passwords not yet replaced:
+
+```sh
+docker compose exec backend users                    # all
+docker compose exec backend users --branch NTH --pending
+docker compose exec backend users --help             # every filter
+```
+
+Always run these tools inside the backend container: there `DATABASE_URL`
+points at the database. With `localhost` in a container they can't reach it.
 
 Stop it with `docker compose down`. Add `-v` to also delete the data.
 

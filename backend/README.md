@@ -23,20 +23,14 @@ You need [Rust](https://rustup.rs) and [Docker](https://www.docker.com).
    cp .env.example .env
    ```
 
-3. **Add demo data**, so there's someone to sign in as:
+3. **Create a super admin**, so there's someone to sign in as:
 
    ```sh
-   cargo run --bin admin -- seed-demo
+   cargo run --bin admin -- create-super-admin --email you@school.org --first-name Your --last-name Name
    ```
 
-   This creates three branches, about 90 people and some issues. Every demo
-   account has the password `demo-password`, for example:
-
-   | Account | Role |
-   |---|---|
-   | `superadmin@demo.school` | Super admin: runs the app (branches, people, groups) |
-   | `admin@north.demo.school` | Admin of the North branch (also `south`, `east`) |
-   | `member1@north.demo.school` | A member (`member1` to `member28`, in each branch) |
+   It prints a temporary password. `cargo run --bin users` lists every
+   account, with temporary passwords not yet replaced (`--help` for filters).
 
 4. **Start the server:**
 

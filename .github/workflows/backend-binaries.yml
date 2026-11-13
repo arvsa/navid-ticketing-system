@@ -42,7 +42,8 @@ jobs:
         run: |
           out=linux-${{ matrix.arch }}
           mkdir "$out"
-          for bin in backend admin health users login logout whoami change_password; do
+          # login, logout, whoami and change_password are local-dev helpers: not shipped.
+          for bin in backend admin health users; do
             sudo cp "backend/target/release/$bin" "$out/"
           done
           sudo chown -R "$USER" "$out"

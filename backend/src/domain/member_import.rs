@@ -164,8 +164,8 @@ pub async fn run(
         if matches!(join, Join::AlreadyMember) {
             continue;
         }
-        let hash = password.as_ref().map(|(_, h)| h.as_str());
-        let user_id = apply_join(&mut tx, actor, branch_id, email, join, hash).await?;
+        let pair = password.as_ref().map(|(p, h)| (p.expose(), h.as_str()));
+        let user_id = apply_join(&mut tx, actor, branch_id, email, join, pair).await?;
         row.user_id = Some(user_id);
         row.temporary_password = password.map(|(p, _)| p.expose().to_owned());
         changed.push(user_id);

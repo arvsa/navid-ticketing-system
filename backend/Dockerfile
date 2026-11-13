@@ -5,9 +5,9 @@ ENV SQLX_OFFLINE=true
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release --bin backend --bin admin --bin health \
+    cargo build --release --bin backend --bin admin --bin health --bin users \
     && mkdir /out \
-    && cp target/release/backend target/release/admin target/release/health /out/
+    && cp target/release/backend target/release/admin target/release/health target/release/users /out/
 
 FROM debian:bookworm-slim
 RUN apt-get update \

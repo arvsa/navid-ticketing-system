@@ -3,12 +3,15 @@
 //! ```text
 //! cargo run --bin admin -- create-super-admin --email x --first-name y --last-name z
 //! cargo run --bin admin -- reset-password --email x
-//! cargo run --bin admin -- seed-demo          # demo data, empty databases only
 //! ```
+//!
+//! In Docker, run it in the backend container, which has `DATABASE_URL` set:
+//! `docker compose exec backend admin create-super-admin ...`.
 
-use backend::{auth::bootstrap, db, seed};
+use std::process::ExitCode;
+
+use backend::{auth::bootstrap, cli, db, error::AppError};
 use clap::{Parser, Subcommand};
-use sqlx::postgres::PgPoolOptions;
 
 #[derive(Parser)]
 #[command(about = "School ticketing admin tasks")]
@@ -35,44 +38,49 @@ enum Command {
         #[arg(long)]
         email: String,
     },
-    /// Fill an empty database with demo branches, people and issues.
-    SeedDemo,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> ExitCode {
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
-    let pool = PgPoolOptions::new().max_connections(2).connect(&cli.database_url).await?;
-    db::migrate(&pool).await?;
-
-    if let Command::SeedDemo = cli.command {
-        let seeded = seed::demo(&pool).await?;
-        println!("Seeded {} branches, {} users and {} issues.", seeded.branches, seeded.users, seeded.issues);
-        println!();
-        println!("  Super admin:  {}", seed::DEMO_SUPER_ADMIN);
-        println!("  Branch admin: admin@north.demo.school (also south, east)");
-        println!("  Members:      member1@north.demo.school .. member{}@...", seed::MEMBERS_PER_BRANCH);
-        println!("  Password:     {} (for every demo account)", seed::DEMO_PASSWORD);
-        return Ok(());
+    let pool = match cli::connect(&cli.database_url).await {
+        Ok(pool) => pool,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(e) = db::migrate(&pool).await {
+        eprintln!("Can't apply the database migrations: {e}");
+        return ExitCode::FAILURE;
     }
 
-    let (email, created) = match cli.command {
+    let result = match &cli.command {
         Command::CreateSuperAdmin { email, first_name, last_name } => {
-            let created = bootstrap::create_super_admin(&pool, &email, &first_name, &last_name).await?;
-            println!("Created super admin {email} ({})", created.user_id);
-            (email, created)
+            bootstrap::create_super_admin(&pool, email, first_name, last_name)
+                .await
+                .map(|created| (email, created, format!("Created super admin {email}")))
         }
-        Command::ResetPassword { email } => {
-            let created = bootstrap::reset_password(&pool, &email).await?;
-            println!("Reset the password of {email} ({}); their sessions were signed out", created.user_id);
-            (email, created)
-        }
-        Command::SeedDemo => unreachable!("handled above"),
+        Command::ResetPassword { email } => bootstrap::reset_password(&pool, email)
+            .await
+            .map(|created| (email, created, format!("Reset the password of {email}; their sessions were signed out"))),
     };
+    let (email, created, done) = match result {
+        Ok(ok) => ok,
+        Err(AppError::NotFound) => {
+            eprintln!("There's no account with that email (`users` lists them).");
+            return ExitCode::FAILURE;
+        }
+        Err(e) => {
+            eprintln!("Failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("{done} ({})", created.user_id);
     println!();
     println!("  Temporary password: {}", created.temporary_password.expose());
     println!();
-    println!("It is shown only once. {email} must choose a new password after signing in.");
-    Ok(())
+    println!("{email} must choose a new password after signing in. Until then `users` shows it too.");
+    ExitCode::SUCCESS
 }

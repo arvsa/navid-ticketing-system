@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO app_user (email, first_name, last_name, password_hash, is_super_admin, must_change_password)\n                VALUES ($1::text, $2, $3, $4, true, true)\n                RETURNING id\n                ",
+  "query": "\n                INSERT INTO app_user (email, first_name, last_name, password_hash, temporary_password, must_change_password)\n                VALUES ($1::text, $2, $3, $4, $5, true)\n                RETURNING id\n                ",
   "describe": {
     "columns": [
       {
@@ -20,6 +20,7 @@
         "Text",
         "Text",
         "Text",
+        "Text",
         "Text"
       ]
     },
@@ -27,5 +28,5 @@
       false
     ]
   },
-  "hash": "e8bb34a9276d93d7dde57527e1fc66bbdf03ad5dbb2a979e1660cc641d0e6118"
+  "hash": "e5d84ceb366d2f0bbba32ba1c226da6cd2678485faa97a597c7fe685b0b68aa3"
 }

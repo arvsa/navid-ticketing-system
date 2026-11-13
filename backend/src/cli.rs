@@ -1,5 +1,36 @@
 //! Helpers shared by the small command-line tools in `src/bin`.
 
+use std::time::Duration;
+
+use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
+
+/// Connects to the database for an operator tool, failing within a few
+/// seconds with a message that says where it tried, instead of sqlx's bare
+/// `PoolTimedOut` after 30.
+pub async fn connect(database_url: &str) -> Result<PgPool, String> {
+    let options: PgConnectOptions = database_url.parse().map_err(|e| format!("DATABASE_URL is not valid: {e}"))?;
+    let host = options.get_host().to_owned();
+    let port = options.get_port();
+    PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect_with(options)
+        .await
+        .map_err(|e| {
+            let mut msg = format!("Can't reach the database at {host}:{port} ({e}).");
+            if matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
+                msg.push_str(
+                    "\nIs it running? If you're inside a container, localhost is the container itself: \
+                     run the tool in the backend container instead, which has the right DATABASE_URL:\n  \
+                     docker compose exec backend admin --help",
+                );
+            } else {
+                msg.push_str("\nIs the database running and reachable from here?");
+            }
+            msg
+        })
+}
+
 /// The `sid` value from a curl (Netscape) cookie file, as written by
 /// `cargo run --bin login` or `curl -c`, or from a plain `sid=...` line.
 pub fn session_token(contents: &str) -> Option<String> {

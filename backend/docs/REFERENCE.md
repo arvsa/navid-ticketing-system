@@ -177,7 +177,6 @@ an `x-request-id` header to quote when reporting problems.
 | 409 | `comment_deleted` | The comment was deleted. |
 | 409 | `report_exists` | There's already a report for this; edit it. |
 | 409 | `report_locked` | The report's work was approved (or its issue closed). |
-| 409 | `not_empty` | `seed-demo` only runs on an empty database. |
 | 413 | `payload_too_large` | Body over 1 MB, or file over 25 MB. |
 | 422 | `invalid_body` | The JSON body is malformed or missing fields. |
 | 422 | `invalid_query` | A query parameter is malformed. |
@@ -258,7 +257,7 @@ comments, dashboard, unread counts) and updating (comments, read marks), with
 errors.
 
 ```sh
-cargo run --bin admin -- seed-demo                     # on an empty database
+# needs the demo accounts: a database filled by backend::seed::demo (as in tests/hardening.rs)
 SQLX_OFFLINE=true cargo build --release
 APP_ORIGIN=http://localhost:5173 COOKIE_SECURE=false JOBS_ENABLED=true ./target/release/backend &
 k6 run scripts/loadtest.js                             # BASE_URL / ORIGIN / DURATION / VUS env to override
@@ -288,4 +287,3 @@ k6 run scripts/loadtest.js                             # BASE_URL / ORIGIN / DUR
   never are.
 - **Health:** `GET /api/healthz` (no auth) checks the database; use it for
   liveness and readiness probes.
-- Never run `seed-demo` against real data (it refuses anyway).

@@ -10,7 +10,7 @@ Screens follow the designs in `../School Ticketing UI-png` and the behaviour in
 
 ## Run it
 
-1. Start the backend (see `../backend/README.md`): database, `seed-demo`, then
+1. Start the backend (see `../backend/README.md`): database, a super admin (`admin create-super-admin`), then
    `cargo run`. It must allow the frontend's origin: `APP_ORIGIN=http://localhost:5173`
    and `COOKIE_SECURE=false` (the defaults in `.env.example`).
 2. Install and start the frontend:
