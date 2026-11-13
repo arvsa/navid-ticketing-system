@@ -248,17 +248,20 @@ async function addMembers(page: Page, group: string, people: { email: string; fi
   await openGroup(page, group);
   await page.getByRole("tab", { name: /^Members/ }).click();
   const panel = page.getByRole("heading", { level: 2, name: new RegExp(`${group}$`) }).locator("xpath=ancestor::div[.//*[@role='tablist']][1]");
-  finding("People & groups: the group tabs (What they can do / Members) have no tabpanel, so screen readers can't tell what the tab controls.");
-  for (const p of people) {
-    await expect(panel.getByText(/No one is in this group yet|@/).first()).toBeVisible();
-    if (await panel.getByRole("listitem").filter({ hasText: p.email, hasNotText: "No one matches" }).isVisible()) continue;
-    if (!(await panel.getByRole("button", { name: /^Add to / }).isVisible())) await panel.getByRole("button", { name: "Add people" }).click();
+  await expect(panel.getByText(/No one is in this group yet|@/).first()).toBeVisible();
+  const missing = [];
+  for (const p of people)
+    if (!(await panel.getByRole("listitem").filter({ hasText: p.email, hasNotText: "No one matches" }).isVisible())) missing.push(p);
+  if (!missing.length) return;
+  // Several at once: tick each, then add them together.
+  await panel.getByRole("button", { name: "Add people" }).click();
+  for (const p of missing) {
     await panel.getByRole("textbox", { name: "Search people…" }).fill(p.email);
-    await panel.getByRole("button", { name: new RegExp(p.email) }).click();
-    await panel.getByRole("button", { name: `Add to ${group}` }).click();
-    await toast(page, "Added");
-    await expect(panel.getByRole("listitem").filter({ hasText: p.email, hasNotText: "No one matches" })).toBeVisible();
+    await panel.getByRole("checkbox", { name: new RegExp(p.email) }).check();
   }
+  await panel.getByRole("button", { name: /^Add (\d+ )?to / }).click();
+  await toast(page, /^Added/);
+  for (const p of missing) await expect(panel.getByRole("listitem").filter({ hasText: p.email, hasNotText: "No one matches" })).toBeVisible();
 }
 
 test("3. each principal signs in for the first time and staffs their branch's groups", async ({ browser }) => {

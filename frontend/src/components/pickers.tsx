@@ -325,3 +325,61 @@ export function PersonSelect({
     </div>
   );
 }
+
+/** Pick several people from a list (adding people to a group). */
+export function PeopleChecklist({
+  people,
+  value,
+  onChange,
+  exclude = [],
+}: {
+  people: Person[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+  exclude?: string[];
+}) {
+  const [q, setQ] = useState("");
+  const term = q.trim().toLowerCase();
+  const list = people
+    .filter((p) => p.is_active && !exclude.includes(p.id))
+    .filter((p) => !term || `${p.first_name} ${p.last_name} ${p.email}`.toLowerCase().includes(term))
+    .sort((a, b) => a.first_name.localeCompare(b.first_name, localeTag));
+  const flip = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  const allShown = list.length > 0 && list.every((p) => value.includes(p.id));
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-text-3" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search people…")} aria-label={t("Search people…")} className={cx(inputClass, "ps-9")} />
+      </div>
+      {list.length > 1 && (
+        <label className="flex items-center gap-3 px-3 text-[14px] text-text-2">
+          <input
+            type="checkbox"
+            className="size-4"
+            checked={allShown}
+            onChange={() => onChange(allShown ? value.filter((id) => !list.some((p) => p.id === id)) : [...new Set([...value, ...list.map((p) => p.id)])])}
+          />
+          {term ? t("Select everyone shown ({n})", { n: list.length }) : t("Select everyone ({n})", { n: list.length })}
+        </label>
+      )}
+      <ul className="max-h-[280px] overflow-y-auto rounded-[10px] border border-border">
+        {list.length === 0 && <li className="px-3 py-3 text-text-2">{q ? t("No one matches {q}.", { q: quote(q) }) : t("Everyone here is in it already.")}</li>}
+        {list.map((p) => (
+          <li key={p.id}>
+            <label className={cx("flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-sunken", value.includes(p.id) && "bg-primary-soft")}>
+              <input type="checkbox" className="size-4" checked={value.includes(p.id)} onChange={() => flip(p.id)} />
+              <Avatar first={p.first_name} last={p.last_name} id={p.id} size={28} />
+              <span className="min-w-0 flex-1">
+                <span className="block">
+                  {p.first_name} {p.last_name}
+                </span>
+                <span className="block truncate text-[13px] text-text-3">{p.email}</span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

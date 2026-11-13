@@ -423,6 +423,11 @@ export const fa: Record<string, string> = {
 
   // ---- Permissions ----------------------------------------------------------
   "All kinds": "همهٔ انواع",
+  "Select everyone shown ({n})": "انتخاب همهٔ نمایش‌داده‌شده‌ها ({n})",
+  "Select everyone ({n})": "انتخاب همه ({n})",
+  "Everyone here is in it already.": "همهٔ افراد اینجا از قبل عضو آن هستند.",
+  "Added {n} people": "{n} نفر اضافه شدند",
+  "Add {n} to {name}": "افزودن {n} نفر به {name}",
   Department: "بخش",
   Head: "مسئول",
   "{n} head": "{n} مسئول",

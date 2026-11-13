@@ -10,7 +10,7 @@ import { keys } from "@/api/keys";
 import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
-import { PersonSelect } from "@/components/pickers";
+import { PeopleChecklist, PersonSelect } from "@/components/pickers";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, Tabs, cx, inputClass } from "@/components/ui";
 import { hasGrant, headsGroup, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
@@ -497,16 +497,24 @@ function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Gro
   const members = useMembers(branchId, { groupId: group.id });
   const [adding, setAdding] = useState(false);
   const [mq, setMq] = useState("");
-  const [pick, setPick] = useState<string | null>(null);
+  const [picks, setPicks] = useState<string[]>([]);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["branches", branchId] });
     qc.invalidateQueries({ queryKey: ["school-groups"] });
     qc.invalidateQueries({ queryKey: ["my-groups"] });
   };
+  // One request each; whoever was added stays added if a later one fails.
   const add = useMutation({
-    mutationFn: (id: string) => api.put(`/groups/${group.id}/members/${id}`),
-    onSuccess: () => (toast.success(t("Added")), setPick(null), refresh()),
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await api.put(`/groups/${group.id}/members/${id}`);
+        setPicks((p) => p.filter((x) => x !== id));
+      }
+      return ids.length;
+    },
+    onSuccess: (n) => (toast.success(tn(n, "Added", "Added {n} people")), setAdding(false)),
     onError: (e) => toast.error(errorMessage(e)),
+    onSettled: refresh,
   });
   const remove = useMutation({
     mutationFn: (id: string) => api.del(`/groups/${group.id}/members/${id}`),
@@ -544,12 +552,12 @@ function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Gro
         <div className="mb-4">
           {adding ? (
             <div className="space-y-3 rounded-[12px] border border-border p-4">
-              <PersonSelect people={people.inBranch(branchId)} value={pick} onChange={setPick} exclude={[...ids]} />
+              <PeopleChecklist people={people.inBranch(branchId)} value={picks} onChange={setPicks} exclude={[...ids]} />
               <div className="flex gap-2">
-                <Button variant="primary" disabled={!pick} loading={add.isPending} onClick={() => pick && add.mutate(pick)}>
-                  {t("Add to {name}", { name: group.name })}
+                <Button variant="primary" disabled={!picks.length} loading={add.isPending} onClick={() => add.mutate(picks)}>
+                  {picks.length > 1 ? t("Add {n} to {name}", { n: picks.length, name: group.name }) : t("Add to {name}", { name: group.name })}
                 </Button>
-                <Button onClick={() => setAdding(false)}>{t("Done")}</Button>
+                <Button onClick={() => (setAdding(false), setPicks([]))}>{t("Done")}</Button>
               </div>
             </div>
           ) : (

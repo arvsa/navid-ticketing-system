@@ -124,3 +124,30 @@ test("a department head runs their department without being a branch admin", asy
   await h.page.goto("/directory");
   await expect(h.page.getByText(`Head · ${head.email}`).first()).toBeVisible();
 });
+
+test("several people join a group at once", async ({ browser }) => {
+  const { page } = await as(browser, person("AZR", "principal").email);
+  await page.goto("/people?tab=groups");
+  const name = "Grade 7 team";
+  const entry = page.getByRole("button", { name: new RegExp(`^${name} \\d+`) });
+  await expect(page.getByRole("button", { name: /^All members \d+/ })).toBeVisible();
+  if (!(await entry.isVisible())) {
+    await page.getByRole("button", { name: "New group" }).click();
+    await page.getByRole("dialog").getByLabel("Name").fill(name);
+    await page.getByRole("dialog").getByRole("button", { name: "Create group" }).click();
+    await toast(page, `${name} created`);
+  }
+  await entry.click();
+  await page.getByRole("tab", { name: /^Members/ }).click();
+  await expect(page.getByText("No one is in this group yet").or(page.getByText("teacher1@azr.rnn.school"))).toBeVisible();
+  if (await page.getByText("No one is in this group yet").isVisible()) {
+    await page.getByRole("button", { name: "Add people" }).click();
+    await page.getByRole("textbox", { name: "Search people…" }).fill("teacher");
+    await page.getByRole("checkbox", { name: /^Select everyone shown/ }).check();
+    await expect(page.getByRole("button", { name: `Add 4 to ${name}` })).toBeVisible();
+    await page.getByRole("checkbox", { name: /teacher4@/ }).uncheck();
+    await page.getByRole("button", { name: `Add 3 to ${name}` }).click();
+    await toast(page, "Added 3 people");
+  }
+  await expect(page.getByRole("tab", { name: /^Members 3/ })).toBeVisible();
+});
