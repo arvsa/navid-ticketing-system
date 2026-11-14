@@ -26,7 +26,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    dotenvy::dotenv().ok();
+    backend::config::load_dotenv();
     let cli = Cli::parse();
 
     let Some(token) = fs::read_to_string(&cli.cookie_file).ok().and_then(|c| session_token(&c)) else {

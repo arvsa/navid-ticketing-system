@@ -61,7 +61,7 @@ const DATE: &[BorrowedFormatItem<'static>] = format_description!("[year]-[month]
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    dotenvy::dotenv().ok();
+    backend::config::load_dotenv();
     let cli = Cli::parse();
 
     let pool = match cli::connect(&cli.database_url).await {

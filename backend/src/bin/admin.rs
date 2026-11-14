@@ -43,7 +43,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    dotenvy::dotenv().ok();
+    backend::config::load_dotenv();
     let cli = Cli::parse();
     let pool = match cli::connect(&cli.database_url).await {
         Ok(pool) => pool,

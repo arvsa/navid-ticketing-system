@@ -21,11 +21,15 @@ services:
 
   backend:
     build: ./backend
+    # Settings come from the root .env (defaults: .env.example). env_file paths
+    # resolve next to this file, so running compose from backend/ can't pick up
+    # backend/.env (the `cargo run` settings) by mistake.
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgres://ticketing:ticketing@postgres:5432/ticketing
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      RUST_LOG: ${RUST_LOG:-backend=info,tower_http=info,sqlx=warn}
     volumes:
       - attachments:/data/attachments
     depends_on:
@@ -37,7 +41,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "${APP_PORT:-8000}:80"
+      - "${APP_PORT:-8000}:80" # read from the .env where you run compose: run it from the repo root
     depends_on:
       backend:
         condition: service_healthy

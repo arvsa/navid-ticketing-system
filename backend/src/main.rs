@@ -4,7 +4,7 @@ use backend::{auth::bootstrap, authz::permission, db, http, jobs, realtime, tele
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenvy::dotenv().ok();
+    backend::config::load_dotenv();
     let config = Config::from_env()?;
     telemetry::init(config.log_format);
 

@@ -30,6 +30,17 @@ pub struct Config {
 #[error("config: {0}")]
 pub struct ConfigError(String);
 
+/// Loads the dev settings in `backend/.env`, wherever `cargo run` starts from,
+/// so a root `.env` meant for docker compose is never picked up. Values in the
+/// file win over ones inherited from the shell. Built images don't ship this
+/// file, so outside dev this falls back to a `.env` in the working directory.
+pub fn load_dotenv() {
+    let dev_env = concat!(env!("CARGO_MANIFEST_DIR"), "/.env");
+    if dotenvy::from_path_override(dev_env).is_err() {
+        dotenvy::dotenv().ok();
+    }
+}
+
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         let log_format = match optional("LOG_FORMAT").as_deref() {

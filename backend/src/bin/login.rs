@@ -34,7 +34,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    dotenvy::dotenv().ok();
+    backend::config::load_dotenv();
     let cli = Cli::parse();
     match run(&cli).await {
         Ok(()) => ExitCode::SUCCESS,
