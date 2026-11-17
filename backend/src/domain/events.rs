@@ -113,8 +113,8 @@ pub(crate) async fn sync_invitees(tx: &mut Tx, actor: &Actor, issue_id: Uuid) ->
             JOIN branch_membership m ON m.user_id = t.user_id AND m.branch_id = t.branch_id AND m.left_at IS NULL
             WHERE t.issue_id = $1 AND t.removed_at IS NULL AND t.kind = 'user'
             UNION
-            SELECT gm.user_id FROM issue_target t JOIN group_member gm ON gm.group_id = t.group_id
-            WHERE t.issue_id = $1 AND t.removed_at IS NULL AND t.kind = 'group'
+            SELECT dm.user_id FROM issue_target t JOIN department_member dm ON dm.department_id = t.department_id
+            WHERE t.issue_id = $1 AND t.removed_at IS NULL AND t.kind = 'department'
             UNION
             SELECT m.user_id FROM issue_target t
             JOIN branch_membership m ON m.branch_id = t.branch_id AND m.left_at IS NULL
@@ -158,8 +158,9 @@ pub(crate) async fn prune_invitees(tx: &mut Tx, issue_id: Uuid) -> AppResult<()>
             SELECT 1 FROM issue_target t
             WHERE t.issue_id = $1 AND t.removed_at IS NULL AND (
                    (t.kind = 'user' AND t.user_id = r.user_id)
-                OR (t.kind = 'group' AND EXISTS (
-                      SELECT 1 FROM group_member gm WHERE gm.group_id = t.group_id AND gm.user_id = r.user_id))
+                OR (t.kind = 'department' AND EXISTS (
+                      SELECT 1 FROM department_member dm
+                      WHERE dm.department_id = t.department_id AND dm.user_id = r.user_id))
                 OR (t.kind = 'branch' AND EXISTS (
                       SELECT 1 FROM branch_membership m
                       WHERE m.branch_id = t.branch_id AND m.user_id = r.user_id AND m.left_at IS NULL))))

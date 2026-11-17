@@ -1,10 +1,24 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ISSUE_STATES, ISSUE_TYPES, PRIORITIES, RSVP_RESPONSES, SCOPES, WORK_STATUSES } from "@/api/types";
 import type { IssueDetail, MeResponse, WorkItem } from "@/api/types";
-import { permissionInfo, priorityLabel, rsvpLabel, scopeLabel, stateLabel, typeLabel, workStatusLabel } from "../labels";
+import { ERROR_CODES, errorMessage, permissionInfo, priorityLabel, rsvpLabel, scopeLabel, stateLabel, typeLabel, workStatusLabel } from "../labels";
 import { primaryAction } from "../items";
 
 describe("labels", () => {
+  it("has words for every error code the API documents", () => {
+    const reference = readFileSync(join(__dirname, "../../../../backend/docs/REFERENCE.md"), "utf8");
+    const codes = [...reference.matchAll(/^\| \d{3} \| `([a-z_]+)` \|/gm)].map((m) => m[1]);
+    expect(codes.length).toBeGreaterThan(50);
+    expect(codes.filter((c) => !ERROR_CODES.includes(c))).toEqual([]);
+  });
+
+  it("shows the server's message for request problems it has no words for", () => {
+    expect(errorMessage({ code: "brand_new", status: 409, message: "a clear reason" })).toBe("a clear reason");
+    expect(errorMessage({ code: "brand_new", status: 500, message: "stack trace" })).not.toBe("stack trace");
+  });
+
   it("has a word for every API value", () => {
     for (const v of ISSUE_TYPES) expect(typeLabel[v]).toBeTruthy();
     for (const v of ISSUE_STATES) expect(stateLabel[v]).toBeTruthy();
@@ -12,13 +26,13 @@ describe("labels", () => {
     for (const v of PRIORITIES) expect(priorityLabel[v]).toBeTruthy();
     for (const v of RSVP_RESPONSES) expect(rsvpLabel[v]).toBeTruthy();
     for (const v of SCOPES) expect(scopeLabel[v]).toBeTruthy();
-    expect(Object.keys(permissionInfo)).toHaveLength(16);
+    expect(Object.keys(permissionInfo)).toHaveLength(15);
   });
 });
 
 const me = (id = "me"): MeResponse => ({
   user: { id, email: "a@b.c", first_name: "A", last_name: "B", is_super_admin: false, must_change_password: false },
-  memberships: [{ branch: { id: "br", code: "BR", name: "Branch" }, is_admin: false, joined_at: "", grants: [], heads: [] }],
+  memberships: [{ branch: { id: "br", code: "BR", name: "Branch" }, is_admin: false, joined_at: "", grants: [], departments: [], heads: [], manages_members_of: [] }],
 });
 const work = (patch: Partial<WorkItem>): WorkItem => ({
   id: "w", issue_id: "i", target_id: "t", branch_id: "br", assignee_id: "me", status: "open",

@@ -282,9 +282,9 @@ async fn reports_need_a_submitted_report_before_submission(pool: PgPool) {
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn shared_group_work_is_claimed_once(pool: PgPool) {
     let c = setup(pool).await;
-    let team = create_group(&c.app.db, c.org.branch_a, "Team", &[], &[c.org.plain_a, c.org.multi]).await;
+    let team = create_department(&c.app.db, c.org.branch_a, "Team", &[], &[c.org.plain_a, c.org.multi]).await;
     let (_, items) = c
-        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "Anyone", "targets": [{ "group_id": team }] }))
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "Anyone", "targets": [{ "department_id": team }] }))
         .await;
     let id = items[0]["id"].as_str().unwrap().to_owned();
 
@@ -314,9 +314,9 @@ async fn only_shared_group_work_is_claimable(pool: PgPool) {
     assert_status(&c.go(&c.plain, &branch_item, "claim", json!({})).await, StatusCode::CONFLICT, Some("not_claimable"));
 
     // An unassigned per_member item (its member left) isn't claimable either.
-    let team = create_group(&c.app.db, c.org.branch_a, "Team", &[], &[c.org.plain_a, c.org.manager_a]).await;
+    let team = create_department(&c.app.db, c.org.branch_a, "Team", &[], &[c.org.plain_a, c.org.manager_a]).await;
     let (_, items) = c
-        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "Each", "completion_mode": "per_member", "targets": [{ "group_id": team }] }))
+        .issue(&c.admin, json!({ "branch_id": c.org.branch_a, "type": "action", "title": "Each", "completion_mode": "per_member", "targets": [{ "department_id": team }] }))
         .await;
     let managers = items.iter().find(|w| w["assignee_id"] == c.org.manager_a.to_string()).unwrap()["id"]
         .as_str()
@@ -450,7 +450,11 @@ async fn passed_work_is_reviewed_up_the_chain_and_sent_back_down(pool: PgPool) {
     assert_eq!(passed["reviewer_id"], c.org.manager_a.to_string());
     assert_eq!(notifications_of(&c.app.db, c.org.plain_a, "assigned").await, 1);
     // Only the holder passes it on; never back up the chain, nor outside the branch.
-    assert_status(&c.go(&manager, &id, "pass", json!({ "assignee_id": c.org.multi })).await, StatusCode::FORBIDDEN, None);
+    assert_status(
+        &c.go(&manager, &id, "pass", json!({ "assignee_id": c.org.multi })).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
     let back_up = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.manager_a })).await;
     assert_status(&back_up, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_assignee"));
     let elsewhere = c.go(&c.plain, &id, "pass", json!({ "assignee_id": c.org.admin_b })).await;
@@ -485,7 +489,14 @@ async fn passed_work_is_reviewed_up_the_chain_and_sent_back_down(pool: PgPool) {
     assert_eq!(issue.body["state"], "closed");
 
     // Every pass is in the history.
-    let history = call(&c.app, &c.admin, Method::GET, &format!("/api/issues/{}/history", issue.body["id"].as_str().unwrap()), None).await;
+    let history = call(
+        &c.app,
+        &c.admin,
+        Method::GET,
+        &format!("/api/issues/{}/history", issue.body["id"].as_str().unwrap()),
+        None,
+    )
+    .await;
     let passes = history.body["items"].as_array().unwrap().iter().filter(|h| h["action"] == "pass").count();
     assert_eq!(passes, 2);
 }

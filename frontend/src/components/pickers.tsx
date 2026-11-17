@@ -1,4 +1,4 @@
-// Choosing people, groups and branches.
+// Choosing people, departments and branches.
 import { useEffect, useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { useQueries } from "@tanstack/react-query";
@@ -6,51 +6,54 @@ import { toast } from "sonner";
 import { Building2, ChevronDown, Search, User, Users, X } from "lucide-react";
 import { getAll } from "@/api/client";
 import { keys } from "@/api/keys";
-import type { BranchGroup, BranchPerson, Group, Member } from "@/api/types";
+import type { BranchDepartment, BranchPerson, Department, Member } from "@/api/types";
 import type { Person } from "@/people/usePeople";
 import { Avatar } from "./badges";
 import { cx, inputClass } from "./ui";
 import { localeTag, num, quote, t } from "@/i18n";
 
 export type Recipient =
-  /** `note`: the person's or group's branch, when it's another branch. */
+  /** `note`: the person's or department's branch, when it's another branch. */
   | { kind: "user"; id: string; branchId: string; label: string; note?: string }
-  /** `whole`: the branch's All members group. */
-  | { kind: "group"; id: string; branchId: string; label: string; count: number; note?: string; whole?: boolean }
+  /** `memberIds`: when known (this branch's departments). */
+  | { kind: "department"; id: string; branchId: string; label: string; count: number; note?: string; memberIds?: string[] }
   | { kind: "branch"; id: string; branchId: string; label: string };
 
 // With the branch: on a school-wide item someone in two branches can be picked in either.
 export const recipientKey = (r: Recipient) => `${r.kind}:${r.id}:${r.branchId}`;
 
-/** Which picked people are already reached through a picked branch or group.
- * Group members are fetched; a group we can't list covers no one. */
+/** Which picked people are already reached through a picked branch or
+ * department. Members of other branches' departments are fetched; one we
+ * can't list covers no one. */
 function useCovered(value: Recipient[]) {
-  const groups = value.filter((r): r is Extract<Recipient, { kind: "group" }> => r.kind === "group" && !r.whole);
+  const departments = value.filter((r): r is Extract<Recipient, { kind: "department" }> => r.kind === "department");
+  const unknown = departments.filter((d) => !d.memberIds);
   const members = useQueries({
-    queries: groups.map((g) => {
-      const extra = { include_left: false, group_id: g.id };
+    queries: unknown.map((d) => {
+      const extra = { include_left: false, department_id: d.id };
       return {
-        queryKey: keys.members(g.branchId, extra),
-        queryFn: () => getAll<Member>(`/branches/${g.branchId}/members`, { group_id: g.id }),
+        queryKey: keys.members(d.branchId, extra),
+        queryFn: () => getAll<Member>(`/branches/${d.branchId}/members`, { department_id: d.id }),
         staleTime: 5 * 60_000,
         retry: false,
       };
     }),
   });
-  const wholeBranches = new Set(value.filter((r) => r.kind === "branch" || (r.kind === "group" && r.whole)).map((r) => r.branchId));
-  const inGroups = new Set<string>();
-  members.forEach((m, i) => m.data?.forEach((x) => inGroups.add(`${x.user_id}:${groups[i].branchId}`)));
-  return (r: Recipient) => r.kind === "user" && (wholeBranches.has(r.branchId) || inGroups.has(`${r.id}:${r.branchId}`));
+  const wholeBranches = new Set(value.filter((r) => r.kind === "branch").map((r) => r.branchId));
+  const inDepartments = new Set<string>();
+  for (const d of departments) d.memberIds?.forEach((id) => inDepartments.add(`${id}:${d.branchId}`));
+  members.forEach((m, i) => m.data?.forEach((x) => inDepartments.add(`${x.user_id}:${unknown[i].branchId}`)));
+  return (r: Recipient) => r.kind === "user" && (wholeBranches.has(r.branchId) || inDepartments.has(`${r.id}:${r.branchId}`));
 }
 
 export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => void }) {
-  const Icon = r.kind === "user" ? User : r.kind === "group" ? Users : Building2;
+  const Icon = r.kind === "user" ? User : r.kind === "department" ? Users : Building2;
   return (
     <span className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-sunken px-3">
       <Icon className="size-4 text-text-2" aria-hidden />
       <b>{r.label}</b>
       <span className="text-text-3">
-        {r.kind === "group" ? [t("group · {n}", { n: r.count }), r.note].filter(Boolean).join(" · ") : r.kind === "branch" ? t("whole branch") : (r.note ?? "")}
+        {r.kind === "department" ? [t("department · {n}", { n: r.count }), r.note].filter(Boolean).join(" · ") : r.kind === "branch" ? t("whole branch") : (r.note ?? "")}
       </span>
       {onRemove && (
         <button type="button" onClick={onRemove} aria-label={t("Remove {name}", { name: r.label })} className="ms-1 text-text-3 hover:text-danger">
@@ -61,29 +64,29 @@ export function RecipientChip({ r, onRemove }: { r: Recipient; onRemove?: () => 
   );
 }
 
-/** Text field with chips; typing shows matching people, groups (and branches).
- * `crossPeople` and `crossGroups` are people and groups of other branches
+/** Text field with chips; typing shows matching people, departments (and
+ * branches). `crossPeople` and `crossDepartments` are people and departments of other branches
  * (labelled with their branch); `branchId` null is a school-wide item, which
  * also takes whole `branches`. */
 export function RecipientPicker({
   value,
   onChange,
   people,
-  groups,
+  departments,
   branches,
   crossPeople,
-  crossGroups,
+  crossDepartments,
   branchId,
   branchName,
-  placeholder = t("Add a person or group"),
+  placeholder = t("Add a person or department"),
 }: {
   value: Recipient[];
   onChange: (v: Recipient[]) => void;
   people: Person[];
-  groups: Group[];
+  departments: Department[];
   branches?: { id: string; name: string }[];
   crossPeople?: BranchPerson[];
-  crossGroups?: BranchGroup[];
+  crossDepartments?: BranchDepartment[];
   branchId: string | null;
   /** The item's own branch, to head its section when other branches show. */
   branchName?: string;
@@ -95,14 +98,14 @@ export function RecipientPicker({
   const [toggled, setToggled] = useState<Set<string>>(new Set());
   const chosen = new Set(value.map(recipientKey));
   const covered = useCovered(value);
-  // Someone already reached through a picked branch or group is dropped.
+  // Someone already reached through a picked branch or department is dropped.
   const redundant = value.filter(covered);
   const redundantKey = redundant.map(recipientKey).join(",");
   useEffect(() => {
     if (!redundant.length) return;
     onChange(value.filter((r) => !covered(r)));
     toast.info(
-      t("Removed {names}: already included through a group or branch.", { names: redundant.map((r) => r.label).join(t(", ")) }),
+      t("Removed {names}: already included through a department or branch.", { names: redundant.map((r) => r.label).join(t(", ")) }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [redundantKey]);
@@ -112,30 +115,31 @@ export function RecipientPicker({
     const out: Recipient[] = [];
     for (const b of branches ?? []) if (match(b.name)) out.push({ kind: "branch", id: b.id, branchId: b.id, label: b.name });
     if (branchId) {
-      for (const g of groups)
-        if (!g.archived_at && match(g.name))
-          out.push({ kind: "group", id: g.id, branchId, label: g.is_default ? t("All members") : g.name, count: g.member_count, whole: g.is_default });
+      // Not "All members": that's the whole branch.
+      for (const d of departments)
+        if (!d.archived_at && !d.is_default && match(d.name))
+          out.push({ kind: "department", id: d.id, branchId, label: d.name, count: d.member_ids.length, memberIds: d.member_ids });
       for (const p of people)
         if (p.is_active && match(`${p.first_name} ${p.last_name} ${p.email}`))
           out.push({ kind: "user", id: p.id, branchId, label: `${p.first_name} ${p.last_name}` });
     }
-    // Other branches: groups first (like "IT"), then people.
-    for (const g of crossGroups ?? [])
-      if (g.branch_id !== branchId && match(`${g.name} ${g.branch_name}`))
-        out.push({ kind: "group", id: g.id, branchId: g.branch_id, label: g.name, count: g.member_count, note: g.branch_name });
+    // Other branches: departments first (like "IT"), then people.
+    for (const d of crossDepartments ?? [])
+      if (d.branch_id !== branchId && match(`${d.name} ${d.branch_name}`))
+        out.push({ kind: "department", id: d.id, branchId: d.branch_id, label: d.name, count: d.member_count, note: d.branch_name });
     for (const p of crossPeople ?? [])
       if (p.branch_id !== branchId && match(`${p.first_name} ${p.last_name} ${p.branch_name}`))
         out.push({ kind: "user", id: p.user_id, branchId: p.branch_id, label: `${p.first_name} ${p.last_name}`, note: p.branch_name });
     return out.filter((o) => !chosen.has(recipientKey(o)) && !covered(o));
-  }, [q, people, groups, branches, crossPeople, crossGroups, branchId, chosen, covered]);
+  }, [q, people, departments, branches, crossPeople, crossDepartments, branchId, chosen, covered]);
 
   // One section per branch: the branch itself (when it can be picked
-  // whole), then its groups, then its people. This branch comes first.
+  // whole), then its departments, then its people. This branch comes first.
   const sections = useMemo(() => {
     const names = new Map<string, string>();
     if (branchId && branchName) names.set(branchId, branchName);
     for (const b of branches ?? []) names.set(b.id, b.name);
-    for (const g of crossGroups ?? []) names.set(g.branch_id, g.branch_name);
+    for (const d of crossDepartments ?? []) names.set(d.branch_id, d.branch_name);
     for (const p of crossPeople ?? []) names.set(p.branch_id, p.branch_name);
     const byBranch = new Map<string, { id: string; name: string; head?: Recipient; items: Recipient[] }>();
     for (const o of options) {
@@ -144,12 +148,12 @@ export function RecipientPicker({
       else s.items.push(o);
       byBranch.set(o.branchId, s);
     }
-    const rank = (r: Recipient) => (r.kind === "group" ? 0 : 1);
+    const rank = (r: Recipient) => (r.kind === "department" ? 0 : 1);
     return [...byBranch.values()]
       .map((s) => ({ ...s, items: s.items.sort((a, b) => rank(a) - rank(b)).slice(0, 25) }))
       .sort((a, b) => Number(b.id === branchId) - Number(a.id === branchId) || a.name.localeCompare(b.name, localeTag));
-  }, [options, branches, crossGroups, crossPeople, branchId, branchName]);
-  // Just this branch's people and groups: no headings needed.
+  }, [options, branches, crossDepartments, crossPeople, branchId, branchName]);
+  // Just this branch's people and departments: no headings needed.
   const plain = sections.length === 1 && sections[0].id === branchId && !sections[0].head;
   const isOpen = (id: string) => plain || !!q.trim() || (id === branchId) !== toggled.has(id);
   const toggle = (id: string) =>
@@ -264,13 +268,13 @@ function OptionRow({ o, onPick }: { o: Recipient; onPick: (o: Recipient) => void
     <button type="button" className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-start hover:bg-sunken" onClick={() => onPick(o)}>
       {o.kind === "user" ? (
         <Avatar first={o.label.split(" ")[0]} last={o.label.split(" ")[1]} id={o.id} size={28} />
-      ) : o.kind === "group" ? (
+      ) : o.kind === "department" ? (
         <Users className="size-5 text-text-2" />
       ) : (
         <Building2 className="size-5 text-text-2" />
       )}
       <span className={cx("flex-1", o.kind === "branch" && "font-semibold")}>{o.label}</span>
-      <span className="text-[13px] text-text-3">{o.kind === "group" ? t("{n} people", { n: o.count }) : o.kind === "branch" ? t("Whole branch") : t("Person")}</span>
+      <span className="text-[13px] text-text-3">{o.kind === "department" ? t("{n} people", { n: o.count }) : o.kind === "branch" ? t("Whole branch") : t("Person")}</span>
     </button>
   );
 }
@@ -326,7 +330,7 @@ export function PersonSelect({
   );
 }
 
-/** Pick several people from a list (adding people to a group). */
+/** Pick several people from a list (adding people to a department). */
 export function PeopleChecklist({
   people,
   value,

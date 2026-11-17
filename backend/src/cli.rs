@@ -11,12 +11,8 @@ pub async fn connect(database_url: &str) -> Result<PgPool, String> {
     let options: PgConnectOptions = database_url.parse().map_err(|e| format!("DATABASE_URL is not valid: {e}"))?;
     let host = options.get_host().to_owned();
     let port = options.get_port();
-    PgPoolOptions::new()
-        .max_connections(2)
-        .acquire_timeout(Duration::from_secs(5))
-        .connect_with(options)
-        .await
-        .map_err(|e| {
+    PgPoolOptions::new().max_connections(2).acquire_timeout(Duration::from_secs(5)).connect_with(options).await.map_err(
+        |e| {
             let mut msg = format!("Can't reach the database at {host}:{port} ({e}).");
             if matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
                 msg.push_str(
@@ -28,7 +24,8 @@ pub async fn connect(database_url: &str) -> Result<PgPool, String> {
                 msg.push_str("\nIs the database running and reachable from here?");
             }
             msg
-        })
+        },
+    )
 }
 
 /// The `sid` value from a curl (Netscape) cookie file, as written by

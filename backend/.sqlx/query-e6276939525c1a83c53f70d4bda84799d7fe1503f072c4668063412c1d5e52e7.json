@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM permission_group_grant\n           WHERE permission_key = 'issue.read'\n             AND group_id = (SELECT id FROM permission_group WHERE branch_id = $1 AND name = 'All members')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6276939525c1a83c53f70d4bda84799d7fe1503f072c4668063412c1d5e52e7"
+}

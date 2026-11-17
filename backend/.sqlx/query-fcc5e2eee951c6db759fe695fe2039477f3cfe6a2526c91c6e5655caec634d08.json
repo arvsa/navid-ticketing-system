@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT gg.permission_key AS \"permission!\", t.code AS \"issue_type?\", gg.department AS \"department_name?\",\n               g.id AS \"group_id!\", g.name AS \"group_name!\", d.id AS \"via_id?\", d.name AS \"via_name?\"\n        FROM department_member dm\n        JOIN department d                    ON d.id = dm.department_id AND d.archived_at IS NULL\n        JOIN department_permission_group dpg ON dpg.department_id = d.id\n        JOIN permission_group g              ON g.id = dpg.group_id\n        JOIN permission_group_grant gg       ON gg.group_id = g.id\n        LEFT JOIN issue_type t               ON t.id = gg.issue_type_id\n        WHERE dm.user_id = $1 AND dm.branch_id = $2\n        UNION ALL\n        SELECT gg.permission_key, t.code, gg.department, g.id, g.name, NULL, NULL\n        FROM permission_group g\n        JOIN permission_group_grant gg ON gg.group_id = g.id\n        LEFT JOIN issue_type t         ON t.id = gg.issue_type_id\n        WHERE g.is_default\n        ORDER BY 1, 2 NULLS FIRST, 3 NULLS FIRST, 5, 7\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "department_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "group_name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "via_id?",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "via_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fcc5e2eee951c6db759fe695fe2039477f3cfe6a2526c91c6e5655caec634d08"
+}

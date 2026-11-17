@@ -32,7 +32,7 @@ import { useLogout, useSession } from "@/auth/session";
 import { Avatar, TypeBadge } from "@/components/badges";
 import { BrandMark } from "@/components/brand";
 import { Drawer, IconButton, Menu, MenuItem, MenuLabel, MenuSeparator, cx } from "@/components/ui";
-import { hasGrant, hasGrantAnywhere, isAdminOf, isSuper } from "@/lib/can";
+import { choosesMembersSomewhere, hasGrant, hasGrantAnywhere, isAdminOf, isSuper } from "@/lib/can";
 import { APP_NAME } from "@/lib/labels";
 import { useSchoolName } from "@/lib/useSchoolName";
 import { describeNotification } from "@/lib/notifications";
@@ -80,11 +80,11 @@ function useNav() {
   main.push({ to: "/directory", label: t("Directory"), icon: <BookUser className="size-[18px]" /> });
 
   const manage: NavEntry[] = [];
-  // Department heads choose their department's members there too.
+  // Whoever runs departments or chooses their members works there too.
   const canPeople = branchId
-    ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") || !!me.memberships.find((m) => m.branch.id === branchId)?.heads.length
-    : me.memberships.some((m) => m.is_admin || m.heads.length) || superAdmin;
-  if (canPeople) manage.push({ to: "/people", label: t("People & groups"), icon: <Users className="size-4" /> });
+    ? isAdminOf(v, branchId) || hasGrant(v, branchId, "member.manage") || choosesMembersSomewhere(v, branchId)
+    : superAdmin || me.memberships.some((m) => m.is_admin || choosesMembersSomewhere(v, m.branch.id) || m.grants.some((g) => g.permission === "member.manage"));
+  if (canPeople) manage.push({ to: "/people", label: t("People & departments"), icon: <Users className="size-4" /> });
   if (superAdmin) manage.push({ to: "/branches", label: t("Branches & admins"), icon: <Shield className="size-4" /> });
   if (superAdmin) manage.push({ to: "/templates", label: t("Templates"), icon: <LayoutTemplate className="size-4" /> });
   const canExport = superAdmin || (branchId ? hasGrant(v, branchId, "export.run") : hasGrantAnywhere(v, "export.run"));

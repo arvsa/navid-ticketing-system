@@ -38,8 +38,8 @@ pub struct MemberQuery {
     /// Include departed members (admins only, for reactivation).
     #[serde(default)]
     pub include_left: bool,
-    /// Only members of this group.
-    pub group_id: Option<Uuid>,
+    /// Only members of this department.
+    pub department_id: Option<Uuid>,
 }
 
 pub async fn list(
@@ -70,14 +70,15 @@ pub async fn list(
         WHERE m.branch_id = $1
           AND ($2 OR m.left_at IS NULL)
           AND ($3::uuid IS NULL OR EXISTS (
-                SELECT 1 FROM group_member gm WHERE gm.group_id = $3 AND gm.user_id = u.id AND gm.branch_id = $1))
+                SELECT 1 FROM department_member dm
+                WHERE dm.department_id = $3 AND dm.user_id = u.id AND dm.branch_id = $1))
           AND ($4::text IS NULL OR (lower(u.last_name), lower(u.first_name), u.id) > ($4, $5, $6))
         ORDER BY lower(u.last_name), lower(u.first_name), u.id
         LIMIT $7
         "#,
         branch_id,
         query.include_left,
-        query.group_id,
+        query.department_id,
         after_last,
         after_first,
         after_id,
@@ -134,7 +135,10 @@ pub async fn add(db: &PgPool, actor: &Actor, branch_id: Uuid, input: NewMember) 
 
 /// The account with this email, if there is one.
 pub(super) async fn find_user(db: &PgPool, email: &str) -> AppResult<Option<relations::UserFacts>> {
-    match sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email).fetch_optional(db).await? {
+    match sqlx::query_scalar!("SELECT id FROM app_user WHERE email = ($1::text)::citext", email)
+        .fetch_optional(db)
+        .await?
+    {
         Some(id) => relations::load_user(db, id).await,
         None => Ok(None),
     }
@@ -147,7 +151,10 @@ pub(super) enum Join {
     Reactivate(Uuid),
     /// An account from another branch.
     Add(Uuid),
-    Create { first_name: String, last_name: String },
+    Create {
+        first_name: String,
+        last_name: String,
+    },
 }
 
 /// Checks the actor may add `existing` (or a new account) to the branch.
@@ -332,7 +339,7 @@ pub async fn update_profile(
 }
 
 /// DELETE /branches/{id}/members/{user_id}: sets `left_at`. The schema
-/// trigger removes them from the branch's groups; their open work items in
+/// trigger removes them from the branch's departments; their open work items in
 /// the branch become unassigned.
 pub async fn remove(db: &PgPool, actor: &Actor, branch_id: Uuid, user_id: Uuid) -> AppResult<()> {
     let target = current_member(db, branch_id, user_id).await?;
@@ -529,7 +536,7 @@ pub struct Recipient {
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct RecipientGroup {
+pub struct RecipientDepartment {
     pub id: Uuid,
     pub name: String,
     pub branch_id: Uuid,
@@ -537,28 +544,27 @@ pub struct RecipientGroup {
     pub member_count: i64,
 }
 
-/// Every active group in every active branch, for the same people as
-/// [`recipients`]. Not the "All members" groups: send to the whole branch
-/// instead.
-pub async fn recipient_groups(db: &PgPool, actor: &Actor) -> AppResult<Vec<RecipientGroup>> {
+/// Every active department in every active branch, for the same people as
+/// [`recipients`]. Not "All members": that's the whole branch.
+pub async fn recipient_departments(db: &PgPool, actor: &Actor) -> AppResult<Vec<RecipientDepartment>> {
     authorize(actor, Action::FindPeopleInOtherBranches)?;
     Ok(sqlx::query_as!(
-        RecipientGroup,
+        RecipientDepartment,
         r#"
-        SELECT g.id, g.name, b.id AS branch_id, b.name AS branch_name,
-               (SELECT count(*) FROM group_member gm WHERE gm.group_id = g.id) AS "member_count!"
-        FROM user_group g
-        JOIN branch b ON b.id = g.branch_id
-        WHERE g.archived_at IS NULL AND NOT g.is_default AND b.is_active
-        ORDER BY b.name, g.name
+        SELECT d.id, d.name, b.id AS branch_id, b.name AS branch_name,
+               (SELECT count(*) FROM department_member dm WHERE dm.department_id = d.id) AS "member_count!"
+        FROM department d
+        JOIN branch b ON b.id = d.branch_id
+        WHERE d.archived_at IS NULL AND NOT d.is_default AND b.is_active
+        ORDER BY b.name, d.name
         "#
     )
     .fetch_all(db)
     .await?)
 }
 
-/// Everyone in every active branch, for super admins and holders of
-/// `issue.target_other_branches`. Someone in two branches appears twice.
+/// Everyone in every active branch, for anyone sending an item. Someone in
+/// two branches appears twice.
 pub async fn recipients(db: &PgPool, actor: &Actor) -> AppResult<Vec<Recipient>> {
     authorize(actor, Action::FindPeopleInOtherBranches)?;
     Ok(sqlx::query_as!(

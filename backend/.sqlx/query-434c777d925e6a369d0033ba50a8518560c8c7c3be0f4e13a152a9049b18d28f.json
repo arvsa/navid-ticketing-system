@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT key, per_issue_type, per_department, allowed_scopes::text[] AS \"allowed_scopes!\" FROM permission",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "permission",
+            "name": "key"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "per_issue_type",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "permission",
+            "name": "per_issue_type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "per_department",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "permission",
+            "name": "per_department"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "allowed_scopes!",
+        "type_info": "TextArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "434c777d925e6a369d0033ba50a8518560c8c7c3be0f4e13a152a9049b18d28f"
+}

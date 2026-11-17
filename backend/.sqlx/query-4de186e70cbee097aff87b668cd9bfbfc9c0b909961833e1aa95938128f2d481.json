@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM issue_target WHERE department_id = $1) AS \"referenced!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "referenced!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4de186e70cbee097aff87b668cd9bfbfc9c0b909961833e1aa95938128f2d481"
+}

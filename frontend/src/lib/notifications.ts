@@ -24,8 +24,11 @@ export type NotificationText = {
 
 export function describeNotification(n: Notification, nameOf: (id?: string | null) => string): NotificationText {
   let actor = n.actor_id ? nameOf(n.actor_id) : undefined;
-  // Groups are run by your branch's admins (whom you know) or super admins.
-  if (actor === UNKNOWN_PERSON && (n.kind === "added_to_group" || n.kind === "permissions_changed")) actor = SCHOOL_OFFICE;
+  // Someone the directory doesn't list (another branch, a root user, someone
+  // who left): the notification carries their name.
+  if (actor === UNKNOWN_PERSON && n.actor_name) actor = n.actor_name;
+  // Departments and permissions are run by your branch's admins (whom you know) or super admins.
+  if (actor === UNKNOWN_PERSON && (n.kind === "added_to_department" || n.kind === "permissions_changed")) actor = SCHOOL_OFFICE;
   const item = n.issue_title ? quote(n.issue_title) : n.issue_key ?? t("an item");
   const p = (n.payload ?? {}) as Record<string, unknown>;
   const dueWhen = typeof p.sla_due_at === "string" ? formatWhen(p.sla_due_at) : null;
@@ -34,6 +37,7 @@ export function describeNotification(n: Notification, nameOf: (id?: string | nul
   const starts = startWhen ? ` · ${startWhen}` : "";
   const status = typeof p.status === "string" ? workStatusLabel[p.status as keyof typeof workStatusLabel] : undefined;
   const group = typeof p.group_name === "string" ? quote(p.group_name) : undefined;
+  const department = typeof p.department_name === "string" ? quote(p.department_name) : undefined;
 
   let sentence: string;
   let suffix = "";
@@ -93,23 +97,29 @@ export function describeNotification(n: Notification, nameOf: (id?: string | nul
       sentence = t("{item} is now overdue");
       tone = "danger";
       break;
-    case "added_to_group":
-      sentence = group
+    case "added_to_department":
+      sentence = department
         ? actor
-          ? t("{actor} added you to {group}", { group })
-          : t("You were added to {group}", { group })
+          ? t("{actor} added you to {department}", { department })
+          : t("You were added to {department}", { department })
         : actor
-          ? t("{actor} added you to a group")
-          : t("Added you to a group");
+          ? t("{actor} added you to a department")
+          : t("Added you to a department");
       break;
     case "permissions_changed":
-      // Sent to branch admins: a member joined or left a group, or a group's
-      // permissions changed (one notice per save).
-      if (typeof p.user_id === "string" && group) {
+      // Sent to branch admins (one notice per save): someone joined or left a
+      // department with permissions, a permission group was attached to or
+      // detached from a department, its grants changed, or a file was loaded.
+      if (typeof p.user_id === "string" && department) {
         sentence = p.removed
-          ? t("{actor} removed {person} from {group}", { person: nameOf(p.user_id), group })
-          : t("{actor} added {person} to {group}", { person: nameOf(p.user_id), group });
-      } else sentence = group ? t("{actor} changed what {group} can do", { group }) : t("{actor} changed a group's permissions");
+          ? t("{actor} removed {person} from {department}", { person: nameOf(p.user_id), department })
+          : t("{actor} added {person} to {department}", { person: nameOf(p.user_id), department });
+      } else if (group && department) {
+        sentence = p.removed
+          ? t("{actor} took {group} away from {department}", { group, department })
+          : t("{actor} gave {department} the permissions of {group}", { group, department });
+      } else if (p.config_import) sentence = t("{actor} loaded a permissions file");
+      else sentence = group ? t("{actor} changed what {group} allows", { group }) : t("{actor} changed permissions");
       break;
     default:
       sentence = t("Update on {item}");

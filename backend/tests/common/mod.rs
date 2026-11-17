@@ -244,13 +244,14 @@ pub async fn add_member(db: &PgPool, branch_id: Uuid, user_id: Uuid) {
         .unwrap();
 }
 
-/// Takes `issue.read` away from the branch's "All members" group: its plain
-/// members then see only the issues they created or are targeted by.
+/// Takes `issue.read` away from the branch's "All members" permission
+/// group: its plain members then see only the issues they created or are
+/// targeted by.
 pub async fn hide_branch_issues(db: &PgPool, branch_id: Uuid) {
     sqlx::query!(
-        r#"DELETE FROM group_permission
+        r#"DELETE FROM permission_group_grant
            WHERE permission_key = 'issue.read'
-             AND group_id = (SELECT id FROM user_group WHERE branch_id = $1 AND is_default)"#,
+             AND group_id = (SELECT id FROM permission_group WHERE branch_id = $1 AND name = 'All members')"#,
         branch_id
     )
     .execute(db)
@@ -258,27 +259,49 @@ pub async fn hide_branch_issues(db: &PgPool, branch_id: Uuid) {
     .unwrap();
 }
 
-/// Creates a group in the branch with the given grants and members.
-pub async fn create_group(
+/// Creates a department in the branch with the given members. With grants,
+/// a permission group of the same name holding them is attached to it
+/// (per-department grants cover every department: `*`). Grants are
+/// branch-wide; the scope is checked, not stored.
+pub async fn create_department(
     db: &PgPool,
     branch_id: Uuid,
     name: &str,
     grants: &[(&str, Option<&str>, &str)],
     members: &[Uuid],
 ) -> Uuid {
-    let group_id =
-        sqlx::query_scalar!("INSERT INTO user_group (branch_id, name) VALUES ($1, $2) RETURNING id", branch_id, name)
+    let department_id =
+        sqlx::query_scalar!("INSERT INTO department (branch_id, name) VALUES ($1, $2) RETURNING id", branch_id, name)
             .fetch_one(db)
             .await
             .unwrap();
-    for (key, issue_type, scope) in grants {
+    if !grants.is_empty() {
+        let group_id = sqlx::query_scalar!(
+            "INSERT INTO permission_group (branch_id, name) VALUES ($1, $2) RETURNING id",
+            branch_id,
+            name
+        )
+        .fetch_one(db)
+        .await
+        .unwrap();
+        for (key, issue_type, scope) in grants {
+            assert_eq!(*scope, "branch", "grants are branch-wide; the baseline covers own and targeted");
+            sqlx::query!(
+                r#"INSERT INTO permission_group_grant (group_id, permission_key, issue_type_id, scope, department)
+                   VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), 'branch',
+                           CASE WHEN $2 = 'department.members.manage' THEN '*' END)"#,
+                group_id,
+                key,
+                *issue_type,
+            )
+            .execute(db)
+            .await
+            .unwrap();
+        }
         sqlx::query!(
-            r#"INSERT INTO group_permission (group_id, permission_key, issue_type_id, scope)
-               VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), $4::text::permission_scope)"#,
-            group_id,
-            key,
-            *issue_type,
-            scope
+            "INSERT INTO department_permission_group (department_id, group_id) VALUES ($1, $2)",
+            department_id,
+            group_id
         )
         .execute(db)
         .await
@@ -286,8 +309,8 @@ pub async fn create_group(
     }
     for user in members {
         sqlx::query!(
-            "INSERT INTO group_member (group_id, user_id, branch_id) VALUES ($1, $2, $3)",
-            group_id,
+            "INSERT INTO department_member (department_id, user_id, branch_id) VALUES ($1, $2, $3)",
+            department_id,
             user,
             branch_id
         )
@@ -295,16 +318,22 @@ pub async fn create_group(
         .await
         .unwrap();
     }
-    group_id
+    department_id
 }
 
-/// Every grantable permission at branch scope: an "admin-like" group.
+/// The permission group attached to a department made by [`create_department`].
+pub async fn permission_group_of(db: &PgPool, department_id: Uuid) -> Uuid {
+    sqlx::query_scalar!("SELECT group_id FROM department_permission_group WHERE department_id = $1", department_id)
+        .fetch_one(db)
+        .await
+        .unwrap()
+}
+
+/// Every grantable permission at branch scope: an "admin-like" department.
 pub const EVERYTHING: &[(&str, Option<&str>, &str)] = &[
     ("issue.read", None, "branch"),
-    ("issue.create", None, "branch"),
     ("issue.edit", None, "branch"),
     ("issue.close", None, "branch"),
-    ("issue.target", None, "branch"),
     ("work_item.update", None, "branch"),
     ("work_item.assign", None, "branch"),
     ("work_item.approve", None, "branch"),
@@ -315,6 +344,8 @@ pub const EVERYTHING: &[(&str, Option<&str>, &str)] = &[
     ("member.manage", None, "branch"),
     ("dashboard.branch", None, "branch"),
     ("export.run", None, "branch"),
+    ("department.manage", None, "branch"),
+    ("department.members.manage", None, "branch"),
 ];
 
 pub const PW: &str = "correct-horse-1";
@@ -322,8 +353,8 @@ pub const PW: &str = "correct-horse-1";
 /// A small organisation used by the phase 2 tests.
 ///
 /// - `root`: super admin
-/// - branch A: `admin_a` (admin), `manager_a` (group with member.manage),
-///   `boss_like_a` (group with every grantable permission), `plain_a`
+/// - branch A: `admin_a` (admin), `manager_a` (department with member.manage),
+///   `boss_like_a` (department with every grantable permission), `plain_a`
 /// - branch B: `admin_b`
 /// - `multi`: a plain member of both A and B
 pub struct Org {
@@ -336,8 +367,8 @@ pub struct Org {
     pub boss_like_a: Uuid,
     pub plain_a: Uuid,
     pub multi: Uuid,
-    pub managers_group: Uuid,
-    pub boss_like_group: Uuid,
+    pub managers_department: Uuid,
+    pub boss_like_department: Uuid,
 }
 
 impl Org {
@@ -358,9 +389,9 @@ impl Org {
         }
         add_member(db, branch_b, multi).await;
 
-        let managers_group =
-            create_group(db, branch_a, "Managers", &[("member.manage", None, "branch")], &[manager_a]).await;
-        let boss_like_group = create_group(db, branch_a, "Deputies", EVERYTHING, &[boss_like_a]).await;
+        let managers_department =
+            create_department(db, branch_a, "Managers", &[("member.manage", None, "branch")], &[manager_a]).await;
+        let boss_like_department = create_department(db, branch_a, "Deputies", EVERYTHING, &[boss_like_a]).await;
         Self {
             root,
             branch_a,
@@ -371,8 +402,8 @@ impl Org {
             boss_like_a,
             plain_a,
             multi,
-            managers_group,
-            boss_like_group,
+            managers_department,
+            boss_like_department,
         }
     }
 }
@@ -470,11 +501,7 @@ pub async fn send_multipart(
     );
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    app.req(method, uri)
-        .cookie(cookie)
-        .raw(&format!("multipart/form-data; boundary={boundary}"), body)
-        .send()
-        .await
+    app.req(method, uri).cookie(cookie).raw(&format!("multipart/form-data; boundary={boundary}"), body).send().await
 }
 
 /// The built-in Report template: an action that needs a written report.

@@ -12,9 +12,12 @@ use super::json::{ApiJson, ApiPath, ApiQuery};
 use crate::{
     authz::Actor,
     domain::{
-        groups::{self, EffectivePermissions},
         member_import::{self, ImportReport},
-        members::{self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient, RecipientGroup},
+        members::{
+            self, AddedMember, Member, MemberQuery, NewMember, PasswordReset, ProfilePatch, Recipient,
+            RecipientDepartment,
+        },
+        permission_groups::{self, EffectivePermissions},
     },
     error::{AppError, AppResult},
     pagination::{Page, PageParams},
@@ -29,7 +32,7 @@ pub fn routes() -> Router<AppState> {
         .route("/users/{id}/reset-password", post(reset_password))
         .route("/users/{id}/active", patch(set_active))
         .route("/recipients", get(recipients))
-        .route("/recipient-groups", get(recipient_groups))
+        .route("/recipient-departments", get(recipient_departments))
         .route("/members/import-template", get(import_template))
 }
 
@@ -92,10 +95,10 @@ async fn recipients(State(s): State<AppState>, actor: Actor) -> AppResult<Json<V
     Ok(Json(members::recipients(&s.db, &actor).await?))
 }
 
-/// Groups in every branch, to send a school-wide item to.
-#[utoipa::path(get, path = "/api/recipient-groups", operation_id = "listRecipientGroups", tag = "members", responses((status = 200, body = Vec<RecipientGroup>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
-async fn recipient_groups(State(s): State<AppState>, actor: Actor) -> AppResult<Json<Vec<RecipientGroup>>> {
-    Ok(Json(members::recipient_groups(&s.db, &actor).await?))
+/// Departments in every branch, to send an item to.
+#[utoipa::path(get, path = "/api/recipient-departments", operation_id = "listRecipientDepartments", tag = "members", responses((status = 200, body = Vec<RecipientDepartment>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn recipient_departments(State(s): State<AppState>, actor: Actor) -> AppResult<Json<Vec<RecipientDepartment>>> {
+    Ok(Json(members::recipient_departments(&s.db, &actor).await?))
 }
 
 /// Flat on purpose: `serde(flatten)` breaks typed query-string fields.
@@ -106,7 +109,7 @@ struct ListQuery {
     limit: Option<i64>,
     #[serde(default)]
     include_left: bool,
-    group_id: Option<Uuid>,
+    department_id: Option<Uuid>,
 }
 
 #[utoipa::path(get, path = "/api/branches/{id}/members", operation_id = "listMembers", tag = "members", params(("id" = uuid::Uuid, Path, description = "id"), ListQuery), responses((status = 200, body = Page<Member>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
@@ -121,7 +124,7 @@ async fn list(
             &s.db,
             &actor,
             id,
-            &MemberQuery { include_left: q.include_left, group_id: q.group_id },
+            &MemberQuery { include_left: q.include_left, department_id: q.department_id },
             &PageParams { after: q.after, limit: q.limit },
         )
         .await?,
@@ -164,7 +167,7 @@ async fn effective_permissions(
     actor: Actor,
     ApiPath((id, user_id)): ApiPath<(Uuid, Uuid)>,
 ) -> AppResult<Json<EffectivePermissions>> {
-    Ok(Json(groups::effective_permissions(&s.db, &actor, id, user_id).await?))
+    Ok(Json(permission_groups::effective_permissions(&s.db, &actor, id, user_id).await?))
 }
 
 #[utoipa::path(post, path = "/api/users/{id}/reset-password", operation_id = "resetUserPassword", tag = "users", params(("id" = uuid::Uuid, Path, description = "id")), responses((status = 200, body = PasswordReset), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]

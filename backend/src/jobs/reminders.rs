@@ -23,7 +23,7 @@ pub async fn run(pool: &PgPool, now: OffsetDateTime) -> AppResult<Option<u64>> {
                    || ':' || extract(epoch FROM e.starts_at)::bigint
         FROM event_reminder er
         JOIN issue_event e ON e.issue_id = er.issue_id
-        JOIN issue i ON i.id = e.issue_id AND i.state = 'open'
+        JOIN issue i ON i.id = e.issue_id AND i.state = 'open' AND i.deleted_at IS NULL
         JOIN event_rsvp r ON r.issue_id = i.id AND r.response <> 'declined'
         JOIN app_user u ON u.id = r.user_id AND u.is_active
         WHERE e.starts_at - make_interval(mins => er.minutes_before) <= $1

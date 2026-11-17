@@ -115,16 +115,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/branches/{id}/groups": {
+    "/api/branches/{id}/departments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["get__api_branches_id_groups"];
+        /** The branch's departments, with their members, heads and permission groups. */
+        get: operations["get__api_branches_id_departments"];
         put?: never;
-        post: operations["post__api_branches_id_groups"];
+        post: operations["post__api_branches_id_departments"];
         delete?: never;
         options?: never;
         head?: never;
@@ -201,6 +202,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/branches/{id}/permission-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The branch's own permission groups and the school-wide ones it may attach
+         *     (branch admins).
+         */
+        get: operations["get__api_branches_id_permission_groups"];
+        put?: never;
+        post: operations["post__api_branches_id_permission_groups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/calendar": {
         parameters: {
             query?: never;
@@ -244,6 +265,74 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/departments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes the department, or archives it if issues were sent to it. */
+        delete: operations["delete__api_departments_id_"];
+        options?: never;
+        head?: never;
+        patch: operations["patch__api_departments_id_"];
+        trace?: never;
+    };
+    "/api/departments/{id}/heads/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Make a department member one of its heads. */
+        put: operations["put__api_departments_id_heads_user_id_"];
+        post?: never;
+        /** Stop someone being a head of a department (they stay a member). */
+        delete: operations["delete__api_departments_id_heads_user_id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/departments/{id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["put__api_departments_id_members_user_id_"];
+        post?: never;
+        delete: operations["delete__api_departments_id_members_user_id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/departments/{id}/permission-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Attach a permission group to a department: its members get its grants. */
+        put: operations["put__api_departments_id_permission_groups_group_id_"];
+        post?: never;
+        delete: operations["delete__api_departments_id_permission_groups_group_id_"];
         options?: never;
         head?: never;
         patch?: never;
@@ -329,92 +418,6 @@ export interface paths {
         get: operations["get__api_exports_people"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/group-permissions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["delete__api_group_permissions_id_"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/groups/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["delete__api_groups_id_"];
-        options?: never;
-        head?: never;
-        patch: operations["patch__api_groups_id_"];
-        trace?: never;
-    };
-    "/api/groups/{id}/heads/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Make a department member one of its heads (branch admins). */
-        put: operations["put__api_groups_id_heads_user_id_"];
-        post?: never;
-        /** Stop someone being a head of a department (they stay a member). */
-        delete: operations["delete__api_groups_id_heads_user_id_"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/groups/{id}/members/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["put__api_groups_id_members_user_id_"];
-        post?: never;
-        delete: operations["delete__api_groups_id_members_user_id_"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/groups/{id}/permissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get__api_groups_id_permissions"];
-        /**
-         * Save several grant changes at once (one notification, all or nothing).
-         *     Returns the group's grants afterwards.
-         */
-        put: operations["put__api_groups_id_permissions"];
-        post: operations["post__api_groups_id_permissions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -565,6 +568,27 @@ export interface paths {
         get: operations["get__api_issues_id_comments"];
         put?: never;
         post: operations["post__api_issues_id_comments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Soft-delete an issue: hidden from everyone, its history kept. Its sender
+         *     may while it's open and current (an event that hasn't ended, work not past
+         *     its deadline); branch admins at any time.
+         */
+        post: operations["post__api_issues_id_delete"];
         delete?: never;
         options?: never;
         head?: never;
@@ -856,6 +880,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/permission-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The permission setup as one document: permission groups with their
+         *     grants, and each branch's departments with their permission groups and
+         *     heads. Root users get everything; branch admins the school-wide groups
+         *     and their own branches.
+         */
+        get: operations["get__api_permission_config"];
+        put?: never;
+        /**
+         * Import an edited document (the request body, as YAML or JSON). Creates
+         *     and updates only; anything missing from the document is left as it is.
+         *     With `dry_run`, nothing is saved and the changes are listed.
+         */
+        post: operations["post__api_permission_config"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/permission-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete__api_permission_groups_id_"];
+        options?: never;
+        head?: never;
+        /** Rename, describe, or replace every grant of a permission group. */
+        patch: operations["patch__api_permission_groups_id_"];
+        trace?: never;
+    };
     "/api/permissions": {
         parameters: {
             query?: never;
@@ -876,15 +944,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/recipient-groups": {
+    "/api/recipient-departments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Groups in every branch, to send a school-wide item to. */
-        get: operations["get__api_recipient_groups"];
+        /** Departments in every branch, to send an item to. */
+        get: operations["get__api_recipient_departments"];
         put?: never;
         post?: never;
         delete?: never;
@@ -949,7 +1017,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every root user (root users only). */
         get: operations["get__api_root_users"];
         put?: never;
         post?: never;
@@ -959,34 +1026,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/school-groups": {
+    "/api/root-users/names": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** School-wide groups: their grants apply in every branch a member belongs to. */
-        get: operations["get__api_school_groups"];
+        /**
+         * Every root user (root users only).
+         *     Active root users' names, for everyone signed in (to name them and @mention them).
+         */
+        get: operations["get__api_root_users_names"];
         put?: never;
-        post: operations["post__api_school_groups"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/school-groups/{id}/copies": {
+    "/api/school-permission-groups": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** A school-wide group's copies, one per branch, with their member counts. */
-        get: operations["get__api_school_groups_id_copies"];
+        /** School-wide permission groups, "Everyone" first (root users). */
+        get: operations["get__api_school_permission_groups"];
         put?: never;
-        post?: never;
+        post: operations["post__api_school_permission_groups"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1360,6 +1430,12 @@ export interface components {
         };
         /** @enum {string} */
         CompletionMode: "shared" | "per_member";
+        ConfigImportOutcome: {
+            /** @description Whether the changes were saved (`false` on a dry run). */
+            applied: boolean;
+            /** @description What changes (or would change), one line each. Empty: already as the file says. */
+            changes: string[];
+        };
         Dashboard: {
             branches: components["schemas"]["BranchNumbers"][];
             /** Format: date-time */
@@ -1369,23 +1445,53 @@ export interface components {
         DeleteOutcome: {
             archived: boolean;
             /**
-             * @description `true`: the group was hard-deleted. `false`: it is referenced by issue
-             *     targets, so it was archived instead.
+             * @description `true`: the department was hard-deleted. `false`: issues were sent to
+             *     it, so it was archived instead.
              */
             deleted: boolean;
         };
+        Department: {
+            /** Format: date-time */
+            archived_at?: string | null;
+            /** Format: uuid */
+            branch_id: string;
+            /** Format: date-time */
+            created_at: string;
+            description?: string | null;
+            /** @description Who runs the department (some of `member_ids`). */
+            head_ids: string[];
+            /** Format: uuid */
+            id: string;
+            /** @description The branch's "All members": everyone in it, automatically. */
+            is_default: boolean;
+            member_ids: string[];
+            name: string;
+            /** @description The permission groups whose grants its members get. */
+            permission_groups: components["schemas"]["PermissionGroupRef"][];
+        };
+        DepartmentPatch: {
+            /** @description `true` archives, `false` restores. */
+            archived?: boolean | null;
+            description?: string | null;
+            name?: string | null;
+        };
+        DepartmentSource: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         DirectoryBranch: {
             code: string;
+            departments: components["schemas"]["DirectoryDepartment"][];
             /** @description The branch's contact address. */
             email?: string | null;
-            groups: components["schemas"]["DirectoryGroup"][];
             /** Format: uuid */
             id: string;
             name: string;
             people: components["schemas"]["DirectoryPerson"][];
             timezone: string;
         };
-        DirectoryGroup: {
+        DirectoryDepartment: {
             description?: string | null;
             /** @description Who runs the department (some of `member_ids`). */
             head_ids: string[];
@@ -1408,7 +1514,10 @@ export interface components {
             /** Format: uuid */
             branch_id: string;
             grants: components["schemas"]["SourcedGrant"][];
-            /** @description Admins can do everything except super admin actions, whatever their groups grant. */
+            /**
+             * @description Admins can do everything except root user actions, whatever their
+             *     permission groups grant.
+             */
             is_admin: boolean;
             /** Format: uuid */
             user_id: string;
@@ -1453,77 +1562,28 @@ export interface components {
             reminders: number[];
             rsvp_counts: components["schemas"]["RsvpCounts"];
         };
+        /** @enum {string} */
+        Format: "yaml" | "json";
         Grant: {
             issue_type?: components["schemas"]["IssueType"] | null;
             permission: components["schemas"]["Permission"];
             scope: components["schemas"]["Scope"];
         };
         /**
-         * @description Several grant changes saved together: all or nothing, one audit row per
-         *     grant, and a single notification and event (instead of one per change).
+         * @description One grant: a permission, optionally for one issue type, or for
+         *     per-department permissions the department it covers.
          */
-        GrantChanges: {
-            grant?: components["schemas"]["NewGrant"][];
-            /** @description Grant ids of this group to remove. */
-            revoke?: string[];
-        };
-        Group: {
-            /** Format: date-time */
-            archived_at?: string | null;
+        GrantSpec: {
             /**
-             * Format: uuid
-             * @description `null`: a school-wide group (super admins only). It has no members of
-             *     its own: every branch has a copy of it, with the same grants.
+             * @description For `department.members.manage`: a department name, or `*` for every
+             *     department of the branch.
              */
-            branch_id?: string | null;
-            /** Format: date-time */
-            created_at: string;
-            description?: string | null;
-            /** @description A department's heads (members of this group). */
-            head_ids: string[];
-            /** Format: uuid */
-            id: string;
-            is_default: boolean;
-            /**
-             * @description `department` (IT, Health: handles work for others, has heads) or
-             *     `team` (a role or committee: Principals, Teachers).
-             */
-            kind: string;
-            /**
-             * Format: int64
-             * @description For a school-wide group: the members of all its branch copies.
-             */
-            member_count: number;
-            name: string;
-            /**
-             * Format: uuid
-             * @description On a branch group: the school-wide group it's a copy of. Its name,
-             *     grants and archiving follow that group; branch admins choose members.
-             */
-            template_id?: string | null;
-        };
-        GroupGrant: {
-            /** Format: date-time */
-            created_at: string;
-            /** Format: uuid */
-            group_id: string;
-            /** Format: uuid */
-            id: string;
+            department?: string | null;
+            /** @description `ticket`, `event` or `action`; absent = all types. */
             issue_type?: string | null;
             permission: string;
-            scope: components["schemas"]["Scope"];
         };
-        GroupPatch: {
-            /** @description `true` archives, `false` restores. */
-            archived?: boolean | null;
-            description?: string | null;
-            /** @description `team` or `department`. Turning a department into a team removes its heads. */
-            kind?: string | null;
-            name?: string | null;
-        };
-        GroupRef: {
-            /** @description The school-wide "Everyone" group, which every user is in. */
-            everyone: boolean;
+        GroupSource: {
             /** Format: uuid */
             id: string;
             name: string;
@@ -1727,19 +1787,24 @@ export interface components {
         };
         MembershipView: {
             branch: components["schemas"]["BranchRef"];
+            /** @description The user's departments in this branch. */
+            departments: string[];
             /**
-             * @description Effective grants in this branch (union over the user's groups).
-             *     Branch admins can do everything except super admin actions regardless.
+             * @description Effective grants in this branch (union over the permission groups of
+             *     the user's departments, and "Everyone"). Branch admins can do
+             *     everything except super admin actions regardless.
              */
             grants: components["schemas"]["Grant"][];
             /**
-             * @description Departments in this branch the user heads: they run their members and
-             *     the work and questions sent to them.
+             * @description Departments in this branch the user heads: they run the work and
+             *     questions sent to them.
              */
             heads: string[];
             is_admin: boolean;
             /** Format: date-time */
             joined_at: string;
+            /** @description `department.members.manage`: lowercase department names, or `*`. */
+            manages_members_of: string[];
         };
         MyNumbers: {
             /** Format: int64 */
@@ -1778,15 +1843,8 @@ export interface components {
             /** Format: uuid */
             work_item_id?: string | null;
         };
-        NewGrant: {
-            issue_type?: string | null;
-            permission: string;
-            scope: string;
-        };
-        NewGroup: {
+        NewDepartment: {
             description?: string | null;
-            /** @description `team` (default) or `department`. */
-            kind?: string | null;
             name: string;
         };
         NewIssue: {
@@ -1823,6 +1881,11 @@ export interface components {
             first_name?: string | null;
             last_name?: string | null;
         };
+        NewPermissionGroup: {
+            description?: string | null;
+            grants?: components["schemas"]["GrantSpec"][];
+            name: string;
+        };
         NewReport: {
             body: string;
             title: string;
@@ -1855,6 +1918,11 @@ export interface components {
              * @description `null` = the system.
              */
             actor_id?: string | null;
+            /**
+             * @description The actor's full name, so it can be shown even when the reader can't
+             *     see the actor in any branch (a root user, someone who has left).
+             */
+            actor_name?: string | null;
             /** Format: uuid */
             branch_id?: string | null;
             /** Format: date-time */
@@ -1938,55 +2006,25 @@ export interface components {
             }[];
             next_cursor?: string | null;
         };
-        Page_Group: {
+        Page_Department: {
             items: {
                 /** Format: date-time */
                 archived_at?: string | null;
-                /**
-                 * Format: uuid
-                 * @description `null`: a school-wide group (super admins only). It has no members of
-                 *     its own: every branch has a copy of it, with the same grants.
-                 */
-                branch_id?: string | null;
+                /** Format: uuid */
+                branch_id: string;
                 /** Format: date-time */
                 created_at: string;
                 description?: string | null;
-                /** @description A department's heads (members of this group). */
+                /** @description Who runs the department (some of `member_ids`). */
                 head_ids: string[];
                 /** Format: uuid */
                 id: string;
+                /** @description The branch's "All members": everyone in it, automatically. */
                 is_default: boolean;
-                /**
-                 * @description `department` (IT, Health: handles work for others, has heads) or
-                 *     `team` (a role or committee: Principals, Teachers).
-                 */
-                kind: string;
-                /**
-                 * Format: int64
-                 * @description For a school-wide group: the members of all its branch copies.
-                 */
-                member_count: number;
+                member_ids: string[];
                 name: string;
-                /**
-                 * Format: uuid
-                 * @description On a branch group: the school-wide group it's a copy of. Its name,
-                 *     grants and archiving follow that group; branch admins choose members.
-                 */
-                template_id?: string | null;
-            }[];
-            next_cursor?: string | null;
-        };
-        Page_GroupGrant: {
-            items: {
-                /** Format: date-time */
-                created_at: string;
-                /** Format: uuid */
-                group_id: string;
-                /** Format: uuid */
-                id: string;
-                issue_type?: string | null;
-                permission: string;
-                scope: components["schemas"]["Scope"];
+                /** @description The permission groups whose grants its members get. */
+                permission_groups: components["schemas"]["PermissionGroupRef"][];
             }[];
             next_cursor?: string | null;
         };
@@ -2085,6 +2123,11 @@ export interface components {
                  * @description `null` = the system.
                  */
                 actor_id?: string | null;
+                /**
+                 * @description The actor's full name, so it can be shown even when the reader can't
+                 *     see the actor in any branch (a root user, someone who has left).
+                 */
+                actor_name?: string | null;
                 /** Format: uuid */
                 branch_id?: string | null;
                 /** Format: date-time */
@@ -2204,7 +2247,41 @@ export interface components {
             temporary_password: string;
         };
         /** @enum {string} */
-        Permission: "issue.read" | "issue.create" | "issue.edit" | "issue.close" | "issue.target" | "issue.target_other_branches" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run";
+        Permission: "issue.read" | "issue.edit" | "issue.close" | "work_item.update" | "work_item.assign" | "work_item.approve" | "comment.create" | "comment.internal" | "comment.moderate" | "member.view" | "member.manage" | "dashboard.branch" | "export.run" | "department.manage" | "department.members.manage";
+        PermissionGroup: {
+            /**
+             * Format: uuid
+             * @description `null`: school-wide (root users), attachable in every branch.
+             */
+            branch_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * @description The departments it's attached to (in the listed branch, or for root
+             *     users' school-wide list, everywhere).
+             */
+            department_ids: string[];
+            description?: string | null;
+            grants: components["schemas"]["GrantSpec"][];
+            /** Format: uuid */
+            id: string;
+            /** @description "Everyone": applies to every user in every branch, unattached. */
+            is_default: boolean;
+            name: string;
+        };
+        PermissionGroupPatch: {
+            description?: string | null;
+            /** @description Replaces every grant of the group. */
+            grants?: components["schemas"]["GrantSpec"][] | null;
+            name?: string | null;
+        };
+        PermissionGroupRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description School-wide (set up by root users) rather than the branch's own. */
+            school_wide: boolean;
+        };
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         ProfilePatch: {
@@ -2241,7 +2318,7 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
-        RecipientGroup: {
+        RecipientDepartment: {
             /** Format: uuid */
             branch_id: string;
             branch_name: string;
@@ -2292,6 +2369,16 @@ export interface components {
             last_login_at?: string | null;
             last_name: string;
         };
+        /**
+         * @description An active root user's name, for everyone: root users belong to no
+         *     branch, yet they send items, comment, and can be @mentioned.
+         */
+        RootUserName: {
+            first_name: string;
+            last_name: string;
+            /** Format: uuid */
+            user_id: string;
+        };
         RowError: {
             code: string;
             message: string;
@@ -2338,11 +2425,9 @@ export interface components {
         SettingsPatch: {
             school_name?: string | null;
         };
-        SourcedGrant: {
-            group: components["schemas"]["GroupRef"];
-            issue_type?: string | null;
-            permission: string;
-            scope: components["schemas"]["Scope"];
+        SourcedGrant: components["schemas"]["GrantSpec"] & {
+            department?: components["schemas"]["DepartmentSource"] | null;
+            permission_group: components["schemas"]["GroupSource"];
         };
         StatusCounts: {
             /** Format: int64 */
@@ -2373,36 +2458,37 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             /** Format: uuid */
-            group_id?: string | null;
+            department_id?: string | null;
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["TargetKind"];
             /**
-             * @description What to call it: the person's full name, the group's ("All members"
-             *     for a branch's default group) or the branch's. Readers of the issue
-             *     may not see the other branches' people and groups.
+             * @description What to call it: the person's full name, the department's ("All
+             *     members" for a branch's default department) or the branch's. Readers
+             *     of the issue may not see the other branches' people and departments.
              */
             name: string;
             /** Format: uuid */
             user_id?: string | null;
         };
         /**
-         * @description A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
-         *     branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
-         *     issue a person or group also names their branch: `{"user_id": "...",
-         *     "branch_id": "..."}`, `{"group_id": "...", "branch_id": "..."}`. Anything
-         *     else is `422 invalid_target`. Send one target per recipient.
+         * @description A recipient: exactly one of `user_id`, `department_id` or `branch_id`
+         *     (whole branch: its admins and super admins), e.g. `{"department_id":
+         *     "..."}`. On a cross-branch issue a person or department also names their
+         *     branch: `{"user_id": "...", "branch_id": "..."}`, `{"department_id":
+         *     "...", "branch_id": "..."}`. Anything else is `422 invalid_target`. Send
+         *     one target per recipient.
          */
         TargetInput: {
             /** Format: uuid */
             branch_id?: string | null;
             /** Format: uuid */
-            group_id?: string | null;
+            department_id?: string | null;
             /** Format: uuid */
             user_id?: string | null;
         };
         /** @enum {string} */
-        TargetKind: "branch" | "group" | "user";
+        TargetKind: "branch" | "department" | "user";
         Template: {
             /** Format: date-time */
             archived_at?: string | null;
@@ -2869,7 +2955,7 @@ export interface operations {
             };
         };
     };
-    get__api_branches_id_groups: {
+    get__api_branches_id_departments: {
         parameters: {
             query?: {
                 after?: string;
@@ -2890,7 +2976,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Page_Group"];
+                    "application/json": components["schemas"]["Page_Department"];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -2904,7 +2990,7 @@ export interface operations {
             };
         };
     };
-    post__api_branches_id_groups: {
+    post__api_branches_id_departments: {
         parameters: {
             query?: never;
             header?: never;
@@ -2916,7 +3002,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NewGroup"];
+                "application/json": components["schemas"]["NewDepartment"];
             };
         };
         responses: {
@@ -2925,7 +3011,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Group"];
+                    "application/json": components["schemas"]["Department"];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -2945,7 +3031,7 @@ export interface operations {
                 after?: string;
                 limit?: number;
                 include_left?: boolean;
-                group_id?: string;
+                department_id?: string;
             };
             header?: never;
             path: {
@@ -3147,6 +3233,72 @@ export interface operations {
             };
         };
     };
+    get__api_branches_id_permission_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGroup"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_branches_id_permission_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewPermissionGroup"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGroup"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get__api_calendar: {
         parameters: {
             query: {
@@ -3263,6 +3415,258 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Dashboard"];
                 };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_departments_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteOutcome"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch__api_departments_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentPatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_departments_id_heads_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_departments_id_heads_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_departments_id_members_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_departments_id_members_user_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+                /** @description User id */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put__api_departments_id_permission_groups_group_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Department id */
+                id: string;
+                /** @description Permission group id */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_departments_id_permission_groups_group_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Department id */
+                id: string;
+                /** @description Permission group id */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error; see the codes in the README */
             "4XX": {
@@ -3440,331 +3844,6 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete__api_group_permissions_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete__api_groups_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteOutcome"];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    patch__api_groups_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GroupPatch"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Group"];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    put__api_groups_id_heads_user_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-                /** @description User id */
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete__api_groups_id_heads_user_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-                /** @description User id */
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    put__api_groups_id_members_user_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-                /** @description User id */
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete__api_groups_id_members_user_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-                /** @description User id */
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get__api_groups_id_permissions: {
-        parameters: {
-            query?: {
-                /** @description Opaque cursor from the previous page's `next_cursor`. */
-                after?: string;
-                /** @description 1-200, default 50. */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Page_GroupGrant"];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    put__api_groups_id_permissions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrantChanges"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GroupGrant"][];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    post__api_groups_id_permissions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewGrant"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GroupGrant"];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -4174,6 +4253,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Comment"];
                 };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_issues_id_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error; see the codes in the README */
             "4XX": {
@@ -4893,6 +5005,141 @@ export interface operations {
             };
         };
     };
+    get__api_permission_config: {
+        parameters: {
+            query?: {
+                /** @description `yaml` (default) or `json`. */
+                format?: components["schemas"]["Format"];
+                /** @description Import only: list the changes without saving them. */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The document, as YAML or JSON */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": string;
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_permission_config: {
+        parameters: {
+            query?: {
+                /** @description `yaml` (default) or `json`. */
+                format?: components["schemas"]["Format"];
+                /** @description Import only: list the changes without saving them. */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/yaml": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigImportOutcome"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete__api_permission_groups_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch__api_permission_groups_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionGroupPatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGroup"];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get__api_permissions: {
         parameters: {
             query?: never;
@@ -4921,7 +5168,7 @@ export interface operations {
             };
         };
     };
-    get__api_recipient_groups: {
+    get__api_recipient_departments: {
         parameters: {
             query?: never;
             header?: never;
@@ -4935,7 +5182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecipientGroup"][];
+                    "application/json": components["schemas"]["RecipientDepartment"][];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -5075,11 +5322,9 @@ export interface operations {
             };
         };
     };
-    get__api_school_groups: {
+    get__api_root_users_names: {
         parameters: {
-            query?: {
-                include_archived?: boolean;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -5091,7 +5336,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Group"][];
+                    "application/json": components["schemas"]["RootUserName"][];
                 };
             };
             /** @description Error; see the codes in the README */
@@ -5105,7 +5350,35 @@ export interface operations {
             };
         };
     };
-    post__api_school_groups: {
+    get__api_school_permission_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGroup"][];
+                };
+            };
+            /** @description Error; see the codes in the README */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post__api_school_permission_groups: {
         parameters: {
             query?: never;
             header?: never;
@@ -5114,7 +5387,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NewGroup"];
+                "application/json": components["schemas"]["NewPermissionGroup"];
             };
         };
         responses: {
@@ -5123,38 +5396,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Group"];
-                };
-            };
-            /** @description Error; see the codes in the README */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get__api_school_groups_id_copies: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Group"][];
+                    "application/json": components["schemas"]["PermissionGroup"];
                 };
             };
             /** @description Error; see the codes in the README */

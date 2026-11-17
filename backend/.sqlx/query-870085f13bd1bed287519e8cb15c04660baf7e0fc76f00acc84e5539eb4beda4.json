@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT gg.permission_key AS \"permission_key!\", t.code AS \"issue_type?\", gg.department\n           FROM permission_group_grant gg LEFT JOIN issue_type t ON t.id = gg.issue_type_id\n           WHERE gg.group_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_key!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "permission_group_grant",
+            "name": "permission_key"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issue_type",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "department",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "permission_group_grant",
+            "name": "department"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "870085f13bd1bed287519e8cb15c04660baf7e0fc76f00acc84e5539eb4beda4"
+}

@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT g.id, g.branch_id, g.name, g.description, g.is_default, g.created_at,\n               (SELECT coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(\n                           'permission', gg.permission_key, 'issue_type', t.code, 'department', gg.department))\n                       ORDER BY gg.permission_key, t.code NULLS FIRST, gg.department NULLS FIRST), '[]')\n                FROM permission_group_grant gg LEFT JOIN issue_type t ON t.id = gg.issue_type_id\n                WHERE gg.group_id = g.id) AS \"grants!: Json<Vec<GrantSpec>>\",\n               ARRAY(SELECT x.department_id FROM department_permission_group x\n                     JOIN department d ON d.id = x.department_id AND d.branch_id = $1\n                     WHERE x.group_id = g.id ORDER BY x.department_id) AS \"department_ids!\"\n        FROM permission_group g\n        WHERE g.branch_id = $1 OR g.branch_id IS NULL\n        ORDER BY g.is_default DESC, g.branch_id IS NULL, lower(g.name), g.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "is_default",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "is_default"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "permission_group",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "grants!: Json<Vec<GrantSpec>>",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "department_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "4135e20f561638f8b1c72ec282e6aa39b5722bf0aefc4285ffd2f37d4110d24c"
+}

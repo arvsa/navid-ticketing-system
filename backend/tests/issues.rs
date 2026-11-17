@@ -68,10 +68,9 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
     assert_eq!(event.body["event"]["location"], "Hall");
     assert_eq!(event.body["event"]["all_day"], false);
 
-    // Reports are actions: members make them for themselves, but can't send them.
+    // Actions and reports too, sent to anyone: that's the baseline.
     let action = post_issue(&app, &plain, json!({ "branch_id": a, "type": "action", "title": "Do it" })).await;
     assert_status(&action, StatusCode::CREATED, None);
-    // issue.target @own covers tickets and events only.
     let targeted_report = post_issue(
         &app,
         &plain,
@@ -80,7 +79,7 @@ async fn members_create_tickets_reports_and_events_but_not_actions(pool: PgPool)
         }),
     )
     .await;
-    assert_status(&targeted_report, StatusCode::FORBIDDEN, None);
+    assert_status(&targeted_report, StatusCode::CREATED, None);
     // Not their branch.
     let elsewhere =
         post_issue(&app, &plain, json!({ "branch_id": org.branch_b, "type": "ticket", "title": "X" })).await;
@@ -119,11 +118,11 @@ async fn issue_input_is_validated_per_type(pool: PgPool) {
             "invalid_target",
         ),
         (
-            json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "group_id": Uuid::new_v4() }] }),
+            json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "department_id": Uuid::new_v4() }] }),
             "invalid_target",
         ),
         (
-            json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "user_id": org.plain_a, "group_id": org.managers_group }] }),
+            json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "user_id": org.plain_a, "department_id": org.managers_department }] }),
             "invalid_target",
         ),
     ];
@@ -132,15 +131,15 @@ async fn issue_input_is_validated_per_type(pool: PgPool) {
         assert_status(&res, StatusCode::UNPROCESSABLE_ENTITY, Some(code));
     }
 
-    // An archived group can't be targeted.
-    sqlx::query!("UPDATE user_group SET archived_at = now() WHERE id = $1", org.managers_group)
+    // An archived department can't be targeted.
+    sqlx::query!("UPDATE department SET archived_at = now() WHERE id = $1", org.managers_department)
         .execute(&app.db)
         .await
         .unwrap();
     let res = post_issue(
         &app,
         &admin,
-        json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "group_id": org.managers_group }] }),
+        json!({ "branch_id": a, "type": "action", "title": "T", "targets": [{ "department_id": org.managers_department }] }),
     )
     .await;
     assert_status(&res, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_target"));
@@ -153,7 +152,7 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     let admin = as_user(&app, "admin_a@example.com").await;
     let root = as_root(&app).await;
     let a = org.branch_a;
-    let team = create_group(&app.db, a, "Team", &[], &[org.plain_a, org.multi, org.manager_a]).await;
+    let team = create_department(&app.db, a, "Team", &[], &[org.plain_a, org.multi, org.manager_a]).await;
 
     // user target: one assigned item, shared or per_member.
     for mode in ["shared", "per_member"] {
@@ -172,13 +171,13 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     let shared = post_issue(
         &app,
         &admin,
-        json!({ "branch_id": a, "type": "action", "title": "G", "targets": [{ "group_id": team }] }),
+        json!({ "branch_id": a, "type": "action", "title": "G", "targets": [{ "department_id": team }] }),
     )
     .await;
     assert_eq!(items(&shared).len(), 1);
     assert!(items(&shared)[0]["assignee_id"].is_null());
     let per_member = post_issue(&app, &admin, json!({
-        "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "G", "completion_mode": "per_member", "targets": [{ "group_id": team }]
+        "branch_id": a, "type": "action", "template_id": report_template(&app.db).await, "title": "G", "completion_mode": "per_member", "targets": [{ "department_id": team }]
     }))
     .await;
     let mut assignees: Vec<String> =
@@ -190,10 +189,15 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     // The snapshot doesn't follow later group changes.
     let latecomer = create_user(&app.db, NewUser::member("late@example.com", PW)).await;
     add_member(&app.db, a, latecomer).await;
-    sqlx::query!("INSERT INTO group_member (group_id, user_id, branch_id) VALUES ($1, $2, $3)", team, latecomer, a)
-        .execute(&app.db)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "INSERT INTO department_member (department_id, user_id, branch_id) VALUES ($1, $2, $3)",
+        team,
+        latecomer,
+        a
+    )
+    .execute(&app.db)
+    .await
+    .unwrap();
     let again = call(&app, &admin, Method::GET, &format!("/api/issues/{}", id_of(&per_member)), None).await;
     assert_eq!(items(&again).len(), 3);
 
@@ -211,14 +215,14 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
     .await;
     assert_eq!(hours_from_now(&items(&explicit)[0]["sla_due_at"]), 5);
 
-    // Whole-branch targets: admins (and holders of issue.target_other_branches).
+    // Whole-branch targets: the branch's admins.
     // Shared: one unassigned item; per_member: one per current branch member
     // (the fixture's 5 + the latecomer).
     let branch_target = json!({ "branch_id": a, "type": "action", "title": "B", "targets": [{ "branch_id": a }] });
     let boss_like = as_user(&app, "boss_like_a@example.com").await;
     let manager = as_user(&app, "manager_a@example.com").await;
     assert_status(&post_issue(&app, &manager, branch_target.clone()).await, StatusCode::FORBIDDEN, None);
-    // Every other grant isn't enough without the cross-branch one.
+    // No grant opens them.
     assert_status(&post_issue(&app, &boss_like, branch_target.clone()).await, StatusCode::FORBIDDEN, None);
     let res = post_issue(&app, &admin, branch_target).await;
     assert_status(&res, StatusCode::CREATED, None);
@@ -232,14 +236,16 @@ async fn targets_create_work_items_per_the_table(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn admins_send_school_wide_items_to_whole_branches(pool: PgPool) {
+async fn root_users_send_school_wide_items_to_whole_branches(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
-    let root = as_user(&app, "admin_a@example.com").await;
+    let root = as_root(&app).await;
     let plain = as_user(&app, "plain_a@example.com").await;
+    let admin = as_user(&app, "admin_a@example.com").await;
 
     let body = json!({ "branch_id": null, "type": "action", "title": "All schools", "targets": [{ "branch_id": org.branch_a }, { "branch_id": org.branch_b }] });
     assert_status(&post_issue(&app, &plain, body.clone()).await, StatusCode::FORBIDDEN, None);
+    assert_status(&post_issue(&app, &admin, body.clone()).await, StatusCode::FORBIDDEN, None);
     let res = post_issue(&app, &root, body).await;
     assert_status(&res, StatusCode::CREATED, None);
     assert!(res.body["branch_id"].is_null());
@@ -265,7 +271,7 @@ async fn admins_send_school_wide_items_to_whole_branches(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
+async fn anyone_sends_items_to_people_in_other_branches(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let to_b = |title: &str| {
@@ -273,24 +279,9 @@ async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
                 "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] })
     };
 
-    // Admins always may; others need the grant.
-    let admin = as_user(&app, "admin_a@example.com").await;
-    assert_status(&post_issue(&app, &admin, to_b("Yes")).await, StatusCode::CREATED, None);
-    assert_status(&call(&app, &admin, Method::GET, "/api/recipients", None).await, StatusCode::OK, None);
+    // No grant needed: any signed-in member may.
     let plain = as_user(&app, "plain_a@example.com").await;
-    assert_status(&post_issue(&app, &plain, to_b("No")).await, StatusCode::FORBIDDEN, None);
     assert_status(&app.get("/api/recipients").await, StatusCode::UNAUTHORIZED, None);
-    assert_status(&call(&app, &plain, Method::GET, "/api/recipients", None).await, StatusCode::FORBIDDEN, None);
-
-    create_group(
-        &app.db,
-        org.branch_a,
-        "Coordinators",
-        &[("issue.target_other_branches", Some("action"), "branch"), ("issue.create", Some("action"), "branch")],
-        &[org.plain_a],
-    )
-    .await;
-    let plain = as_user(&app, "plain_a@example.com").await;
     let people = call(&app, &plain, Method::GET, "/api/recipients", None).await;
     assert_status(&people, StatusCode::OK, None);
     assert!(people
@@ -309,10 +300,10 @@ async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
     assert_eq!(work[0]["branch_id"], org.branch_b.to_string());
     assert_eq!(work[0]["assignee_id"], org.admin_b.to_string());
 
-    // Whole branches too; a person needs their real branch.
+    // Not whole branches (root users only); a person needs their real branch.
     let whole =
         json!({ "branch_id": null, "type": "action", "title": "W", "targets": [{ "branch_id": org.branch_b }] });
-    assert_status(&post_issue(&app, &plain, whole).await, StatusCode::CREATED, None);
+    assert_status(&post_issue(&app, &plain, whole).await, StatusCode::FORBIDDEN, None);
     let wrong_branch = json!({ "branch_id": null, "type": "action", "title": "W",
                                "targets": [{ "user_id": org.plain_a, "branch_id": org.branch_b }] });
     assert_status(
@@ -320,12 +311,12 @@ async fn cross_branch_items_need_admin_or_target_other_branches(pool: PgPool) {
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("invalid_target"),
     );
-    // Only the kinds the grant names (they may create events, but not send them across).
+    // Every kind.
     let starts = OffsetDateTime::now_utc() + Duration::days(3);
     let event = json!({ "branch_id": null, "type": "event", "title": "E",
                         "event": { "starts_at": starts.format(&Rfc3339).unwrap(), "ends_at": (starts + Duration::hours(1)).format(&Rfc3339).unwrap() },
                         "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
-    assert_status(&post_issue(&app, &plain, event).await, StatusCode::FORBIDDEN, None);
+    assert_status(&post_issue(&app, &plain, event).await, StatusCode::CREATED, None);
     // A template's report rule travels with its type: the Report template is an action.
     let report = json!({ "branch_id": null, "type": "action", "template_id": report_template(&app.db).await, "title": "R",
                          "targets": [{ "user_id": org.admin_b, "branch_id": org.branch_b }] });
@@ -369,12 +360,9 @@ async fn unreadable_issues_are_404_by_id_and_number(pool: PgPool) {
     let boss_like = as_user(&app, "boss_like_a@example.com").await;
     let plain = as_user(&app, "plain_a@example.com").await;
 
-    let res = post_issue(
-        &app,
-        &boss_like,
-        json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter" }),
-    )
-    .await;
+    let res =
+        post_issue(&app, &boss_like, json!({ "branch_id": org.branch_a, "type": "ticket", "title": "HR matter" }))
+            .await;
     assert_status(&res, StatusCode::CREATED, None);
     let (id, number) = (id_of(&res), res.body["number"].as_i64().unwrap());
 
@@ -841,37 +829,38 @@ async fn migration_0006_rewrites_list_dates_as_rfc3339(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn school_wide_items_go_to_a_group_in_another_branch(pool: PgPool) {
+async fn school_wide_items_go_to_a_department_in_another_branch(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
-    let it = create_group(&app.db, org.branch_b, "IT", &[], &[org.multi]).await;
+    let it = create_department(&app.db, org.branch_b, "IT", &[], &[org.multi]).await;
     let admin = as_user(&app, "admin_a@example.com").await;
 
-    // Every branch's groups, for those who may send across (not All members).
-    let groups = call(&app, &admin, Method::GET, "/api/recipient-groups", None).await;
-    assert_status(&groups, StatusCode::OK, None);
-    let groups = groups.body.as_array().unwrap();
-    assert!(groups.iter().any(|g| g["id"] == it.to_string() && g["branch_id"] == org.branch_b.to_string() && g["member_count"] == 1));
-    assert!(!groups.iter().any(|g| g["name"] == "All members"));
+    // Every branch's departments, for everyone (not All members).
     let plain = as_user(&app, "plain_a@example.com").await;
-    assert_status(&call(&app, &plain, Method::GET, "/api/recipient-groups", None).await, StatusCode::FORBIDDEN, None);
-    let root = as_root(&app).await;
-    let as_root_groups = call(&app, &root, Method::GET, "/api/recipient-groups", None).await;
-    assert_status(&as_root_groups, StatusCode::OK, None);
-    assert!(as_root_groups.body.as_array().unwrap().iter().any(|g| g["id"] == it.to_string()), "super admins too");
+    let departments = call(&app, &plain, Method::GET, "/api/recipient-departments", None).await;
+    assert_status(&departments, StatusCode::OK, None);
+    let departments = departments.body.as_array().unwrap();
+    assert!(departments
+        .iter()
+        .any(|d| d["id"] == it.to_string() && d["branch_id"] == org.branch_b.to_string() && d["member_count"] == 1));
+    assert!(!departments.iter().any(|d| d["name"] == "All members"));
 
-    // A ticket for B's IT group, sent from A.
+    // A ticket for B's IT department, sent from A.
     let body = json!({ "branch_id": null, "type": "ticket", "title": "Projector",
-                       "targets": [{ "group_id": it, "branch_id": org.branch_b }] });
+                       "targets": [{ "department_id": it, "branch_id": org.branch_b }] });
     let res = post_issue(&app, &admin, body).await;
     assert_status(&res, StatusCode::CREATED, None);
     assert!(res.body["branch_id"].is_null());
-    assert_eq!(res.body["targets"][0]["group_id"], it.to_string());
+    assert_eq!(res.body["targets"][0]["department_id"], it.to_string());
     let multi = as_user(&app, "multi@example.com").await;
-    assert_status(&call(&app, &multi, Method::GET, &format!("/api/issues/{}", id_of(&res)), None).await, StatusCode::OK, None);
+    assert_status(
+        &call(&app, &multi, Method::GET, &format!("/api/issues/{}", id_of(&res)), None).await,
+        StatusCode::OK,
+        None,
+    );
 
-    // The group must be in the branch named, and the branch named at all.
-    for target in [json!({ "group_id": it, "branch_id": org.branch_a }), json!({ "group_id": it })] {
+    // The department must be in the branch named, and the branch named at all.
+    for target in [json!({ "department_id": it, "branch_id": org.branch_a }), json!({ "department_id": it })] {
         let body = json!({ "branch_id": null, "type": "ticket", "title": "X", "targets": [target] });
         assert_status(&post_issue(&app, &admin, body).await, StatusCode::UNPROCESSABLE_ENTITY, Some("invalid_target"));
     }

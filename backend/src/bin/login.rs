@@ -67,7 +67,9 @@ async fn run(cli: &Cli) -> Result<(), String> {
     if !status.is_success() {
         let code = body["error"]["code"].as_str().unwrap_or("unknown");
         let hint = match code {
-            "invalid_credentials" => " (wrong email or password; `cargo run --bin users` lists accounts and temporary passwords)",
+            "invalid_credentials" => {
+                " (wrong email or password; `cargo run --bin users` lists accounts and temporary passwords)"
+            }
             "origin_mismatch" => " (--origin must match the server's APP_ORIGIN)",
             _ => "",
         };
@@ -94,6 +96,9 @@ async fn run(cli: &Cli) -> Result<(), String> {
     println!("Saved the session cookie to {}. Use it with curl:", cli.cookie_file);
     println!();
     println!("  curl -b {} {base}/api/me", cli.cookie_file);
-    println!("  curl -b {} -X POST {base}/api/... -H 'Origin: {}' -H 'Content-Type: application/json' -d '{{...}}'", cli.cookie_file, cli.origin);
+    println!(
+        "  curl -b {} -X POST {base}/api/... -H 'Origin: {}' -H 'Content-Type: application/json' -d '{{...}}'",
+        cli.cookie_file, cli.origin
+    );
     Ok(())
 }

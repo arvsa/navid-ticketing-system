@@ -31,7 +31,7 @@ pub enum Kind {
     EventReminder,
     SlaDueSoon,
     SlaBreached,
-    AddedToGroup,
+    AddedToDepartment,
     PermissionsChanged,
 }
 
@@ -60,7 +60,7 @@ impl Kind {
         Self::EventReminder,
         Self::SlaDueSoon,
         Self::SlaBreached,
-        Self::AddedToGroup,
+        Self::AddedToDepartment,
         Self::PermissionsChanged,
     ];
 
@@ -82,7 +82,7 @@ impl Kind {
             Self::EventReminder => "event_reminder",
             Self::SlaDueSoon => "sla_due_soon",
             Self::SlaBreached => "sla_breached",
-            Self::AddedToGroup => "added_to_group",
+            Self::AddedToDepartment => "added_to_department",
             Self::PermissionsChanged => "permissions_changed",
         }
     }
@@ -178,6 +178,9 @@ pub struct Notification {
     pub work_item_id: Option<Uuid>,
     /// `null` = the system.
     pub actor_id: Option<Uuid>,
+    /// The actor's full name, so it can be shown even when the reader can't
+    /// see the actor in any branch (a root user, someone who has left).
+    pub actor_name: Option<String>,
     pub payload: Value,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
@@ -195,9 +198,11 @@ pub async fn list(db: &PgPool, actor: &Actor, unread_only: bool, page: &PagePara
         Notification,
         r#"
         SELECT n.id, n.kind, n.branch_id, n.issue_id, 'ISS-' || i.number AS issue_key, i.title AS "issue_title?",
-               n.work_item_id, n.actor_id, n.payload, n.created_at, n.read_at
+               n.work_item_id, n.actor_id, trim(u.first_name || ' ' || u.last_name) AS "actor_name?",
+               n.payload, n.created_at, n.read_at
         FROM notification n
         LEFT JOIN issue i ON i.id = n.issue_id
+        LEFT JOIN app_user u ON u.id = n.actor_id
         WHERE n.recipient_id = $1
           AND (NOT $2 OR n.read_at IS NULL)
           AND (n.issue_id IS NULL OR issue_visible(i.id, i.branch_id, i.type_id, i.created_by, $3))

@@ -17,6 +17,7 @@ import { errorMessage } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { useItemLabels } from "@/lib/items";
 import { PersonPopover } from "@/people/PersonPopover";
+import { useSession } from "@/auth/session";
 import { usePeople, type Person } from "@/people/usePeople";
 import { t } from "@/i18n";
 
@@ -183,19 +184,31 @@ function CommentItem({ c, issue, compact, people }: { c: Comment; issue: IssueDe
 function Composer({ issue, workItemId, compact }: { issue: IssueDetail; workItemId?: string; compact?: boolean }) {
   const qc = useQueryClient();
   const people = usePeople();
+  const me = useSession();
   const key = draftKey(issue.id, workItemId);
   const [body, setBody] = useState(() => readDraft(key));
   const [mentions, setMentions] = useState<Person[]>([]);
   const files = useFilePicker();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState<string | null>(null);
-  const branchIds = issue.branch_id ? [issue.branch_id] : [...new Set(issue.work_items.map((w) => w.branch_id))];
+  // Who can read it: its branch (or, school-wide, every branch it went to),
+  // whoever it was sent to or is working on it, its sender, and root users.
+  const branchIds = issue.branch_id
+    ? [issue.branch_id]
+    : [...new Set([...issue.targets.map((t) => t.branch_id), ...issue.work_items.map((w) => w.branch_id)])];
+  const involved = [issue.created_by, ...issue.targets.map((t) => t.user_id), ...issue.work_items.map((w) => w.assignee_id)];
   const candidates = useMemo(() => {
     const seen = new Map<string, Person>();
     for (const b of branchIds) for (const p of people.inBranch(b)) if (p.is_active) seen.set(p.id, p);
+    for (const id of involved) {
+      const p = people.get(id);
+      if (p?.is_active) seen.set(p.id, p);
+    }
+    for (const p of people.roots) seen.set(p.id, p);
+    seen.delete(me.user.id);
     return [...seen.values()];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [people.all.length, branchIds.join()]);
+  }, [people.all.length, people.roots.length, branchIds.join(), involved.join()]);
   const matches = query === null ? [] : candidates.filter((p) => `${p.first_name} ${p.last_name}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6);
 
   useEffect(() => writeDraft(key, body), [key, body]);

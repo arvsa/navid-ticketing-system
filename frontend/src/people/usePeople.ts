@@ -2,7 +2,7 @@
 // (gap G-2: responses carry user ids only).
 import { useQuery } from "@tanstack/react-query";
 import { getAll } from "@/api/client";
-import { useRecipients } from "@/api/hooks";
+import { useRecipients, useRootUserNames } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { Member } from "@/api/types";
 import { useSession } from "@/auth/session";
@@ -30,8 +30,12 @@ export type Directory = {
   get: (id?: string | null) => Person | undefined;
   name: (id?: string | null) => string;
   short: (id?: string | null) => string;
+  /** Current members of the branch, including other branches' people the
+   * viewer can name (for school-wide items). */
   inBranch: (branchId: string) => Person[];
   all: Person[];
+  /** Active root users: they belong to no branch but read every item. */
+  roots: Person[];
 };
 
 export function usePeople(): Directory {
@@ -79,7 +83,7 @@ export function usePeople(): Directory {
   // Senders of school-wide items see names in other branches too, so their
   // recipients aren't "someone outside your branch". Only for naming: they
   // don't join the directory lists.
-  const sendsAcross = !me.user.is_super_admin && (["ticket", "action", "event"] as const).some((ty) => canSendAcross({ me }, ty));
+  const sendsAcross = !me.user.is_super_admin && canSendAcross({ me });
   const others = useRecipients(sendsAcross);
   const outside = new Map<string, Person>();
   for (const r of others.data ?? []) {
@@ -88,6 +92,18 @@ export function usePeople(): Directory {
     p.branchIds.push(r.branch_id);
     outside.set(r.user_id, p);
   }
+  // Root users belong to no branch: named (and @mentionable) from their own list.
+  const rootNames = useRootUserNames();
+  const roots: Person[] = (rootNames.data ?? []).map((r) => ({
+    id: r.user_id,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    email: "",
+    is_active: true,
+    branchIds: [],
+    adminOf: [],
+  }));
+  for (const r of roots) if (!map.has(r.id) && !outside.has(r.id)) outside.set(r.id, r);
   const self: Person = {
     id: me.user.id,
     first_name: me.user.first_name,
@@ -108,8 +124,9 @@ export function usePeople(): Directory {
       const p = get(id);
       return p ? shortName(p.first_name, p.last_name) : UNKNOWN_PERSON;
     },
-    inBranch: (branchId) => [...map.values()].filter((p) => p.branchIds.includes(branchId)),
+    inBranch: (branchId) => [...map.values(), ...outside.values()].filter((p) => p.branchIds.includes(branchId)),
     all: [...map.values()],
+    roots,
   };
 }
 

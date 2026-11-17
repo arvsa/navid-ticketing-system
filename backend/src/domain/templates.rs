@@ -243,7 +243,13 @@ pub async fn update(db: &PgPool, actor: &Actor, id: Uuid, patch: TemplatePatch) 
     Ok(t)
 }
 
-async fn record(tx: &mut Tx, actor: &Actor, t: &Template, action: &'static str, old: Option<&Template>) -> AppResult<()> {
+async fn record(
+    tx: &mut Tx,
+    actor: &Actor,
+    t: &Template,
+    action: &'static str,
+    old: Option<&Template>,
+) -> AppResult<()> {
     audit::record(
         tx,
         AuditEntry {

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO permission_group_grant (group_id, permission_key, issue_type_id, scope, department, granted_by)\n            VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), 'branch', $4, $5)\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "permission_group_grant",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3ca6f002ee5e414c9b0b78a43db7bf88cc17daa7ecf2f3b2524c013deaaa7f03"
+}

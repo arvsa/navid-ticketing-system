@@ -31,6 +31,7 @@ pub fn routes() -> Router<AppState> {
         .route("/issues/{id}", get(show).patch(update))
         .route("/issues/{id}/close", post(close))
         .route("/issues/{id}/cancel", post(cancel))
+        .route("/issues/{id}/delete", post(delete_issue))
         .route("/issues/{id}/targets", post(add_target))
         .route("/issues/{id}/targets/{target_id}", delete(remove_target))
         .route("/issues/{id}/read", post(mark_read))
@@ -80,7 +81,11 @@ struct TagsQuery {
 
 /// The tags in use on issues the viewer can see, for filtering.
 #[utoipa::path(get, path = "/api/issues/tags", operation_id = "listIssueTags", tag = "issues", params(TagsQuery), responses((status = 200, body = Vec<TagCount>), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
-async fn tags(State(s): State<AppState>, actor: Actor, ApiQuery(q): ApiQuery<TagsQuery>) -> AppResult<Json<Vec<TagCount>>> {
+async fn tags(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiQuery(q): ApiQuery<TagsQuery>,
+) -> AppResult<Json<Vec<TagCount>>> {
     Ok(Json(issues::tags(&s.db, &actor, q.branch_id).await?))
 }
 
@@ -159,6 +164,20 @@ async fn cancel(
     ApiJson(body): ApiJson<VersionBody>,
 ) -> AppResult<Json<IssueDetail>> {
     Ok(Json(issues::close(&s.db, &actor, id, body.version, IssueState::Cancelled).await?))
+}
+
+/// Soft-delete an issue: hidden from everyone, its history kept. Its sender
+/// may while it's open and current (an event that hasn't ended, work not past
+/// its deadline); branch admins at any time.
+#[utoipa::path(post, path = "/api/issues/{id}/delete", operation_id = "deleteIssue", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), request_body = VersionBody, responses((status = 204), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]
+async fn delete_issue(
+    State(s): State<AppState>,
+    actor: Actor,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(body): ApiJson<VersionBody>,
+) -> AppResult<StatusCode> {
+    issues::delete(&s.db, &actor, id, body.version).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(post, path = "/api/issues/{id}/targets", operation_id = "addIssueTarget", tag = "issues", params(("id" = uuid::Uuid, Path, description = "id")), request_body = NewTarget, responses((status = 201, body = IssueDetail), (status = "4XX", description = "Error; see the codes in the README", body = crate::http::openapi::ErrorResponse)))]

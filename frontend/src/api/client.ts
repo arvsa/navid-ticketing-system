@@ -51,12 +51,15 @@ async function toError(res: Response): Promise<ApiError> {
 export async function request<T>(
   method: string,
   path: string,
-  opts: { query?: Query; body?: unknown; form?: FormData; signal?: AbortSignal } = {},
+  opts: { query?: Query; body?: unknown; form?: FormData; text?: { body: string; type: string }; signal?: AbortSignal; raw?: boolean } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: opts.raw ? "*/*" : "application/json" };
   let body: BodyInit | undefined;
   if (opts.form) body = opts.form;
-  else if (opts.body !== undefined) {
+  else if (opts.text) {
+    headers["Content-Type"] = opts.text.type;
+    body = opts.text.body;
+  } else if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
@@ -79,6 +82,7 @@ export async function request<T>(
     throw err;
   }
   if (res.status === 204) return undefined as T;
+  if (opts.raw) return (await res.text()) as T;
   const type = res.headers.get("content-type") ?? "";
   if (!type.includes("json")) return undefined as T;
   return (await res.json()) as T;
@@ -91,6 +95,11 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body }),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, { body }),
   del: <T>(path: string) => request<T>("DELETE", path),
+  /** The response body as text, whatever its type (YAML, for instance). */
+  getText: (path: string, query?: Query) => request<string>("GET", path, { query, raw: true }),
+  /** A text body of the given content type; the response is JSON. */
+  postText: <T>(path: string, body: string, type: string, query?: Query) =>
+    request<T>("POST", path, { query, text: { body, type } }),
 };
 
 /** Uploads with progress (fetch has no upload progress). */

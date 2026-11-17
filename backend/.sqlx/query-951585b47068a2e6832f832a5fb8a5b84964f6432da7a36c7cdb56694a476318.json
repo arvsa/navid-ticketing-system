@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT dm.branch_id AS \"branch_id!\", gg.permission_key AS \"permission_key!\",\n                   t.code AS \"issue_type?\", gg.scope AS \"scope!: Scope\", gg.department\n            FROM department_member dm\n            JOIN department d                    ON d.id = dm.department_id AND d.archived_at IS NULL\n            JOIN department_permission_group dpg ON dpg.department_id = d.id\n            JOIN permission_group_grant gg       ON gg.group_id = dpg.group_id\n            LEFT JOIN issue_type t               ON t.id = gg.issue_type_id\n            WHERE dm.user_id = $1\n            UNION ALL\n            SELECT m.branch_id, gg.permission_key, t.code, gg.scope, gg.department\n            FROM branch_membership m\n            JOIN permission_group pg       ON pg.is_default\n            JOIN permission_group_grant gg ON gg.group_id = pg.id\n            LEFT JOIN issue_type t         ON t.id = gg.issue_type_id\n            WHERE m.user_id = $1 AND m.left_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "branch_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_key!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "issue_type?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "scope!: Scope",
+        "type_info": {
+          "Custom": {
+            "name": "permission_scope",
+            "kind": {
+              "Enum": [
+                "own",
+                "targeted",
+                "branch"
+              ]
+            }
+          }
+        },
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "department",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "951585b47068a2e6832f832a5fb8a5b84964f6432da7a36c7cdb56694a476318"
+}

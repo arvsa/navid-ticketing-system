@@ -1,4 +1,4 @@
-//! Phase 2: branches, memberships, groups, grants, and the 6.2 rules
+//! Phase 2: branches, memberships, departments, and the 6.2 rules
 //! enforced end to end through the HTTP API.
 
 mod common;
@@ -6,7 +6,7 @@ mod common;
 use axum::http::{Method, StatusCode};
 use backend::db::MIGRATOR;
 use common::*;
-use serde_json::{json, Value};
+use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -36,12 +36,13 @@ async fn only_super_admins_create_and_edit_branches(pool: PgPool) {
     let branch_id: Uuid = created.body["id"].as_str().unwrap().parse().unwrap();
     assert_eq!(created.body["timezone"], "Europe/Paris");
 
-    // The schema created "All members" with the baseline and the admin membership.
-    let groups = call(&app, &root, Method::GET, &format!("/api/branches/{branch_id}/groups"), None).await;
-    let items = groups.body["items"].as_array().unwrap();
+    // The schema created "All members", its permission group and the admin membership.
+    let departments = call(&app, &root, Method::GET, &format!("/api/branches/{branch_id}/departments"), None).await;
+    let items = departments.body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["is_default"], true);
-    assert_eq!(items[0]["member_count"], 1);
+    assert_eq!(items[0]["member_ids"].as_array().unwrap().len(), 1);
+    assert_eq!(items[0]["permission_groups"][0]["name"], "All members");
     let is_admin = sqlx::query_scalar!(
         "SELECT is_admin FROM branch_membership WHERE branch_id = $1 AND user_id = $2",
         branch_id,
@@ -229,7 +230,7 @@ async fn adding_members_creates_accounts_or_memberships(pool: PgPool) {
     assert_eq!(login.status, StatusCode::OK);
     assert_eq!(login.body["user"]["must_change_password"], true);
     // ...in "All members" via the trigger.
-    assert_eq!(login.body["memberships"][0]["grants"].as_array().unwrap().len(), 12);
+    assert_eq!(login.body["memberships"][0]["grants"].as_array().unwrap().len(), 3);
 
     // New account without names.
     let res = call(&app, &manager, Method::POST, &uri, Some(json!({ "email": "noname@example.com" }))).await;
@@ -267,7 +268,7 @@ async fn removing_a_member_ends_access_and_only_admins_reactivate(pool: PgPool) 
     let plain = as_user(&app, "plain_a@example.com").await;
     let members_uri = format!("/api/branches/{}/members", org.branch_a);
 
-    let extra_group = create_group(&app.db, org.branch_a, "Extra", &[], &[org.plain_a]).await;
+    let extra = create_department(&app.db, org.branch_a, "Extra", &[], &[org.plain_a]).await;
     let res = call(&app, &manager, Method::DELETE, &format!("{members_uri}/{}", org.plain_a), None).await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
 
@@ -276,12 +277,13 @@ async fn removing_a_member_ends_access_and_only_admins_reactivate(pool: PgPool) 
     assert_status(&res, StatusCode::NOT_FOUND, None);
     let me = call(&app, &plain, Method::GET, "/api/me", None).await;
     assert_eq!(me.body["memberships"], json!([]));
-    // ...and out of every group in the branch.
-    let still_in = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM group_member WHERE user_id = $1"#, org.plain_a)
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
-    assert_eq!(still_in, 0, "group {extra_group} membership should be gone");
+    // ...and out of every department in the branch.
+    let still_in =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM department_member WHERE user_id = $1"#, org.plain_a)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(still_in, 0, "department {extra} membership should be gone");
 
     // Departed members are listed only for admins.
     let res = call(&app, &manager, Method::GET, &format!("{members_uri}?include_left=true"), None).await;
@@ -452,150 +454,139 @@ async fn deactivation_rules(pool: PgPool) {
 }
 
 // ---------------------------------------------------------------------------
-// Groups (6.2: branch admin only)
+// Departments
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn only_admins_manage_groups_even_against_admin_like_groups(pool: PgPool) {
+async fn departments_are_run_by_admins_and_department_manage(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
-    let boss_like = as_user(&app, "boss_like_a@example.com").await;
+    let plain = as_user(&app, "plain_a@example.com").await;
     let admin = as_user(&app, "admin_a@example.com").await;
-    let groups_uri = format!("/api/branches/{}/groups", org.branch_a);
-    let g = org.managers_group;
+    let uri = format!("/api/branches/{}/departments", org.branch_a);
+    let d = org.managers_department;
 
     let forbidden = [
-        (Method::POST, groups_uri.clone(), Some(json!({ "name": "Mine" }))),
-        (Method::PATCH, format!("/api/groups/{g}"), Some(json!({ "name": "Renamed" }))),
-        (Method::DELETE, format!("/api/groups/{g}"), None),
-        (Method::PUT, format!("/api/groups/{g}/members/{}", org.plain_a), None),
-        (Method::DELETE, format!("/api/groups/{g}/members/{}", org.manager_a), None),
-        (
-            Method::POST,
-            format!("/api/groups/{g}/permissions"),
-            Some(json!({ "permission": "export.run", "scope": "branch" })),
-        ),
-        (Method::GET, format!("/api/groups/{g}/permissions"), None),
+        (Method::POST, uri.clone(), Some(json!({ "name": "Mine" }))),
+        (Method::PATCH, format!("/api/departments/{d}"), Some(json!({ "name": "Renamed" }))),
+        (Method::DELETE, format!("/api/departments/{d}"), None),
+        (Method::PUT, format!("/api/departments/{d}/members/{}", org.plain_a), None),
+        (Method::DELETE, format!("/api/departments/{d}/members/{}", org.manager_a), None),
+        (Method::PUT, format!("/api/departments/{d}/heads/{}", org.manager_a), None),
     ];
     for (method, uri, body) in forbidden {
-        let res = call(&app, &boss_like, method.clone(), &uri, body).await;
+        let res = call(&app, &plain, method.clone(), &uri, body).await;
         assert_status(&res, StatusCode::FORBIDDEN, None);
     }
 
     // Admin of another branch: not visible.
     let admin_b = as_user(&app, "admin_b@example.com").await;
     assert_status(
-        &call(&app, &admin_b, Method::PATCH, &format!("/api/groups/{g}"), Some(json!({ "name": "X" }))).await,
+        &call(&app, &admin_b, Method::PATCH, &format!("/api/departments/{d}"), Some(json!({ "name": "X" }))).await,
         StatusCode::NOT_FOUND,
         None,
     );
 
-    // The admin can do all of it.
-    let res =
-        call(&app, &admin, Method::POST, &groups_uri, Some(json!({ "name": "Teachers", "description": "Staff" })))
-            .await;
+    let res = call(&app, &admin, Method::POST, &uri, Some(json!({ "name": "Teachers", "description": "Staff" }))).await;
     assert_status(&res, StatusCode::CREATED, None);
     let teachers = res.body["id"].as_str().unwrap().to_owned();
     assert_status(
-        &call(&app, &admin, Method::POST, &groups_uri, Some(json!({ "name": "teachers " }))).await,
-        StatusCode::CREATED,
-        None,
-    );
-    assert_status(
-        &call(&app, &admin, Method::POST, &groups_uri, Some(json!({ "name": "Teachers" }))).await,
+        &call(&app, &admin, Method::POST, &uri, Some(json!({ "name": "Teachers" }))).await,
         StatusCode::CONFLICT,
-        Some("group_name_taken"),
+        Some("department_name_taken"),
     );
     assert_status(
-        &call(&app, &admin, Method::PUT, &format!("/api/groups/{teachers}/members/{}", org.plain_a), None).await,
+        &call(&app, &admin, Method::PUT, &format!("/api/departments/{teachers}/members/{}", org.plain_a), None).await,
         StatusCode::NO_CONTENT,
         None,
     );
-    // Non-members of the branch can't join its groups.
+    // Non-members of the branch can't join its departments.
     assert_status(
-        &call(&app, &admin, Method::PUT, &format!("/api/groups/{teachers}/members/{}", org.admin_b), None).await,
+        &call(&app, &admin, Method::PUT, &format!("/api/departments/{teachers}/members/{}", org.admin_b), None).await,
         StatusCode::CONFLICT,
         Some("not_a_member"),
     );
+    // department.manage (the deputies have it) runs departments too.
+    let boss_like = as_user(&app, "boss_like_a@example.com").await;
+    assert_status(
+        &call(&app, &boss_like, Method::POST, &uri, Some(json!({ "name": "Health" }))).await,
+        StatusCode::CREATED,
+        None,
+    );
 
-    // Any member can list groups (e.g. to target them).
-    let plain = as_user(&app, "plain_a@example.com").await;
-    let list = call(&app, &plain, Method::GET, &groups_uri, None).await;
-    assert_eq!(list.body["items"].as_array().unwrap().len(), 5);
-    let filtered =
-        call(&app, &plain, Method::GET, &format!("/api/branches/{}/members?group_id={teachers}", org.branch_a), None)
-            .await;
+    // Any member can list them (e.g. to send to them).
+    let list = call(&app, &plain, Method::GET, &uri, None).await;
+    let names: Vec<&str> = list.body["items"].as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["All members", "Deputies", "Health", "Managers", "Teachers"]);
+    let filtered = call(
+        &app,
+        &plain,
+        Method::GET,
+        &format!("/api/branches/{}/members?department_id={teachers}", org.branch_a),
+        None,
+    )
+    .await;
     assert_eq!(filtered.body["items"].as_array().unwrap().len(), 1);
 
-    assert!(audit_count(&app.db, "user_group", "create").await >= 2);
-    assert_eq!(audit_count(&app.db, "group_member", "add").await, 1);
-    assert_eq!(notifications_of(&app.db, org.plain_a, "added_to_group").await, 1);
+    assert_eq!(audit_count(&app.db, "department", "create").await, 2);
+    assert_eq!(audit_count(&app.db, "department_member", "add").await, 1);
+    assert_eq!(notifications_of(&app.db, org.plain_a, "added_to_department").await, 1);
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn the_default_group_cannot_be_deleted_renamed_or_joined_by_hand(pool: PgPool) {
+async fn all_members_cannot_be_deleted_renamed_or_joined_by_hand(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let admin = as_user(&app, "admin_a@example.com").await;
-    let default = sqlx::query_scalar!("SELECT id FROM user_group WHERE branch_id = $1 AND is_default", org.branch_a)
+    let default = sqlx::query_scalar!("SELECT id FROM department WHERE branch_id = $1 AND is_default", org.branch_a)
         .fetch_one(&app.db)
         .await
         .unwrap();
-    let uri = format!("/api/groups/{default}");
+    let uri = format!("/api/departments/{default}");
+    let conflict = Some("default_department");
 
-    assert_status(&call(&app, &admin, Method::DELETE, &uri, None).await, StatusCode::CONFLICT, Some("default_group"));
+    assert_status(&call(&app, &admin, Method::DELETE, &uri, None).await, StatusCode::CONFLICT, conflict);
     assert_status(
         &call(&app, &admin, Method::PATCH, &uri, Some(json!({ "name": "Everyone" }))).await,
         StatusCode::CONFLICT,
-        Some("default_group"),
+        conflict,
     );
     assert_status(
         &call(&app, &admin, Method::PATCH, &uri, Some(json!({ "archived": true }))).await,
         StatusCode::CONFLICT,
-        Some("default_group"),
+        conflict,
     );
+    for method in [Method::PUT, Method::DELETE] {
+        assert_status(
+            &call(&app, &admin, method, &format!("{uri}/members/{}", org.plain_a), None).await,
+            StatusCode::CONFLICT,
+            conflict,
+        );
+    }
     assert_status(
-        &call(&app, &admin, Method::DELETE, &format!("{uri}/members/{}", org.plain_a), None).await,
+        &call(&app, &admin, Method::PUT, &format!("{uri}/heads/{}", org.plain_a), None).await,
         StatusCode::CONFLICT,
-        Some("default_group"),
+        conflict,
     );
-    // Its description and grants are editable.
+    // Its description is editable.
     assert_status(
         &call(&app, &admin, Method::PATCH, &uri, Some(json!({ "description": "Everyone here" }))).await,
         StatusCode::OK,
         None,
     );
-
-    // Revoking a baseline grant takes effect on the next request.
-    let plain = as_user(&app, "plain_a@example.com").await;
-    let members_uri = format!("/api/branches/{}/members", org.branch_a);
-    assert_status(&call(&app, &plain, Method::GET, &members_uri, None).await, StatusCode::OK, None);
-    let grants = call(&app, &admin, Method::GET, &format!("{uri}/permissions"), None).await;
-    let member_view =
-        grants.body["items"].as_array().unwrap().iter().find(|g| g["permission"] == "member.view").unwrap()["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
-    assert_status(
-        &call(&app, &admin, Method::DELETE, &format!("/api/group-permissions/{member_view}"), None).await,
-        StatusCode::NO_CONTENT,
-        None,
-    );
-    assert_status(&call(&app, &plain, Method::GET, &members_uri, None).await, StatusCode::FORBIDDEN, None);
-    assert_eq!(audit_count(&app.db, "group_permission", "revoke").await, 1);
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn referenced_groups_are_archived_instead_of_deleted(pool: PgPool) {
+async fn referenced_departments_are_archived_instead_of_deleted(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let admin = as_user(&app, "admin_a@example.com").await;
 
-    let unreferenced = create_group(&app.db, org.branch_a, "Temp", &[], &[org.plain_a]).await;
-    let res = call(&app, &admin, Method::DELETE, &format!("/api/groups/{unreferenced}"), None).await;
+    let unreferenced = create_department(&app.db, org.branch_a, "Temp", &[], &[org.plain_a]).await;
+    let res = call(&app, &admin, Method::DELETE, &format!("/api/departments/{unreferenced}"), None).await;
     assert_eq!(res.body, json!({ "deleted": true, "archived": false }));
 
-    // Reference the managers group from an issue target.
+    // Send an issue to the managers.
     let issue = sqlx::query_scalar!(
         "INSERT INTO issue (branch_id, type_id, title, created_by) VALUES ($1, (SELECT id FROM issue_type WHERE code = 'ticket'), 'Q', $2) RETURNING id",
         org.branch_a,
@@ -605,10 +596,10 @@ async fn referenced_groups_are_archived_instead_of_deleted(pool: PgPool) {
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO issue_target (issue_id, branch_id, kind, group_id) VALUES ($1, $2, 'group', $3)",
+        "INSERT INTO issue_target (issue_id, branch_id, kind, department_id) VALUES ($1, $2, 'department', $3)",
         issue,
         org.branch_a,
-        org.managers_group
+        org.managers_department
     )
     .execute(&app.db)
     .await
@@ -617,15 +608,12 @@ async fn referenced_groups_are_archived_instead_of_deleted(pool: PgPool) {
     let manager = as_user(&app, "manager_a@example.com").await;
     let members_uri = format!("/api/branches/{}/members", org.branch_a);
     let body = json!({ "email": "y@example.com", "first_name": "Y", "last_name": "Z" });
-    assert_status(
-        &call(&app, &manager, Method::POST, &members_uri, Some(body.clone())).await,
-        StatusCode::CREATED,
-        None,
-    );
+    assert_status(&call(&app, &manager, Method::POST, &members_uri, Some(body)).await, StatusCode::CREATED, None);
 
-    let res = call(&app, &admin, Method::DELETE, &format!("/api/groups/{}", org.managers_group), None).await;
+    let uri = format!("/api/departments/{}", org.managers_department);
+    let res = call(&app, &admin, Method::DELETE, &uri, None).await;
     assert_eq!(res.body, json!({ "deleted": false, "archived": true }));
-    // Archived groups grant nothing.
+    // Archived departments pass on no permissions.
     let body = json!({ "email": "z@example.com", "first_name": "Z", "last_name": "Z" });
     assert_status(
         &call(&app, &manager, Method::POST, &members_uri, Some(body.clone())).await,
@@ -633,68 +621,72 @@ async fn referenced_groups_are_archived_instead_of_deleted(pool: PgPool) {
         None,
     );
     // Hidden from the list unless asked for; can be restored.
-    let list = call(&app, &admin, Method::GET, &format!("/api/branches/{}/groups", org.branch_a), None).await;
-    assert!(!list.body["items"].as_array().unwrap().iter().any(|g| g["id"] == org.managers_group.to_string()));
-    let res = call(
-        &app,
-        &admin,
-        Method::PATCH,
-        &format!("/api/groups/{}", org.managers_group),
-        Some(json!({ "archived": false })),
-    )
-    .await;
+    let list = call(&app, &admin, Method::GET, &format!("/api/branches/{}/departments", org.branch_a), None).await;
+    assert!(!list.body["items"].as_array().unwrap().iter().any(|d| d["id"] == org.managers_department.to_string()));
+    let res = call(&app, &admin, Method::PATCH, &uri, Some(json!({ "archived": false }))).await;
     assert!(res.body["archived_at"].is_null());
     assert_status(&call(&app, &manager, Method::POST, &members_uri, Some(body)).await, StatusCode::CREATED, None);
 }
 
-// ---------------------------------------------------------------------------
-// Grants
-// ---------------------------------------------------------------------------
-
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn grants_are_validated_with_friendly_errors(pool: PgPool) {
+async fn members_are_chosen_with_a_per_department_grant_and_heads_by_admins(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let admin = as_user(&app, "admin_a@example.com").await;
-    let uri = format!("/api/groups/{}/permissions", org.managers_group);
-    let post = |body: Value| call(&app, &admin, Method::POST, &uri, Some(body));
-
-    let cases = [
-        (json!({ "permission": "no.such", "scope": "branch" }), "unknown_permission"),
-        (json!({ "permission": "issue.create", "scope": "own" }), "invalid_scope"),
-        (json!({ "permission": "issue.read", "scope": "galaxy" }), "invalid_scope"),
-        (json!({ "permission": "member.view", "issue_type": "ticket", "scope": "branch" }), "invalid_issue_type"),
-        (json!({ "permission": "issue.read", "issue_type": "memo", "scope": "branch" }), "invalid_issue_type"),
-    ];
-    for (body, code) in cases {
-        assert_status(&post(body).await, StatusCode::UNPROCESSABLE_ENTITY, Some(code));
+    let lead = create_user(&app.db, NewUser::member("lead@example.com", PW)).await;
+    let co_lead = create_user(&app.db, NewUser::member("co_lead@example.com", PW)).await;
+    for u in [lead, co_lead] {
+        add_member(&app.db, org.branch_a, u).await;
+    }
+    let it = create_department(&app.db, org.branch_a, "IT", &[], &[lead, co_lead]).await;
+    let health = create_department(&app.db, org.branch_a, "Health", &[], &[]).await;
+    for u in [lead, co_lead] {
+        let res = call(&app, &admin, Method::PUT, &format!("/api/departments/{it}/heads/{u}"), None).await;
+        assert_status(&res, StatusCode::NO_CONTENT, None);
     }
 
-    let res = post(json!({ "permission": "issue.edit", "issue_type": "ticket", "scope": "own" })).await;
-    assert_status(&res, StatusCode::CREATED, None);
-    assert_eq!(res.body["issue_type"], "ticket");
-    assert_eq!(res.body["scope"], "own");
-    assert_status(
-        &post(json!({ "permission": "issue.edit", "issue_type": "ticket", "scope": "own" })).await,
-        StatusCode::CONFLICT,
-        Some("grant_exists"),
-    );
+    // Heading a department doesn't let you choose its members...
+    let lead_s = as_user(&app, "lead@example.com").await;
+    let add = |d: Uuid, u: Uuid| format!("/api/departments/{d}/members/{u}");
+    assert_status(&call(&app, &lead_s, Method::PUT, &add(it, org.plain_a), None).await, StatusCode::FORBIDDEN, None);
 
-    // Admins are notified; the acting admin is not.
-    let admin2 = create_user(&app.db, NewUser::member("admin2@example.com", PW)).await;
-    add_member(&app.db, org.branch_a, admin2).await;
-    sqlx::query!("UPDATE branch_membership SET is_admin = true WHERE user_id = $1", admin2)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    assert_status(&post(json!({ "permission": "export.run", "scope": "branch" })).await, StatusCode::CREATED, None);
-    assert_eq!(notifications_of(&app.db, admin2, "permissions_changed").await, 1);
-    assert_eq!(notifications_of(&app.db, org.admin_a, "permissions_changed").await, 0);
-    assert_eq!(audit_count(&app.db, "group_permission", "grant").await, 2);
+    // ...a permission group granting it for "IT" does, attached by an admin.
+    let res = call(
+        &app,
+        &admin,
+        Method::POST,
+        &format!("/api/branches/{}/permission-groups", org.branch_a),
+        Some(json!({ "name": "IT leads", "grants": [{ "permission": "department.members.manage", "department": "it" }] })),
+    )
+    .await;
+    assert_status(&res, StatusCode::CREATED, None);
+    let leads = res.body["id"].as_str().unwrap().to_owned();
+    let res = call(&app, &admin, Method::PUT, &format!("/api/departments/{it}/permission-groups/{leads}"), None).await;
+    assert_status(&res, StatusCode::NO_CONTENT, None);
+
+    assert_status(&call(&app, &lead_s, Method::PUT, &add(it, org.plain_a), None).await, StatusCode::NO_CONTENT, None);
+    assert_status(
+        &call(&app, &lead_s, Method::PUT, &add(health, org.plain_a), None).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
+    // Members, but not the other head: heads are the admins' to change.
+    assert_status(
+        &call(&app, &lead_s, Method::DELETE, &add(it, org.plain_a), None).await,
+        StatusCode::NO_CONTENT,
+        None,
+    );
+    assert_status(&call(&app, &lead_s, Method::DELETE, &add(it, co_lead), None).await, StatusCode::FORBIDDEN, None);
+    assert_status(
+        &call(&app, &lead_s, Method::DELETE, &format!("/api/departments/{it}/heads/{co_lead}"), None).await,
+        StatusCode::FORBIDDEN,
+        None,
+    );
+    assert_status(&call(&app, &admin, Method::DELETE, &add(it, co_lead), None).await, StatusCode::NO_CONTENT, None);
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn losing_a_group_or_the_branch_revokes_on_the_next_request(pool: PgPool) {
+async fn losing_a_department_or_the_branch_revokes_on_the_next_request(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let admin = as_user(&app, "admin_a@example.com").await;
@@ -706,7 +698,7 @@ async fn losing_a_group_or_the_branch_revokes_on_the_next_request(pool: PgPool) 
         &app,
         &admin,
         Method::DELETE,
-        &format!("/api/groups/{}/members/{}", org.managers_group, org.manager_a),
+        &format!("/api/departments/{}/members/{}", org.managers_department, org.manager_a),
         None,
     )
     .await;
@@ -733,7 +725,7 @@ async fn losing_a_group_or_the_branch_revokes_on_the_next_request(pool: PgPool) 
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn effective_permissions_show_their_source_groups(pool: PgPool) {
+async fn effective_permissions_show_their_permission_group_and_department(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let admin = as_user(&app, "admin_a@example.com").await;
@@ -743,10 +735,11 @@ async fn effective_permissions_show_their_source_groups(pool: PgPool) {
     assert_status(&res, StatusCode::OK, None);
     assert_eq!(res.body["is_admin"], false);
     let grants = res.body["grants"].as_array().unwrap();
-    assert_eq!(grants.len(), 13);
+    assert_eq!(grants.len(), 4);
     let manage = grants.iter().find(|g| g["permission"] == "member.manage").unwrap();
-    assert_eq!(manage["group"]["name"], "Managers");
-    assert!(grants.iter().filter(|g| g["group"]["name"] == "All members").count() == 12);
+    assert_eq!(manage["permission_group"]["name"], "Managers");
+    assert_eq!(manage["department"]["name"], "Managers");
+    assert_eq!(grants.iter().filter(|g| g["department"]["name"] == "All members").count(), 3);
 
     // The member can see their own; other members can't.
     let manager = as_user(&app, "manager_a@example.com").await;
@@ -806,8 +799,8 @@ async fn departing_members_work_items_become_unassigned(pool: PgPool) {
     let org = Org::seed(&app.db).await;
     let manager = as_user(&app, "manager_a@example.com").await;
 
-    // A per_member action sent to a group: one item per member.
-    let team = create_group(&app.db, org.branch_a, "Team", &[], &[org.plain_a, org.multi]).await;
+    // A per_member action sent to a department: one item per member.
+    let team = create_department(&app.db, org.branch_a, "Team", &[], &[org.plain_a, org.multi]).await;
     let issue = sqlx::query_scalar!(
         r#"INSERT INTO issue (branch_id, type_id, title, completion_mode, created_by)
            VALUES ($1, (SELECT id FROM issue_type WHERE code = 'action'), 'Do it', 'per_member', $2) RETURNING id"#,
@@ -818,7 +811,7 @@ async fn departing_members_work_items_become_unassigned(pool: PgPool) {
     .await
     .unwrap();
     let target = sqlx::query_scalar!(
-        "INSERT INTO issue_target (issue_id, branch_id, kind, group_id) VALUES ($1, $2, 'group', $3) RETURNING id",
+        "INSERT INTO issue_target (issue_id, branch_id, kind, department_id) VALUES ($1, $2, 'department', $3) RETURNING id",
         issue,
         org.branch_a,
         team
@@ -898,7 +891,8 @@ async fn importing_members_previews_then_adds_everyone_or_no_one(pool: PgPool) {
     let app = TestApp::new(pool);
     let org = Org::seed(&app.db).await;
     let manager = as_user(&app, "manager_a@example.com").await;
-    let users_before = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
+    let users_before =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM app_user"#).fetch_one(&app.db).await.unwrap();
 
     // A bad row blocks the whole import.
     let bad = "email,first_name,last_name\nnew1@example.com,New,One\nnot-an-email,X,Y\nNEW1@example.com,Dup,Licate\n";
@@ -965,7 +959,14 @@ async fn a_branch_opens_without_an_admin_then_fills_up_and_gets_one(pool: PgPool
     let root = as_root(&app).await;
 
     // Open it with no one in it.
-    let res = call(&app, &root, Method::POST, "/api/branches", Some(json!({ "code": "TEH", "name": "Tehran", "timezone": "Asia/Tehran" }))).await;
+    let res = call(
+        &app,
+        &root,
+        Method::POST,
+        "/api/branches",
+        Some(json!({ "code": "TEH", "name": "Tehran", "timezone": "Asia/Tehran" })),
+    )
+    .await;
     assert_status(&res, StatusCode::CREATED, None);
     let branch: Uuid = res.body["id"].as_str().unwrap().parse().unwrap();
 
@@ -975,7 +976,10 @@ async fn a_branch_opens_without_an_admin_then_fills_up_and_gets_one(pool: PgPool
     assert_status(&res, StatusCode::OK, None);
     assert_eq!(res.body["imported"], true);
     let id_of = |email: &str| {
-        res.body["rows"].as_array().unwrap().iter().find(|r| r["email"] == email).unwrap()["user_id"].as_str().unwrap().to_owned()
+        res.body["rows"].as_array().unwrap().iter().find(|r| r["email"] == email).unwrap()["user_id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
     };
     let (head, teacher) = (id_of("head@teh.org"), id_of("teacher@teh.org"));
 

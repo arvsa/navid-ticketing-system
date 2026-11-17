@@ -3,15 +3,16 @@ mod auth;
 mod branches;
 mod comments;
 mod dashboard;
+mod departments;
 mod directory;
 mod events;
-mod groups;
 mod health;
 mod issues;
 pub mod json;
 mod members;
 mod notifications;
 pub mod openapi;
+mod permission_groups;
 mod permissions;
 mod profile;
 mod reports;
@@ -50,7 +51,8 @@ pub fn router(state: AppState) -> Router {
         .merge(permissions::routes())
         .merge(branches::routes())
         .merge(members::routes())
-        .merge(groups::routes())
+        .merge(departments::routes())
+        .merge(permission_groups::routes())
         .merge(issues::routes())
         .merge(work_items::routes())
         .merge(comments::routes())

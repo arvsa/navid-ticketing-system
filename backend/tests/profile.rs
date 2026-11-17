@@ -31,7 +31,9 @@ async fn everyone_writes_a_bio_and_super_admins_their_name(pool: PgPool) {
     let res = call(&app, &plain, Method::PATCH, "/api/me", Some(json!({ "first_name": "Pat" }))).await;
     assert_status(&res, StatusCode::FORBIDDEN, None);
     let root = as_root(&app).await;
-    let res = call(&app, &root, Method::PATCH, "/api/me", Some(json!({ "first_name": " Navid ", "last_name": "Office" }))).await;
+    let res =
+        call(&app, &root, Method::PATCH, "/api/me", Some(json!({ "first_name": " Navid ", "last_name": "Office" })))
+            .await;
     assert_status(&res, StatusCode::OK, None);
     assert_eq!(res.body["user"]["first_name"], "Navid");
     assert_eq!(res.body["user"]["last_name"], "Office");
@@ -66,11 +68,21 @@ async fn a_cover_image_is_seen_by_everyone_signed_in(pool: PgPool) {
     assert_status(&app.get(&uri).await, StatusCode::UNAUTHORIZED, None);
 
     // A new cover replaces the old one; the type comes from the bytes, not the label.
-    let res = send_multipart(&app, &plain, Method::PUT, "/api/me/cover", ("photo", "application/octet-stream", JPEG), &[]).await;
+    let res =
+        send_multipart(&app, &plain, Method::PUT, "/api/me/cover", ("photo", "application/octet-stream", JPEG), &[])
+            .await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
     let img = call(&app, &manager, Method::GET, &uri, None).await;
     assert_eq!(img.headers[header::CONTENT_TYPE], "image/jpeg");
-    let res = send_multipart(&app, &plain, Method::PUT, "/api/me/cover", ("evil.png", "image/png", b"<svg onload=alert(1)>"), &[]).await;
+    let res = send_multipart(
+        &app,
+        &plain,
+        Method::PUT,
+        "/api/me/cover",
+        ("evil.png", "image/png", b"<svg onload=alert(1)>"),
+        &[],
+    )
+    .await;
     assert_status(&res, StatusCode::UNPROCESSABLE_ENTITY, Some("unsupported_type"));
 
     assert_status(&call(&app, &plain, Method::DELETE, "/api/me/cover", None).await, StatusCode::NO_CONTENT, None);
@@ -112,16 +124,16 @@ async fn the_directory_shows_every_branch_its_departments_and_people(pool: PgPoo
     let org = Org::seed(&app.db).await;
     let plain_b = create_user(&app.db, NewUser::member("plain_b@example.com", PW)).await;
     add_member(&app.db, org.branch_b, plain_b).await;
-    let science = create_group(&app.db, org.branch_b, "Science", &[], &[plain_b]).await;
+    let science = create_department(&app.db, org.branch_b, "Science", &[], &[plain_b]).await;
 
     // Someone only in branch A sees branch B's departments and people.
     let plain = as_user(&app, "plain_a@example.com").await;
     let res = call(&app, &plain, Method::GET, "/api/directory", None).await;
     assert_status(&res, StatusCode::OK, None);
     let b = res.body.as_array().unwrap().iter().find(|b| b["id"] == org.branch_b.to_string()).unwrap();
-    let dept = b["groups"].as_array().unwrap().iter().find(|g| g["id"] == science.to_string()).unwrap();
+    let dept = b["departments"].as_array().unwrap().iter().find(|d| d["id"] == science.to_string()).unwrap();
     assert_eq!(dept["member_ids"], json!([plain_b]));
-    assert!(b["groups"].as_array().unwrap().iter().all(|g| g["name"] != "All members"));
+    assert!(b["departments"].as_array().unwrap().iter().all(|d| d["name"] != "All members"));
     let person = b["people"].as_array().unwrap().iter().find(|p| p["user_id"] == plain_b.to_string()).unwrap();
     assert_eq!(person["email"], "plain_b@example.com");
     let admin = b["people"].as_array().unwrap().iter().find(|p| p["user_id"] == org.admin_b.to_string()).unwrap();

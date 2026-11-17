@@ -124,11 +124,16 @@ pub struct MembershipView {
     pub is_admin: bool,
     #[serde(with = "time::serde::rfc3339")]
     pub joined_at: OffsetDateTime,
-    /// Effective grants in this branch (union over the user's groups).
-    /// Branch admins can do everything except super admin actions regardless.
+    /// Effective grants in this branch (union over the permission groups of
+    /// the user's departments, and "Everyone"). Branch admins can do
+    /// everything except super admin actions regardless.
     pub grants: Vec<Grant>,
-    /// Departments in this branch the user heads: they run their members and
-    /// the work and questions sent to them.
+    /// `department.members.manage`: lowercase department names, or `*`.
+    pub manages_members_of: Vec<String>,
+    /// The user's departments in this branch.
+    pub departments: Vec<Uuid>,
+    /// Departments in this branch the user heads: they run the work and
+    /// questions sent to them.
     pub heads: Vec<Uuid>,
 }
 
@@ -166,8 +171,10 @@ async fn me_response(db: &PgPool, actor: &Actor) -> AppResult<MeResponse> {
     let rows = sqlx::query!(
         r#"
         SELECT b.id, b.code, b.name, m.joined_at,
-               ARRAY(SELECT gm.group_id FROM group_member gm WHERE gm.user_id = m.user_id
-                       AND gm.branch_id = b.id AND gm.is_head) AS "heads!"
+               ARRAY(SELECT dm.department_id FROM department_member dm WHERE dm.user_id = m.user_id
+                       AND dm.branch_id = b.id) AS "departments!",
+               ARRAY(SELECT dm.department_id FROM department_member dm WHERE dm.user_id = m.user_id
+                       AND dm.branch_id = b.id AND dm.is_head) AS "heads!"
         FROM branch_membership m
         JOIN branch b ON b.id = m.branch_id
         WHERE m.user_id = $1 AND m.left_at IS NULL
@@ -189,7 +196,9 @@ async fn me_response(db: &PgPool, actor: &Actor) -> AppResult<MeResponse> {
                 is_admin: access.is_admin,
                 joined_at: r.joined_at,
                 grants: access.grants.clone(),
-                heads: r.heads.into_iter().filter(|g| actor.heads(*g)).collect(),
+                manages_members_of: access.manages_members_of.clone(),
+                departments: r.departments,
+                heads: r.heads.into_iter().filter(|d| actor.heads(*d)).collect(),
             })
         })
         .collect();

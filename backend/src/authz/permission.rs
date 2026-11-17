@@ -57,12 +57,10 @@ impl IssueType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Permission {
     IssueRead,
-    IssueCreate,
+    /// Other people's issues: editing your own is the baseline.
     IssueEdit,
+    /// Other people's issues: closing your own is the baseline.
     IssueClose,
-    IssueTarget,
-    /// Send school-wide items to people in other branches.
-    IssueTargetOtherBranches,
     WorkItemUpdate,
     WorkItemAssign,
     WorkItemApprove,
@@ -74,16 +72,17 @@ pub enum Permission {
     MemberManage,
     DashboardBranch,
     ExportRun,
+    /// Create, rename and archive departments, choose their heads.
+    DepartmentManage,
+    /// Add people to departments and remove them; granted per department.
+    DepartmentMembersManage,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 16] = [
+    pub const ALL: [Permission; 15] = [
         Self::IssueRead,
-        Self::IssueCreate,
         Self::IssueEdit,
         Self::IssueClose,
-        Self::IssueTarget,
-        Self::IssueTargetOtherBranches,
         Self::WorkItemUpdate,
         Self::WorkItemAssign,
         Self::WorkItemApprove,
@@ -94,16 +93,15 @@ impl Permission {
         Self::MemberManage,
         Self::DashboardBranch,
         Self::ExportRun,
+        Self::DepartmentManage,
+        Self::DepartmentMembersManage,
     ];
 
     pub fn key(self) -> &'static str {
         match self {
             Self::IssueRead => "issue.read",
-            Self::IssueCreate => "issue.create",
             Self::IssueEdit => "issue.edit",
             Self::IssueClose => "issue.close",
-            Self::IssueTarget => "issue.target",
-            Self::IssueTargetOtherBranches => "issue.target_other_branches",
             Self::WorkItemUpdate => "work_item.update",
             Self::WorkItemAssign => "work_item.assign",
             Self::WorkItemApprove => "work_item.approve",
@@ -114,6 +112,8 @@ impl Permission {
             Self::MemberManage => "member.manage",
             Self::DashboardBranch => "dashboard.branch",
             Self::ExportRun => "export.run",
+            Self::DepartmentManage => "department.manage",
+            Self::DepartmentMembersManage => "department.members.manage",
         }
     }
 
@@ -124,37 +124,18 @@ impl Permission {
     /// May a grant of this permission be limited to one issue type?
     pub fn per_issue_type(self) -> bool {
         use Permission::*;
-        matches!(
-            self,
-            IssueRead
-                | IssueCreate
-                | IssueEdit
-                | IssueClose
-                | IssueTarget
-                | IssueTargetOtherBranches
-                | WorkItemUpdate
-                | WorkItemAssign
-                | WorkItemApprove
-        )
+        matches!(self, IssueRead | IssueEdit | IssueClose | WorkItemUpdate | WorkItemAssign | WorkItemApprove)
     }
 
+    /// Is a grant of this permission for named departments?
+    pub fn per_department(self) -> bool {
+        self == Permission::DepartmentMembersManage
+    }
+
+    /// Every grant is branch-wide: your own issues and what's sent to you
+    /// are the baseline, which needs no grant.
     pub fn allowed_scopes(self) -> &'static [Scope] {
-        use Permission::*;
-        use Scope::*;
-        match self {
-            IssueRead => &[Own, Targeted, Branch],
-            IssueEdit | IssueClose | IssueTarget => &[Own, Branch],
-            WorkItemUpdate | WorkItemAssign | CommentCreate => &[Targeted, Branch],
-            IssueCreate
-            | IssueTargetOtherBranches
-            | WorkItemApprove
-            | CommentInternal
-            | CommentModerate
-            | MemberView
-            | MemberManage
-            | DashboardBranch
-            | ExportRun => &[Branch],
-        }
+        &[Scope::Branch]
     }
 }
 
@@ -173,20 +154,24 @@ pub enum CatalogError {
 }
 
 /// Fails if the `permission` table and [`Permission`] disagree on keys,
-/// `per_issue_type` or `allowed_scopes`. Run at startup.
+/// `per_issue_type`, `per_department` or `allowed_scopes`. Run at startup.
 pub async fn verify_catalog(db: &PgPool) -> Result<(), CatalogError> {
-    let rows =
-        sqlx::query!(r#"SELECT key, per_issue_type, allowed_scopes::text[] AS "allowed_scopes!" FROM permission"#)
-            .fetch_all(db)
-            .await?;
+    let rows = sqlx::query!(
+        r#"SELECT key, per_issue_type, per_department, allowed_scopes::text[] AS "allowed_scopes!" FROM permission"#
+    )
+    .fetch_all(db)
+    .await?;
 
-    let table: BTreeMap<String, (bool, BTreeSet<String>)> =
-        rows.into_iter().map(|r| (r.key, (r.per_issue_type, r.allowed_scopes.into_iter().collect()))).collect();
-    let code: BTreeMap<String, (bool, BTreeSet<String>)> = Permission::ALL
+    type Shape = (bool, bool, BTreeSet<String>);
+    let table: BTreeMap<String, Shape> = rows
+        .into_iter()
+        .map(|r| (r.key, (r.per_issue_type, r.per_department, r.allowed_scopes.into_iter().collect())))
+        .collect();
+    let code: BTreeMap<String, Shape> = Permission::ALL
         .into_iter()
         .map(|p| {
             let scopes = p.allowed_scopes().iter().map(|s| s.as_str().to_owned()).collect();
-            (p.key().to_owned(), (p.per_issue_type(), scopes))
+            (p.key().to_owned(), (p.per_issue_type(), p.per_department(), scopes))
         })
         .collect();
 

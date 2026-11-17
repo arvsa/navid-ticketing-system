@@ -5,9 +5,9 @@ import type { IssueType } from "@/api/types";
 
 /** `onlyType` hides the kind picker (the calendar only creates events). */
 /** `templateTag`: start from the template with this tag (e.g. "report"). */
-export type NewItemOptions = { type?: IssueType; templateTag?: string; date?: string; group?: string; onlyType?: boolean };
+export type NewItemOptions = { type?: IssueType; templateTag?: string; date?: string; department?: string; onlyType?: boolean };
 
 export const NewItemContext = createContext<(opts?: NewItemOptions) => void>(() => {});
 
-/** Opens the New item modal, optionally with a kind, date or group chosen. */
+/** Opens the New item modal, optionally with a kind, date or department chosen. */
 export const useNewItem = () => useContext(NewItemContext);

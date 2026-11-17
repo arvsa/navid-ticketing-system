@@ -271,7 +271,8 @@ async fn comment_editing_deleting_and_moderation(pool: PgPool) {
 async fn comments_on_unreadable_issues_are_404(pool: PgPool) {
     let c = setup(pool).await;
     hide_branch_issues(&c.app.db, c.org.branch_a).await;
-    let hidden = id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
+    let hidden =
+        id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
     assert_status(&c.comment(&c.plain, &hidden, json!({ "body": "hi" })).await, StatusCode::NOT_FOUND, None);
     let res = call(&c.app, &c.plain, Method::GET, &format!("/api/issues/{hidden}/comments"), None).await;
     assert_status(&res, StatusCode::NOT_FOUND, None);
@@ -537,7 +538,8 @@ async fn comment_attachment(c: &Ctx, issue: &str, comment: &str) -> Value {
 async fn an_unreadable_issues_attachment_is_404(pool: PgPool) {
     let c = setup(pool).await;
     hide_branch_issues(&c.app.db, c.org.branch_a).await;
-    let hidden = id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
+    let hidden =
+        id(&c.issue(&c.boss_like, json!({ "branch_id": c.org.branch_a, "type": "ticket", "title": "HR" })).await);
     let res = upload(&c.app, &c.boss_like, &hidden, ("contract.pdf", "application/pdf", b"%PDF"), &[]).await;
     assert_status(&res, StatusCode::CREATED, None);
     let uri = format!("/api/attachments/{}", id(&res.body));

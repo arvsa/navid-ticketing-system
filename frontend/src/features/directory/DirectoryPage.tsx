@@ -19,7 +19,7 @@ function placesOf(branches: DirectoryBranch[], userId: string): Place[] {
   return branches.flatMap((b) => {
     const me = b.people.find((p) => p.user_id === userId);
     if (!me) return [];
-    return [{ branch: b, admin: me.is_admin, departments: b.groups.filter((g) => g.member_ids.includes(userId)).map((g) => g.name) }];
+    return [{ branch: b, admin: me.is_admin, departments: b.departments.filter((g) => g.member_ids.includes(userId)).map((g) => g.name) }];
   });
 }
 
@@ -42,7 +42,7 @@ export function DirectoryPage() {
     const out: { person: DirectoryPerson; branch: DirectoryBranch }[] = [];
     for (const b of branches)
       for (const p of b.people) {
-        const departments = b.groups.filter((g) => g.member_ids.includes(p.user_id)).map((g) => g.name);
+        const departments = b.departments.filter((g) => g.member_ids.includes(p.user_id)).map((g) => g.name);
         const hay = `${fullName(p)} ${p.email} ${b.name} ${departments.join(" ")}`.toLowerCase();
         if (hay.includes(term) && !seen.has(p.user_id)) {
           seen.add(p.user_id);
@@ -115,13 +115,13 @@ export function DirectoryPage() {
 
 function BranchView({ branch, onOpen }: { branch: DirectoryBranch; onOpen: (id: string) => void }) {
   const byId = new Map(branch.people.map((p) => [p.user_id, p]));
-  const inSome = new Set(branch.groups.flatMap((g) => g.member_ids));
+  const inSome = new Set(branch.departments.flatMap((g) => g.member_ids));
   const others = branch.people.filter((p) => !inSome.has(p.user_id));
   return (
     <div className="space-y-5">
       <BranchCard branch={branch} onOpen={onOpen} />
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        {branch.groups.map((g) => (
+        {branch.departments.map((g) => (
           <DepartmentCard
             key={g.id}
             title={g.name}
@@ -133,7 +133,7 @@ function BranchView({ branch, onOpen }: { branch: DirectoryBranch; onOpen: (id: 
         ))}
         {others.length > 0 && (
           <DepartmentCard
-            title={branch.groups.length ? t("Not in a department") : t("Everyone")}
+            title={branch.departments.length ? t("Not in a department") : t("Everyone")}
             muted
             people={others}
             onOpen={onOpen}
@@ -158,7 +158,7 @@ function BranchCard({ branch, onOpen }: { branch: DirectoryBranch; onOpen: (id: 
   const time = localTime(branch.timezone);
   const stats = [
     { icon: <Users className="size-4" />, value: branch.people.length, label: tn(branch.people.length, "person", "people") },
-    { icon: <Layers className="size-4" />, value: branch.groups.length, label: tn(branch.groups.length, "department", "departments") },
+    { icon: <Layers className="size-4" />, value: branch.departments.length, label: tn(branch.departments.length, "department", "departments") },
     { icon: <Shield className="size-4" />, value: admins.length, label: tn(admins.length, "admin", "admins") },
   ];
   return (

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT dm.department_id FROM department_member dm\n               JOIN department d ON d.id = dm.department_id AND d.archived_at IS NULL\n               WHERE dm.user_id = $1 AND dm.is_head",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "department_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "department_member",
+            "name": "department_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a2cbfdd9a876452b5625e4b21e68b58f4b569f9d77ad5a97a06d5e20b7bb365b"
+}

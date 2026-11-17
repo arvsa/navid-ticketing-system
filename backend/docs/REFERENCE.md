@@ -41,14 +41,13 @@ transactions after 60 s.
 
 ## Roles
 
-- **Super admin**: runs the app. Creates branches and their first admins,
-  school-wide groups and accounts in any branch. Can do anything, but isn't
-  part of the daily work: the UI opens on a Setup page.
-- **Branch admin**: runs a branch: its people, groups and their permissions,
-  and any item or work in it. Always may send items to other branches, to
-  people or to whole branches (`issue.target_other_branches`, which admins
-  can also give to others).
-- Everyone else acts through the permissions of their groups.
+- **Super admin** (root user): runs the app. Creates branches and their first
+  admins, school-wide permission groups and accounts in any branch. Can do
+  anything, but isn't part of the daily work: the UI opens on a Setup page.
+- **Branch admin**: runs a branch: its people, departments, permission
+  groups, and any item or work in it. Sends items to their whole branch.
+- **Everyone** has the baseline (below), plus the grants of the permission
+  groups attached to their departments.
 - An item is run by its sender: on a school-wide item only they edit, close
   or resend it. Work is approved by the item's sender or the work's branch
   approvers (its admins and holders of `work_item.approve`).
@@ -64,6 +63,73 @@ transactions after 60 s.
 - `PUT` / `DELETE /api/issues/{id}/mute`: no more comments or changes from an
   item; what needs you (work, a hand-in to review, a mention) still arrives.
 
+## Departments and permissions
+
+Two separate things:
+
+- A **department** is a business unit of a branch: IT, Health, Teachers.
+  Items are sent to departments (and to people); every member gets them, and
+  shared work sent to a department is claimed by one of them. Its **heads**
+  (chosen by admins) hand out, approve or send back, and cancel the work sent
+  to it, and close the questions sent to it. Every branch has a built-in
+  **All members** department that everyone in it joins automatically; send to
+  the whole branch instead of to it.
+- A **permission group** is a named set of grants, for one branch (its
+  admins make it) or school-wide (root users make it; any branch attaches it).
+  Attached to departments, its grants apply to their members in that branch.
+  **Everyone**, the school-wide default group, applies to every user without
+  being attached. Every grant is branch-wide; `department.members.manage` is
+  granted for named departments (or `*`).
+
+**The baseline**, which needs no grant: create items of every type and send
+them to any person or department in any branch; read, comment on and work on
+what you sent or were sent; edit, resend or delete (soft) your own items while
+they're open and current (not an event that has ended, not work past its
+deadline); close your own items at any time. Whole branches are for their
+admins; school-wide items to whole branches for root users.
+
+| Endpoint | Who |
+|---|---|
+| `GET /api/branches/{id}/departments` | Members of the branch. |
+| `POST /api/branches/{id}/departments`, `PATCH`/`DELETE /api/departments/{id}` | Admins, `department.manage`. Deleting a department items were sent to archives it. |
+| `PUT`/`DELETE /api/departments/{id}/members/{user_id}` | Admins, `department.manage`, `department.members.manage` for that department. Removing a head: admins and `department.manage` only. |
+| `PUT`/`DELETE /api/departments/{id}/heads/{user_id}` | Admins, `department.manage`. |
+| `GET`/`POST /api/branches/{id}/permission-groups` | Admins. Lists the branch's groups and the school-wide ones. |
+| `GET`/`POST /api/school-permission-groups` | Root users. |
+| `PATCH`/`DELETE /api/permission-groups/{id}` | `{name?, description?, grants?}`; `grants` replaces them all: `[{permission, issue_type?, department?}]`. |
+| `PUT`/`DELETE /api/departments/{id}/permission-groups/{group_id}` | Admins: attach or detach. |
+| `GET /api/branches/{id}/members/{user_id}/effective-permissions` | Admins and the user: each grant with its permission group and department. |
+| `GET /api/recipients`, `GET /api/recipient-departments` | Everyone: people and departments of every branch, to send items to. |
+| `GET /api/root-users/names` | Everyone: active root users' names (they belong to no branch), to name and @mention them. |
+| `POST /api/issues/{id}/delete` | `{version}`: soft delete. The sender while open and current; admins at any time. |
+
+**The permission config.** `GET /api/permission-config?format=yaml|json`
+returns the setup as one document: permission groups with their grants as
+statements, and each branch's departments with their permission groups and
+heads (by email). Root users get everything; branch admins the school-wide
+groups and their own branches. `POST /api/permission-config?format=&dry_run=`
+with an edited document as the body applies it in one transaction, or with
+`dry_run=true` only lists what would change (`{applied, changes}`). Importing
+creates and updates, never deletes: what's missing from the document is left
+as it is. Branch admins can only change their own branches.
+
+```yaml
+version: 1
+permission_groups:
+  - name: IT support          # add `branch: AAA` for a branch's own group
+    statements:
+      - actions: [issue.read, comment.internal]
+        issue_types: [ticket] # optional; none = every type
+      - actions: [department.members.manage]
+        departments: [IT]     # per-department actions only; "*" = all
+branches:
+  - branch: AAA
+    departments:
+      - name: IT
+        permission_groups: [IT support]
+        heads: [ali@school.example]
+```
+
 ## Settings
 
 - `GET /api/settings` (no sign-in needed) and `PATCH /api/settings`
@@ -78,9 +144,9 @@ transactions after 60 s.
   cached for good; the version is in `/api/me` and `/api/users/{id}/profile`.
 - `GET /api/avatars`: everyone with a picture, `[{user_id, version}]`, so
   clients can show pictures beside names. Changes send `avatars_changed`.
-- `GET /api/directory`: every active branch with its departments (groups
-  other than All members, with their current members) and its people (names,
-  emails, who runs it). Everyone signed in reads it and anyone's profile.
+- `GET /api/directory`: every active branch with its departments (other
+  than All members, with their current members and heads) and its people
+  (names, emails, who runs it). Everyone signed in reads it and anyone's profile.
 
 ## Templates and tags
 
@@ -111,7 +177,7 @@ the normal API, which applies permissions.
 | `ready` | Connected. |
 | `issue_created`, `issue_updated`, `work_item_updated`, `comment_*`, `report_*`, `rsvp_changed`, ... | Something changed on `issue_id`; refetch it (and any list showing it). |
 | `notification` | Your inbox changed; refetch the unread count. |
-| `permissions_changed`, `member_changed`, `group_changed`, `branch_changed` | Refetch `/api/me` and the affected branch data. |
+| `permissions_changed`, `member_changed`, `department_changed`, `permission_groups_changed`, `branch_changed` | Refetch `/api/me` and the affected branch data. |
 | `templates_changed` | Refetch `/api/templates`. |
 | `resync` | Events may have been missed; refetch everything. |
 | `session_ended` | The session is no longer valid; sign in again. |
@@ -155,8 +221,8 @@ an `x-request-id` header to quote when reporting problems.
 | 409 | `email_taken` | A user with this email exists. |
 | 409 | `branch_code_taken` | A branch with this code exists. |
 | 409 | `branch_name_taken` | A branch with this name exists. |
-| 409 | `group_name_taken` | A group with this name exists in the branch. |
-| 409 | `grant_exists` | The group already has this grant. |
+| 409 | `department_name_taken` | A department with this name exists in the branch. |
+| 409 | `permission_group_name_taken` | A permission group with this name exists in the branch (or school-wide). |
 | 409 | `target_exists` | The issue is already sent to this target. |
 | 409 | `already_assigned` | Someone already has this work (or this person already has work on the target). |
 | 409 | `already_member` | Already a member of the branch. |
@@ -164,16 +230,16 @@ an `x-request-id` header to quote when reporting problems.
 | 409 | `member_is_admin` | Admins can't leave a branch; demote them first. |
 | 409 | `last_admin` | A branch must keep an active admin. |
 | 409 | `last_super_admin` | At least one active super admin must remain. |
-| 409 | `default_group` | "All members" can't be renamed, archived, deleted or joined by hand. |
-| 409 | `not_a_member` | The user isn't a current member of the branch. |
-| 409 | `group_archived` | Restore the group first. |
-| 409 | `managed_by_template` | A branch's copy of a school-wide group: change it in the school-wide group (only its members are chosen in the branch). |
-| 409 | `school_group_has_no_members` | A school-wide group has no members of its own; add people to its copy in each branch. |
+| 409 | `default_department` | "All members" can't be renamed, archived, deleted, given heads or joined by hand. |
+| 409 | `default_group` | "Everyone" can't be renamed, deleted or attached: it applies to everyone. |
+| 409 | `not_a_member` | The user isn't a current member of the branch (or of the department, to become a head). |
+| 409 | `department_archived` | Restore the department first. |
+| 409 | `not_empty` | (Demo seed) The database already has branches. |
 | 409 | `issue_not_open` | The issue is closed or cancelled. |
 | 409 | `event_not_open` | The event is cancelled or over. |
 | 409 | `invalid_transition` | Not a valid work item transition from its current status. |
 | 409 | `not_assigned` | Assign or claim the work before working on it. |
-| 409 | `not_claimable` | Only shared work sent to a group can be claimed. |
+| 409 | `not_claimable` | Only shared work sent to a department can be claimed. |
 | 409 | `comment_deleted` | The comment was deleted. |
 | 409 | `report_exists` | There's already a report for this; edit it. |
 | 409 | `report_locked` | The report's work was approved (or its issue closed). |
@@ -190,16 +256,17 @@ an `x-request-id` header to quote when reporting problems.
 | 422 | `invalid_email` | Not a valid email. |
 | 422 | `invalid_name` | A name is empty or too long. |
 | 422 | `invalid_bio` | A bio is longer than 500 characters. |
-| 422 | `reserved_group_name` | A school-wide group can't be called "All members": every branch already has one. |
 | 422 | `invalid_timezone` | Not an IANA timezone name. |
 | 422 | `invalid_branch_code` | Branch codes are 2 to 10 uppercase letters or digits. |
 | 422 | `invalid_admin` | The first admin must be an active user. |
 | 422 | `user_inactive` | An inactive user can't be appointed admin. |
 | 422 | `unknown_permission` | Not a permission in the catalog. |
-| 422 | `invalid_scope` | The scope isn't allowed for this permission. |
 | 422 | `invalid_issue_type` | Unknown issue type, or the permission can't be limited to a type. |
+| 422 | `department_required` | `department.members.manage` names a department (or `*`). |
+| 422 | `invalid_department` | Only per-department permissions name departments. |
+| 422 | `invalid_config` | The permission config can't be read, has an unknown version, or names something that doesn't exist. |
 | 422 | `invalid_title` | Titles are 1 to 200 characters. |
-| 422 | `invalid_target` | Bad target: wrong branch, not a member, archived group, or not allowed here. |
+| 422 | `invalid_target` | Bad target: wrong branch, not a member, archived department, "All members", or not allowed here. |
 | 422 | `event_required` | Events need event details. |
 | 422 | `invalid_event` | Only events have event details. |
 | 422 | `invalid_event_range` | An event must end after it starts. |

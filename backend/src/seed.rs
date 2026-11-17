@@ -104,11 +104,10 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         }
         seeded.users += members.len() + 2;
 
-        // Groups: teachers may create actions; the deputies hold every grant.
-        let teachers =
-            group(db, id, "Teachers", &[("issue.create", Some("action")), ("issue.target", None)], &members[..12])
-                .await?;
-        group(
+        // Departments: teachers, the office, maintenance (who approve
+        // actions) and the deputies, whose permission group holds every grant.
+        let teachers = department(db, id, "Teachers", &[], &members[..12]).await?;
+        department(
             db,
             id,
             "Office",
@@ -116,10 +115,10 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
             &members[12..16],
         )
         .await?;
-        group(db, id, "Maintenance", &[("work_item.approve", Some("action"))], &members[16..20]).await?;
+        department(db, id, "Maintenance", &[("work_item.approve", Some("action"))], &members[16..20]).await?;
         let everything: Vec<(&str, Option<&str>)> =
             crate::authz::Permission::ALL.iter().map(|p| (p.key(), None)).collect();
-        group(db, id, "Deputies", &everything, &[deputy]).await?;
+        department(db, id, "Deputies", &everything, &[deputy]).await?;
         branches.push(Branch { id, code, admin, deputy, members, teachers });
         seeded.branches += 1;
     }
@@ -155,11 +154,10 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         for n in 0..12 {
             let (targets, mode) = match n % 3 {
                 0 => (vec![target_user(b.members[n + 1])], CompletionMode::Shared),
-                1 => (vec![target_group(b.teachers)], CompletionMode::Shared),
-                _ => (vec![target_group(b.teachers)], CompletionMode::PerMember),
+                1 => (vec![target_department(b.teachers)], CompletionMode::Shared),
+                _ => (vec![target_department(b.teachers)], CompletionMode::PerMember),
             };
-            let mut input =
-                new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), targets);
+            let mut input = new_issue(b.id, "action", &format!("{} ({})", ACTIONS[n % ACTIONS.len()], b.code), targets);
             input.completion_mode = mode;
             input.sla_due_at = Some(now + Duration::hours([-20, 6, 30, 72, 200][n % 5]));
             let issue = issues::create(db, &admin, input).await?;
@@ -193,7 +191,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
                 b.id,
                 "event",
                 &format!("{} ({})", EVENTS[n % EVENTS.len()], b.code),
-                vec![target_group(b.teachers)],
+                vec![target_department(b.teachers)],
             );
             input.event = Some(EventInput {
                 details: EventDetails {
@@ -218,9 +216,10 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
         }
 
         // A few reports filed by members for themselves.
-        let report = sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
-            .fetch_optional(db)
-            .await?;
+        let report =
+            sqlx::query_scalar!("SELECT id FROM issue_template WHERE tag = 'report' ORDER BY created_at LIMIT 1")
+                .fetch_optional(db)
+                .await?;
         for n in 0..4 {
             let author = actor(db, b.members[20 + n]).await?;
             let mut issue = new_issue(b.id, "action", &format!("Incident report {} ({})", n + 1, b.code), vec![]);
@@ -234,7 +233,7 @@ pub async fn demo(db: &PgPool) -> AppResult<Seeded> {
     let mut all = new_issue(Uuid::nil(), "action", "Confirm fire drill procedures", vec![]);
     all.branch_id = None;
     all.targets =
-        branches.iter().map(|b| TargetInput { user_id: None, group_id: None, branch_id: Some(b.id) }).collect();
+        branches.iter().map(|b| TargetInput { user_id: None, department_id: None, branch_id: Some(b.id) }).collect();
     issues::create(db, &root_actor, all).await?;
     seeded.issues += 1;
 
@@ -255,31 +254,53 @@ async fn user(db: &PgPool, hash: &str, email: &str, first: &str, last: &str, sup
     .await?)
 }
 
-async fn group(
+/// A department with its members and, if `grants` isn't empty, a permission
+/// group of the same name attached. Per-department grants cover every
+/// department (`*`).
+async fn department(
     db: &PgPool,
     branch: Uuid,
     name: &str,
     grants: &[(&str, Option<&str>)],
     members: &[Uuid],
 ) -> AppResult<Uuid> {
-    let id = sqlx::query_scalar!("INSERT INTO user_group (branch_id, name) VALUES ($1, $2) RETURNING id", branch, name)
+    let id = sqlx::query_scalar!("INSERT INTO department (branch_id, name) VALUES ($1, $2) RETURNING id", branch, name)
         .fetch_one(db)
         .await?;
-    for (key, ty) in grants {
+    if !grants.is_empty() {
+        let group = sqlx::query_scalar!(
+            "INSERT INTO permission_group (branch_id, name) VALUES ($1, $2) RETURNING id",
+            branch,
+            name
+        )
+        .fetch_one(db)
+        .await?;
+        for (key, ty) in grants {
+            let per_department = crate::authz::Permission::from_key(key).is_some_and(|p| p.per_department());
+            sqlx::query!(
+                r#"INSERT INTO permission_group_grant (group_id, permission_key, issue_type_id, scope, department)
+                   VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), 'branch', $4)"#,
+                group,
+                key,
+                *ty,
+                per_department.then_some("*")
+            )
+            .execute(db)
+            .await?;
+        }
+        sqlx::query!("INSERT INTO department_permission_group (department_id, group_id) VALUES ($1, $2)", id, group)
+            .execute(db)
+            .await?;
+    }
+    for m in members {
         sqlx::query!(
-            r#"INSERT INTO group_permission (group_id, permission_key, issue_type_id, scope)
-               VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), 'branch')"#,
+            "INSERT INTO department_member (department_id, user_id, branch_id) VALUES ($1, $2, $3)",
             id,
-            key,
-            *ty
+            m,
+            branch
         )
         .execute(db)
         .await?;
-    }
-    for m in members {
-        sqlx::query!("INSERT INTO group_member (group_id, user_id, branch_id) VALUES ($1, $2, $3)", id, m, branch)
-            .execute(db)
-            .await?;
     }
     Ok(id)
 }
@@ -307,11 +328,11 @@ fn new_issue(branch: Uuid, ty: &str, title: &str, targets: Vec<TargetInput>) -> 
 }
 
 fn target_user(id: Uuid) -> TargetInput {
-    TargetInput { user_id: Some(id), group_id: None, branch_id: None }
+    TargetInput { user_id: Some(id), department_id: None, branch_id: None }
 }
 
-fn target_group(id: Uuid) -> TargetInput {
-    TargetInput { user_id: None, group_id: Some(id), branch_id: None }
+fn target_department(id: Uuid) -> TargetInput {
+    TargetInput { user_id: None, department_id: Some(id), branch_id: None }
 }
 
 fn comment(body: &str, internal: bool) -> NewComment {

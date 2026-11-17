@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCircle2, Forward, Info, Lock, MoreHorizontal, Pencil, X } from "lucide-react";
+import { Bell, BellOff, CheckCircle2, Forward, Info, Lock, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { setIssue, useComments, useHistory, useIssue, useIssueByNumber, useTransition } from "@/api/hooks";
@@ -11,10 +11,10 @@ import { useBranch } from "@/app/BranchContext";
 import { Pill, PriorityText, TagList, TypeBadge } from "@/components/badges";
 import { FileList } from "@/components/files";
 import { Button, Card, ErrorPanel, Hint, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, TabPanel, Tabs, cx } from "@/components/ui";
-import { canClose, canEdit, canPassTicket, canTarget, isAdminOf } from "@/lib/can";
+import { canClose, canDelete, canEdit, canPassTicket, canTarget, isAdminOf } from "@/lib/can";
 import { formatDateTime, formatDay, timeAgo, zoneSuffix } from "@/lib/dates";
 import { historyLines } from "@/lib/history";
-import { isDone, numberOf, primaryAction, targetName, useGroupDirectory, useItemLabels } from "@/lib/items";
+import { isDone, numberOf, primaryAction, targetName, useDepartmentDirectory, useItemLabels } from "@/lib/items";
 import { errorMessage, modeLabel, stateLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -64,7 +64,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   useMarkReadOnOpen(issue);
   const viewer = useViewer();
   const people = usePeople();
-  const groups = useGroupDirectory();
+  const groups = useDepartmentDirectory();
   const { zoneOf } = useBranch();
   const search = useSearch({ from: "/authed/shell/items/$number" });
   const navigate = useNavigate({ from: "/items/$number" });
@@ -72,7 +72,7 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const comments = useComments(issue.id);
   const history = useHistory(issue.id, search.tab === "history");
   const [filter, setFilter] = useState<null | "approved" | "waiting" | "progress" | "not_started">(null);
-  const [dialog, setDialog] = useState<null | "edit" | "send" | "close" | "cancel" | "pass">(null);
+  const [dialog, setDialog] = useState<null | "edit" | "send" | "close" | "cancel" | "pass" | "delete">(null);
   const close = useIssueAction(issue, "close");
   const cancel = useIssueAction(issue, "cancel");
   const zone = zoneOf(issue.branch_id) ?? zoneOf(issue.work_items[0]?.branch_id);
@@ -92,6 +92,17 @@ function ItemView({ issue }: { issue: IssueDetail }) {
   const setMuted = useMutation({
     mutationFn: () => (issue.muted ? api.del(`/issues/${issue.id}/mute`) : api.put(`/issues/${issue.id}/mute`)),
     onSuccess: () => (qc.invalidateQueries({ queryKey: keys.issue(issue.id) }), toast.success(issue.muted ? t("You'll get updates again") : t("Muted. You'll still be told when something needs you."))),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  // Soft delete: gone for everyone, its history kept.
+  const remove = useMutation({
+    mutationFn: () => api.post(`/issues/${issue.id}/delete`, { version: issue.version }),
+    onSuccess: () => {
+      toast.success(t("{key} deleted.", { key: issue.key }));
+      qc.invalidateQueries({ queryKey: keys.issues });
+      qc.invalidateQueries({ queryKey: keys.workItems });
+      navigate({ to: "/items", search: {} });
+    },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const removeTarget = useMutation({
@@ -150,11 +161,17 @@ function ItemView({ issue }: { issue: IssueDetail }) {
       >
         {t("Copy link")}
       </MenuItem>
-      {(canClose(viewer, issue) || canEdit(viewer, issue)) && <MenuSeparator />}
+      {(canClose(viewer, issue) || canEdit(viewer, issue) || canDelete(viewer, issue)) && <MenuSeparator />}
       {canClose(viewer, issue) && <MenuItem onSelect={() => setDialog("close")}>{issue.type === "ticket" ? t("Close question") : t("Close")}</MenuItem>}
       {canClose(viewer, issue) && (
         <MenuItem danger onSelect={() => setDialog("cancel")}>
           {issue.type === "event" ? t("Cancel event") : t("Cancel")}
+        </MenuItem>
+      )}
+      {canDelete(viewer, issue) && (
+        <MenuItem danger onSelect={() => setDialog("delete")}>
+          <Trash2 className="size-4" />
+          {t("Delete")}
         </MenuItem>
       )}
     </Menu>
@@ -356,6 +373,17 @@ function ItemView({ issue }: { issue: IssueDetail }) {
         danger
         loading={cancel.isPending}
         onConfirm={() => cancel.mutate(undefined, { onSuccess: () => setDialog(null) })}
+      />
+      <ConfirmDialog
+        open={dialog === "delete"}
+        onOpenChange={(o) => !o && setDialog(null)}
+        title={t("Delete {key}?", { key: issue.key })}
+        body={t("It disappears for everyone, and any unfinished work is cancelled. Its record is kept in the history log.")}
+        confirm={t("Delete")}
+        cancelText={t("Keep it")}
+        danger
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
       />
     </div>
   );

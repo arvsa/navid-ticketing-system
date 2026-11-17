@@ -37,27 +37,30 @@ export type Branch = S["Branch"];
 export type Member = S["Member"];
 /** Someone in some branch, to send a school-wide item to. */
 export type BranchPerson = S["Recipient"];
-export type BranchGroup = S["RecipientGroup"];
+/** A department in some branch, to send an item to. */
+export type BranchDepartment = S["RecipientDepartment"];
 export type PublicProfile = S["PublicProfile"];
 export type MyProfilePatch = S["MyProfilePatch"];
 export type AddedMember = S["AddedMember"];
 export type ImportOutcome = S["ImportOutcome"];
+export type ConfigImportOutcome = S["ConfigImportOutcome"];
 export type ImportRow = Omit<S["ImportRow"], "error"> & { error?: { code: string; message: string } | null };
 export type ImportReport = Omit<S["ImportReport"], "rows"> & { rows: ImportRow[] };
-export type Group = S["Group"];
+export type Department = S["Department"];
+export type PermissionGroupRef = S["PermissionGroupRef"];
 export type RootUser = S["RootUser"];
-export type GroupGrant = Omit<S["GroupGrant"], "permission" | "issue_type"> & {
+export type RootUserName = S["RootUserName"];
+/** One grant: a permission, maybe for one issue type, or for one department. */
+export type GrantSpec = Omit<S["GrantSpec"], "permission" | "issue_type"> & {
   permission: Permission;
   issue_type?: IssueType | null;
 };
+export type PermissionGroup = Omit<S["PermissionGroup"], "grants"> & { grants: GrantSpec[] };
 export type CatalogEntry = Omit<S["CatalogEntry"], "key" | "allowed_scopes"> & {
   key: Permission;
   allowed_scopes: Scope[];
 };
-export type SourcedGrant = Omit<S["SourcedGrant"], "permission" | "issue_type"> & {
-  permission: Permission;
-  issue_type?: IssueType | null;
-};
+export type SourcedGrant = Omit<S["SourcedGrant"], "permission" | "issue_type"> & GrantSpec;
 export type EffectivePermissions = Omit<S["EffectivePermissions"], "grants"> & {
   grants: SourcedGrant[];
 };
@@ -95,7 +98,7 @@ export type DeleteOutcome = S["DeleteOutcome"];
 export type Settings = S["Settings"];
 export type AvatarRef = S["AvatarRef"];
 export type DirectoryBranch = S["DirectoryBranch"];
-export type DirectoryGroup = S["DirectoryGroup"];
+export type DirectoryDepartment = S["DirectoryDepartment"];
 export type DirectoryPerson = S["DirectoryPerson"];
 export type Template = Omit<S["Template"], "type"> & { type: IssueType };
 export type NewTemplate = Omit<S["NewTemplate"], "type"> & { type: IssueType };

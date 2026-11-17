@@ -146,7 +146,7 @@ impl From<sqlx::Error> for AppError {
     }
 }
 
-/// Named constraints from `0001_init.sql` that deserve a specific code.
+/// Named constraints that deserve a specific code.
 fn map_constraint(constraint: &str) -> Option<AppError> {
     let err = match constraint {
         "app_user_email_key" => AppError::conflict("email_taken", "a user with this email already exists"),
@@ -155,13 +155,12 @@ fn map_constraint(constraint: &str) -> Option<AppError> {
         "branch_code_check" => {
             AppError::validation("invalid_branch_code", "branch code must be 2-10 uppercase letters or digits")
         }
-        "user_group_name_uq" => {
-            AppError::conflict("group_name_taken", "a group with this name already exists in the branch")
+        "department_name_uq" => {
+            AppError::conflict("department_name_taken", "a department with this name already exists in the branch")
         }
-        "user_group_school_name_uq" => {
-            AppError::conflict("group_name_taken", "a school-wide group with this name already exists")
+        "permission_group_name_uq" => {
+            AppError::conflict("permission_group_name_taken", "a permission group with this name already exists here")
         }
-        "group_permission_uq" => AppError::conflict("grant_exists", "this group already has this grant"),
         "issue_target_once" => AppError::conflict("target_exists", "the issue is already sent to this target"),
         "work_item_once_per_assignee" => {
             AppError::conflict("already_assigned", "this person already has work for this target")
@@ -185,12 +184,20 @@ fn map_trigger_message(message: &str) -> AppError {
         AppError::conflict("last_admin", "a branch must keep at least one active admin")
     } else if has("at least one active super admin is required") {
         AppError::conflict("last_super_admin", "at least one active root user is required")
-    } else if has("the default group cannot be deleted") || has("is_default cannot be changed") {
-        AppError::conflict("default_group", "the All members group can't be deleted or changed")
+    } else if has("a built-in department cannot be deleted") {
+        AppError::conflict("default_department", "\"All members\" can't be deleted or changed")
+    } else if has("a built-in permission_group cannot be deleted") || has("is_default cannot be changed") {
+        AppError::conflict("default_group", "\"Everyone\" can't be deleted or changed")
+    } else if has("applies to everyone; it is not attached") {
+        AppError::conflict("default_group", "\"Everyone\" applies to everyone without being attached")
     } else if has("has left branch") {
         AppError::conflict("not_a_member", "the user is not a current member of this branch")
-    } else if has("is not allowed for") {
-        AppError::validation("invalid_scope", "this scope is not allowed for the permission")
+    } else if has("belongs to another branch") {
+        AppError::NotFound
+    } else if has("needs a department") {
+        AppError::validation("department_required", "this permission names a department (or \"*\")")
+    } else if has("cannot name a department") {
+        AppError::validation("invalid_department", "only per-department permissions name departments")
     } else if has("cannot be limited to an issue type") {
         AppError::validation("invalid_issue_type", "this permission can't be limited to an issue type")
     } else if has("target branch must match the issue branch") {

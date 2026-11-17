@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO permission_group_grant (group_id, permission_key, issue_type_id, scope, department)\n                   VALUES ($1, $2, (SELECT id FROM issue_type WHERE code = $3), 'branch',\n                           CASE WHEN $2 = 'department.members.manage' THEN '*' END)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b7e7d87e7854e01d9d8d2e74610f69f65714ad88a7c62d5d0d39515933911ea1"
+}

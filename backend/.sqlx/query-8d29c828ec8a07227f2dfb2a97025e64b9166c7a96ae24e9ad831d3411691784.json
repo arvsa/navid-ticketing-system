@@ -169,7 +169,8 @@
               "Enum": [
                 "branch",
                 "group",
-                "user"
+                "user",
+                "department"
               ]
             }
           }

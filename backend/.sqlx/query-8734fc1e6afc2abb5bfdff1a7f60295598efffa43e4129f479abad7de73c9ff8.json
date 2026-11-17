@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE department_member SET is_head = $3 WHERE department_id = $1 AND user_id = $2 AND is_head <> $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8734fc1e6afc2abb5bfdff1a7f60295598efffa43e4129f479abad7de73c9ff8"
+}

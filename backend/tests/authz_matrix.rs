@@ -1,16 +1,16 @@
 //! Section 6.6: the authorization matrix.
 //!
 //! Fixture: a super admin; branches A and B, each with an admin, a plain
-//! member and a member of an admin-like group; a member who is admin in A
-//! and plain in B; single-grant actors for every row of the 6.1 table; and
-//! issues of every type created by each role,
-//! including a cross-branch super admin issue.
+//! member and a member of an admin-like department; a member who is admin in
+//! A and plain in B; `bare_a`, who has only the baseline; single-grant actors
+//! for every grantable permission; and issues of every type created by each
+//! role, including a cross-branch super admin issue.
 //!
 //! 1. `matrix`: a table of (actor, action, resource, expected) rows run
 //!    through `relations` + `policy::authorize` on the real database.
 //! 2. `list_matches_read_decisions`: for every actor, `GET /api/issues`
 //!    returns exactly the issues `authorize(Read)` allows.
-//! 3. `revocation_is_instant`: group removal and leaving a branch take
+//! 3. `revocation_is_instant`: leaving a department or a branch takes
 //!    effect on the next request.
 
 mod common;
@@ -29,36 +29,27 @@ use uuid::Uuid;
 
 const TYPES: [&str; 3] = ["ticket", "event", "action"];
 
-/// Grants for the single-grant actors in branch A: (name, permission, type, scope).
-/// Each also gets `issue.read @branch` unless the row is about reading, so a
-/// missing read doesn't mask the permission under test.
-const GRANTEES: &[(&str, &str, Option<&str>, &str)] = &[
-    ("g_read_branch", "issue.read", None, "branch"),
-    ("g_read_ticket", "issue.read", Some("ticket"), "branch"),
-    ("g_read_own", "issue.read", None, "own"),
-    ("g_read_targeted", "issue.read", None, "targeted"),
-    ("g_create_action", "issue.create", Some("action"), "branch"),
-    ("g_edit_own", "issue.edit", None, "own"),
-    ("g_edit_branch", "issue.edit", None, "branch"),
-    ("g_edit_ticket", "issue.edit", Some("ticket"), "branch"),
-    ("g_close_own", "issue.close", None, "own"),
-    ("g_close_branch", "issue.close", None, "branch"),
-    ("g_target_own", "issue.target", None, "own"),
-    ("g_target_branch", "issue.target", None, "branch"),
-    ("g_update_targeted", "work_item.update", None, "targeted"),
-    ("g_update_branch", "work_item.update", None, "branch"),
-    ("g_assign_targeted", "work_item.assign", None, "targeted"),
-    ("g_assign_branch", "work_item.assign", None, "branch"),
-    ("g_approve", "work_item.approve", None, "branch"),
-    ("g_approve_ticket", "work_item.approve", Some("ticket"), "branch"),
-    ("g_comment_targeted", "comment.create", None, "targeted"),
-    ("g_comment_branch", "comment.create", None, "branch"),
-    ("g_internal", "comment.internal", None, "branch"),
-    ("g_moderate", "comment.moderate", None, "branch"),
-    ("g_member_view", "member.view", None, "branch"),
-    ("g_member_manage", "member.manage", None, "branch"),
-    ("g_dashboard", "dashboard.branch", None, "branch"),
-    ("g_export", "export.run", None, "branch"),
+/// Grants for the single-grant actors in branch A: (name, permission, type),
+/// all branch-wide. Each also gets `issue.read` unless the row is about
+/// reading, so a missing read doesn't mask the permission under test.
+const GRANTEES: &[(&str, &str, Option<&str>)] = &[
+    ("g_read_branch", "issue.read", None),
+    ("g_read_ticket", "issue.read", Some("ticket")),
+    ("g_edit_branch", "issue.edit", None),
+    ("g_edit_ticket", "issue.edit", Some("ticket")),
+    ("g_close_branch", "issue.close", None),
+    ("g_update_branch", "work_item.update", None),
+    ("g_assign_branch", "work_item.assign", None),
+    ("g_approve", "work_item.approve", None),
+    ("g_approve_ticket", "work_item.approve", Some("ticket")),
+    ("g_comment_branch", "comment.create", None),
+    ("g_internal", "comment.internal", None),
+    ("g_moderate", "comment.moderate", None),
+    ("g_member_view", "member.view", None),
+    ("g_member_manage", "member.manage", None),
+    ("g_dashboard", "dashboard.branch", None),
+    ("g_export", "export.run", None),
+    ("g_department_manage", "department.manage", None),
 ];
 
 struct Fixture {
@@ -102,21 +93,27 @@ async fn insert_issue(db: &PgPool, branch: Option<Uuid>, ty: &str, by: Uuid) -> 
 }
 
 /// Adds a target and, for a user target, an assigned work item; for a
-/// group or branch target, an unassigned one. Returns the work item.
-async fn target_with_item(db: &PgPool, issue: Uuid, branch: Uuid, user: Option<Uuid>, group: Option<Uuid>) -> Uuid {
-    let kind = match (user, group) {
+/// department or branch target, an unassigned one. Returns the work item.
+async fn target_with_item(
+    db: &PgPool,
+    issue: Uuid,
+    branch: Uuid,
+    user: Option<Uuid>,
+    department: Option<Uuid>,
+) -> Uuid {
+    let kind = match (user, department) {
         (Some(_), _) => "user",
-        (_, Some(_)) => "group",
+        (_, Some(_)) => "department",
         _ => "branch",
     };
     let target = sqlx::query_scalar!(
-        r#"INSERT INTO issue_target (issue_id, branch_id, kind, user_id, group_id)
+        r#"INSERT INTO issue_target (issue_id, branch_id, kind, user_id, department_id)
            VALUES ($1, $2, $3::text::target_kind, $4, $5) RETURNING id"#,
         issue,
         branch,
         kind,
         user,
-        group
+        department
     )
     .fetch_one(db)
     .await
@@ -136,14 +133,14 @@ async fn target_with_item(db: &PgPool, issue: Uuid, branch: Uuid, user: Option<U
 async fn seed(db: &PgPool) -> Fixture {
     let mut users = HashMap::new();
     users.insert("root".to_owned(), create_root(db).await);
-    for name in ["admin_a", "plain_a", "deputy_a", "admin_b", "plain_b", "deputy_b", "multi"] {
+    for name in ["admin_a", "plain_a", "deputy_a", "admin_b", "plain_b", "deputy_b", "multi", "bare_a"] {
         let email = format!("{name}@example.com");
         users.insert(name.to_owned(), create_user(db, NewUser::member(&email, PW)).await);
     }
     let u = |users: &HashMap<String, Uuid>, n: &str| users[n];
     let a = create_branch(db, "AAA", u(&users, "admin_a")).await;
     let b = create_branch(db, "BBB", u(&users, "admin_b")).await;
-    for n in ["plain_a", "deputy_a", "multi"] {
+    for n in ["plain_a", "deputy_a", "multi", "bare_a"] {
         add_member(db, a, u(&users, n)).await;
     }
     for n in ["plain_b", "deputy_b", "multi"] {
@@ -157,36 +154,34 @@ async fn seed(db: &PgPool) -> Fixture {
     .execute(db)
     .await
     .unwrap();
-    create_group(db, a, "Deputies", EVERYTHING, &[u(&users, "deputy_a")]).await;
-    create_group(db, b, "Deputies", EVERYTHING, &[u(&users, "deputy_b")]).await;
+    create_department(db, a, "Deputies", EVERYTHING, &[u(&users, "deputy_a")]).await;
+    create_department(db, b, "Deputies", EVERYTHING, &[u(&users, "deputy_b")]).await;
 
-    // Single-grant actors in A: only their grants, not the baseline.
-    for (name, perm, ty, scope) in GRANTEES {
-        let email = format!("{name}@example.com");
-        let id = create_user(db, NewUser::member(&email, PW)).await;
-        add_member(db, a, id).await;
+    // Out of "All members": no grants at all, only the baseline.
+    let without_all_members = |id: Uuid| {
         sqlx::query!(
-            "DELETE FROM group_member gm USING user_group g WHERE g.id = gm.group_id AND g.is_default AND gm.user_id = $1",
+            "DELETE FROM department_member dm USING department d
+             WHERE d.id = dm.department_id AND d.is_default AND dm.user_id = $1",
             id
         )
         .execute(db)
-        .await
-        .unwrap();
-        let mut grants = vec![(*perm, *ty, *scope)];
+    };
+    without_all_members(u(&users, "bare_a")).await.unwrap();
+
+    // Single-grant actors in A: only their grants.
+    for (name, perm, ty) in GRANTEES {
+        let email = format!("{name}@example.com");
+        let id = create_user(db, NewUser::member(&email, PW)).await;
+        add_member(db, a, id).await;
+        without_all_members(id).await.unwrap();
+        let mut grants = vec![(*perm, *ty, "branch")];
         if !name.starts_with("g_read") {
             grants.push(("issue.read", None, "branch"));
         }
-        create_group(db, a, &format!("only {name}"), &grants, &[id]).await;
+        create_department(db, a, &format!("only {name}"), &grants, &[id]).await;
         users.insert((*name).to_owned(), id);
     }
-    let team = create_group(
-        db,
-        a,
-        "Team",
-        &[],
-        &[u(&users, "plain_a"), u(&users, "g_assign_targeted"), u(&users, "g_update_targeted")],
-    )
-    .await;
+    let team = create_department(db, a, "Team", &[], &[u(&users, "plain_a"), u(&users, "bare_a")]).await;
 
     // Issues of every type, created by each role.
     let mut issues = HashMap::new();
@@ -197,45 +192,56 @@ async fn seed(db: &PgPool) -> Fixture {
             issues.insert(format!("{ty}_{creator}"), id);
         }
     }
-    // Issues owned by the own-scope grantees.
-    for name in ["g_read_own", "g_edit_own", "g_close_own", "g_target_own"] {
-        let id = insert_issue(db, Some(a), "action", u(&users, name)).await;
-        issues.insert(format!("own_{name}"), id);
-    }
+    // bare_a's own: current, past its deadline, and an event that has ended.
+    let bare = u(&users, "bare_a");
+    issues.insert("own_bare_a".to_owned(), insert_issue(db, Some(a), "action", bare).await);
+    let overdue = insert_issue(db, Some(a), "action", bare).await;
+    let item = target_with_item(db, overdue, a, Some(u(&users, "plain_a")), None).await;
+    sqlx::query!("UPDATE work_item SET sla_due_at = now() - interval '1 hour' WHERE id = $1", item)
+        .execute(db)
+        .await
+        .unwrap();
+    issues.insert("own_bare_a_overdue".to_owned(), overdue);
+    let ended = insert_issue(db, Some(a), "event", bare).await;
+    sqlx::query!(
+        "INSERT INTO issue_event (issue_id, starts_at, ends_at) VALUES ($1, now() - interval '3 hours', now() - interval '1 hour')",
+        ended
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    issues.insert("event_ended_bare_a".to_owned(), ended);
 
     let mut items = HashMap::new();
     // An action for plain_a: targeted through a user target / assignee.
     let id = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_plain_a", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
     issues.insert("action_for_plain_a".to_owned(), id);
-    // Shared group work, unassigned and claimable by Team members.
+    // Shared department work, unassigned and claimable by Team members.
     let id = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_shared", target_with_item(db, id, a, None, Some(team)).await);
     issues.insert("action_team".to_owned(), id);
-    // Work assigned to the targeted-scope grantees, and to approvers themselves.
-    for (key, who) in [
-        ("wi_g_update_targeted", "g_update_targeted"),
-        ("wi_g_approve", "g_approve"),
-        ("wi_admin_a", "admin_a"),
-        ("wi_deputy_a", "deputy_a"),
-    ] {
+    // Work assigned to bare_a, and to approvers themselves.
+    for (key, who) in
+        [("wi_bare_a", "bare_a"), ("wi_g_approve", "g_approve"), ("wi_admin_a", "admin_a"), ("wi_deputy_a", "deputy_a")]
+    {
         let id = insert_issue(db, Some(a), "action", u(&users, "plain_a")).await;
         items.insert(key, target_with_item(db, id, a, Some(u(&users, who)), None).await);
     }
     let report = insert_issue(db, Some(a), "action", u(&users, "admin_a")).await;
     items.insert("wi_report", target_with_item(db, report, a, Some(u(&users, "plain_a")), None).await);
-    // A ticket addressed to the targeted-comment grantee.
+    // A ticket addressed to bare_a.
     let id = insert_issue(db, Some(a), "ticket", u(&users, "admin_a")).await;
     sqlx::query!(
         "INSERT INTO issue_target (issue_id, branch_id, kind, user_id) VALUES ($1, $2, 'user', $3)",
         id,
         a,
-        u(&users, "g_comment_targeted")
+        bare
     )
     .execute(db)
     .await
     .unwrap();
-    issues.insert("ticket_to_g_comment_targeted".to_owned(), id);
+    issues.insert("ticket_to_bare_a".to_owned(), id);
     // An item a super admin sent in A, with work for plain_a: an ordinary item now.
     let id = insert_issue(db, Some(a), "action", u(&users, "root")).await;
     items.insert("wi_sa", target_with_item(db, id, a, Some(u(&users, "plain_a")), None).await);
@@ -273,6 +279,7 @@ async fn check(f: &Fixture, who: &str, act: &str, res: &str) -> Result<(), Authz
         let issue_type = IssueType::from_code(ty).unwrap();
         let (branch_id, targets_whole_branches) = match res {
             "cross" => (None, true),
+            "cross_people" => (None, false),
             "A+branch" => (branch("A"), true),
             other => (branch(other), false),
         };
@@ -299,6 +306,7 @@ async fn check(f: &Fixture, who: &str, act: &str, res: &str) -> Result<(), Authz
             "read" => Action::ReadIssue { issue },
             "edit" => Action::EditIssue { issue },
             "close" => Action::CloseIssue { issue },
+            "delete" => Action::DeleteIssue { issue },
             "target" => Action::TargetIssue { issue, whole_branch: false },
             "target_branch" => Action::TargetIssue { issue, whole_branch: true },
             "comment" => Action::CommentOnIssue { issue },
@@ -311,7 +319,8 @@ async fn check(f: &Fixture, who: &str, act: &str, res: &str) -> Result<(), Authz
     if let Some(branch_id) = branch(res) {
         let action = match act {
             "dashboard" => Action::ViewBranchDashboard { branch_id },
-            "manage_groups" => Action::ManageGroups { branch_id },
+            "manage_permission_groups" => Action::ManagePermissionGroups { branch_id },
+            "manage_departments" => Action::ManageDepartments { branch_id },
             "view_members" => Action::ViewMembers { branch_id },
             "reactivate" => Action::ReactivateMember { branch_id },
             "edit_branch" => Action::EditBranch { branch_id },
@@ -349,69 +358,71 @@ async fn matrix(pool: PgPool) {
 
     #[rustfmt::skip]
     let rows: &[(&str, &str, &str, Expect)] = &[
-        // ---- 6.1 issue.read: own, targeted, branch ----
+        // ---- issue.read: own and targeted (baseline), branch (grant) ----
         ("g_read_branch", "read", "ticket_plain_a", Allow),
         ("g_read_branch", "read", "action_admin_a", Allow),
         ("g_read_branch", "read", "ticket_plain_b", NotFound),
         ("g_read_ticket", "read", "ticket_admin_a", Allow),
         ("g_read_ticket", "read", "event_admin_a", NotFound),
-        ("g_read_own", "read", "own_g_read_own", Allow),
-        ("g_read_own", "read", "ticket_plain_a", NotFound),
-        ("g_read_targeted", "read", "ticket_plain_a", NotFound),
+        ("bare_a", "read", "own_bare_a", Allow),
+        ("bare_a", "read", "ticket_to_bare_a", Allow),
+        ("bare_a", "read", "action_team", Allow),
+        ("bare_a", "read", "ticket_plain_a", NotFound),
         ("plain_a", "read", "action_for_plain_a", Allow),
         ("plain_a", "read", "action_team", Allow),
-        // ---- issue.create (per type, branch scope) ----
-        ("g_create_action", "create:action", "A", Allow),
-        ("g_create_action", "create:ticket", "A", Forbidden),
-        ("g_create_action", "create:action", "B", NotFound),
-        ("plain_a", "create:ticket", "A", Allow),
-        ("plain_a", "create:event", "A", Allow),
-        // Reports are actions: everyone makes them, but can't send them (below).
-        ("plain_a", "create:action", "A", Allow),
-        ("deputy_a", "create:action", "A", Allow),
-        // ---- issue.edit: own, branch, per type ----
-        ("g_edit_own", "edit", "own_g_edit_own", Allow),
-        ("g_edit_own", "edit", "action_plain_a", Forbidden),
-        ("g_edit_branch", "edit", "action_plain_a", Allow),
-        ("g_edit_ticket", "edit", "ticket_plain_a", Allow),
-        ("g_edit_ticket", "edit", "event_plain_a", Forbidden),
+        // ---- creating: every type, for every member of the branch ----
+        ("bare_a", "create:action", "A", Allow),
+        ("bare_a", "create:ticket", "A", Allow),
+        ("bare_a", "create:event", "A", Allow),
+        ("bare_a", "create:action", "B", NotFound),
+        // ---- editing, retargeting, deleting: your own while open and current ----
+        ("bare_a", "edit", "own_bare_a", Allow),
+        ("bare_a", "target", "own_bare_a", Allow),
+        ("bare_a", "delete", "own_bare_a", Allow),
+        ("bare_a", "edit", "own_bare_a_overdue", Forbidden),
+        ("bare_a", "target", "own_bare_a_overdue", Forbidden),
+        ("bare_a", "delete", "own_bare_a_overdue", Forbidden),
+        ("bare_a", "edit", "event_ended_bare_a", Forbidden),
+        ("bare_a", "close", "own_bare_a_overdue", Allow),
+        ("bare_a", "close", "event_ended_bare_a", Allow),
         ("plain_a", "edit", "action_plain_a", Allow),
         ("plain_a", "edit", "action_deputy_a", Forbidden),
-        // ---- issue.close: own, branch (+ creators always close tickets/events) ----
-        ("g_close_own", "close", "own_g_close_own", Allow),
-        ("g_close_own", "close", "action_plain_a", Forbidden),
+        ("plain_a", "target", "ticket_deputy_a", Forbidden),
+        // ...and other people's with issue.edit / issue.close, per type.
+        ("g_edit_branch", "edit", "action_plain_a", Allow),
+        ("g_edit_branch", "target", "action_plain_a", Allow),
+        ("g_edit_ticket", "edit", "ticket_plain_a", Allow),
+        ("g_edit_ticket", "edit", "event_plain_a", Forbidden),
         ("g_close_branch", "close", "action_plain_a", Allow),
         ("g_read_branch", "close", "action_plain_a", Forbidden),
         ("plain_a", "close", "event_plain_a", Allow),
+        ("plain_a", "close", "action_plain_a", Allow),
         ("plain_a", "close", "event_admin_a", Forbidden),
-        // ---- issue.target: own, branch ----
-        ("g_target_own", "target", "own_g_target_own", Allow),
-        ("g_target_own", "target", "ticket_plain_a", Forbidden),
-        ("g_target_branch", "target", "action_plain_a", Allow),
-        ("plain_a", "target", "ticket_plain_a", Allow),
-        ("plain_a", "target", "action_plain_a", Forbidden),
-        // ---- work_item.update: targeted (assignee / member of unassigned target), branch ----
-        ("g_update_targeted", "update", "wi_g_update_targeted", Allow),
-        ("g_update_targeted", "update", "wi_plain_a", Forbidden),
-        ("g_update_targeted", "update", "wi_shared", Allow),
+        // Deleting someone else's: admins only, whatever the grants.
+        ("deputy_a", "delete", "action_plain_a", Forbidden),
+        ("admin_a", "delete", "action_plain_a", Allow),
+        ("admin_a", "delete", "own_bare_a_overdue", Allow),
+        // ---- work: the assignee, or a member of an unassigned target (baseline); branch (grant) ----
+        ("bare_a", "update", "wi_bare_a", Allow),
+        ("bare_a", "update", "wi_shared", Allow),
+        ("bare_a", "update", "wi_plain_a", NotFound),
         ("g_update_branch", "update", "wi_g_approve", Allow),
         ("plain_a", "update", "wi_plain_a", Allow),
         ("plain_a", "update", "wi_deputy_a", Forbidden),
-        // ---- work_item.assign: targeted = claim only, branch = reassign ----
-        ("g_assign_targeted", "claim", "wi_shared", Allow),
-        ("g_assign_targeted", "assign", "wi_shared", Forbidden),
+        ("bare_a", "claim", "wi_shared", Allow),
+        ("bare_a", "assign", "wi_shared", Forbidden),
         ("g_assign_branch", "assign", "wi_shared", Allow),
         ("g_assign_branch", "assign", "wi_deputy_a", Allow),
         ("g_read_branch", "claim", "wi_shared", Forbidden),
-        // ---- work_item.approve: branch, per type ----
+        // ---- work_item.approve: per type ----
         ("g_approve", "approve", "wi_deputy_a", Allow),
         ("g_approve", "approve", "wi_report", Allow),
         ("g_approve_ticket", "approve", "wi_report", Forbidden),
         ("plain_a", "approve", "wi_deputy_a", Allow), // the item is theirs: senders approve
         ("plain_a", "approve", "wi_report", Forbidden),
-        // ---- comment.create: targeted (created or targeted), branch ----
-        ("g_comment_targeted", "comment", "ticket_to_g_comment_targeted", Allow),
-        ("g_comment_targeted", "comment", "ticket_plain_a", Forbidden),
+        // ---- comments: own and targeted (baseline), branch (grant) ----
+        ("bare_a", "comment", "ticket_to_bare_a", Allow),
+        ("bare_a", "comment", "own_bare_a", Allow),
         ("g_comment_branch", "comment", "ticket_plain_a", Allow),
         ("g_read_branch", "comment", "ticket_plain_a", Forbidden),
         // ---- comment.internal, comment.moderate ----
@@ -443,10 +454,13 @@ async fn matrix(pool: PgPool) {
         ("root", "set_admin", "A", Allow),
         ("admin_a", "set_super_admin", "-", Forbidden),
         ("root", "set_super_admin", "-", Allow),
-        // ---- sending to other branches and whole branches: admins (and holders of the grant) ----
-        ("admin_a", "create:action", "cross", Allow),
+        // ---- other branches: anyone, to people and departments; whole branches: their admins ----
+        ("bare_a", "create:ticket", "cross_people", Allow),
+        ("plain_b", "create:action", "cross_people", Allow),
+        ("admin_a", "create:action", "cross", Forbidden),
         ("root", "create:action", "cross", Allow),
         ("admin_a", "create:action", "A+branch", Allow),
+        ("deputy_a", "create:action", "A+branch", Forbidden),
         ("root", "create:action", "A+branch", Allow),
         // ---- what a super admin sends is an ordinary item ----
         ("admin_a", "approve", "wi_sa", Allow),
@@ -469,9 +483,14 @@ async fn matrix(pool: PgPool) {
         ("admin_a", "reset_password", "root", Forbidden),
 
         // ---- 6.2 branch admin only ----
-        ("admin_a", "manage_groups", "A", Allow),
-        ("deputy_a", "manage_groups", "A", Forbidden),
-        ("admin_a", "manage_groups", "B", NotFound),
+        ("admin_a", "manage_permission_groups", "A", Allow),
+        ("deputy_a", "manage_permission_groups", "A", Forbidden),
+        ("admin_a", "manage_permission_groups", "B", NotFound),
+        // Departments: admins and department.manage.
+        ("admin_a", "manage_departments", "A", Allow),
+        ("g_department_manage", "manage_departments", "A", Allow),
+        ("deputy_a", "manage_departments", "A", Allow),
+        ("plain_a", "manage_departments", "A", Forbidden),
         ("deputy_a", "reactivate", "A", Forbidden),
         ("admin_a", "reactivate", "A", Allow),
         ("deputy_a", "edit_member", "admin_a", Forbidden),
@@ -482,15 +501,15 @@ async fn matrix(pool: PgPool) {
         // ---- 6.4 decision procedure ----
         // 1. super admins: everything, every branch.
         ("root", "read", "ticket_plain_b", Allow),
-        ("root", "manage_groups", "B", Allow),
+        ("root", "manage_permission_groups", "B", Allow),
         // 3/4. Admin of the resource's branch; nothing elsewhere.
         ("admin_a", "read", "ticket_plain_a", Allow),
         ("admin_a", "edit", "ticket_plain_a", Allow),
         ("admin_a", "read", "ticket_plain_b", NotFound),
         // The multi-branch member: admin in A, plain in B; nothing carries over.
         ("multi", "edit", "action_deputy_a", Allow),
-        ("multi", "manage_groups", "A", Allow),
-        ("multi", "manage_groups", "B", Forbidden),
+        ("multi", "manage_permission_groups", "A", Allow),
+        ("multi", "manage_permission_groups", "B", Forbidden),
         ("multi", "read", "ticket_plain_b", Allow),
         ("multi", "edit", "ticket_plain_b", Forbidden),
         // 4. On super admin issues, admins read, comment, assign and update.
@@ -507,7 +526,7 @@ async fn matrix(pool: PgPool) {
         ("admin_b", "edit", "cross", Forbidden),
         ("admin_b", "assign", "wi_cross_b", Allow),
         ("admin_a", "assign", "wi_cross_b", Forbidden),
-        // 6. Admin-like groups: everything grantable, nothing reserved.
+        // 6. Admin-like departments: everything grantable, nothing reserved.
         ("deputy_a", "read", "ticket_plain_a", Allow),
         ("deputy_a", "edit", "ticket_plain_a", Allow),
         ("deputy_a", "approve", "wi_plain_a", Allow),
@@ -518,7 +537,7 @@ async fn matrix(pool: PgPool) {
         ("deputy_a", "approve", "wi_deputy_a", Forbidden),
         ("g_approve", "approve", "wi_g_approve", Forbidden),
         // Extra: read precedes everything (404, not 403).
-        ("g_read_own", "edit", "ticket_plain_a", NotFound),
+        ("bare_a", "edit", "ticket_plain_a", NotFound),
         ("plain_a", "edit", "ticket_plain_b", NotFound),
         ("plain_a", "comment", "ticket_plain_b", NotFound),
         ("plain_b", "update", "wi_plain_a", NotFound),
@@ -597,17 +616,23 @@ async fn revocation_is_instant(pool: PgPool) {
     let ticket = f.issue("ticket_plain_a");
     let uri = format!("/api/issues/{ticket}");
 
-    // Through its only group, g_read_branch can read plain_a's ticket.
+    // Through its only department, g_read_branch can read plain_a's ticket.
     assert_status(&call(&app, &reader, Method::GET, &uri, None).await, StatusCode::OK, None);
-    let group = sqlx::query_scalar!(
-        "SELECT g.id FROM user_group g WHERE g.branch_id = $1 AND g.name = 'only g_read_branch'",
+    let department = sqlx::query_scalar!(
+        "SELECT id FROM department WHERE branch_id = $1 AND name = 'only g_read_branch'",
         f.branches["A"]
     )
     .fetch_one(&f.db)
     .await
     .unwrap();
-    let res = call(&app, &admin, Method::DELETE, &format!("/api/groups/{group}/members/{}", f.user("g_read_branch")), None)
-        .await;
+    let res = call(
+        &app,
+        &admin,
+        Method::DELETE,
+        &format!("/api/departments/{department}/members/{}", f.user("g_read_branch")),
+        None,
+    )
+    .await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
     // Same session, next request: gone, and 404 rather than 403.
     assert_status(&call(&app, &reader, Method::GET, &uri, None).await, StatusCode::NOT_FOUND, None);

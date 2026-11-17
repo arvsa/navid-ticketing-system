@@ -3,6 +3,11 @@
 //! Each [`Action`] carries the facts about its resource (loaded by
 //! `relations`), so the check itself is a pure function and is unit tested
 //! below. Domain functions call it; HTTP handlers never check permissions.
+//!
+//! Three layers decide: the baseline every user has (their own issues and
+//! what's sent to them, see [`baseline`]), the business rules of departments
+//! and passing work along, and the branch-wide grants of the permission
+//! groups attached to the actor's departments.
 
 use uuid::Uuid;
 
@@ -53,19 +58,31 @@ pub enum Action<'a> {
         branch_id: Uuid,
     },
 
-    // -- groups (admin only, except listing) ----------------------------------
-    ViewGroups {
+    // -- departments ------------------------------------------------------------
+    /// List the branch's departments, their members and heads.
+    ViewDepartments {
         branch_id: Uuid,
     },
-    /// Create, rename, archive or delete groups; add or remove group members;
-    /// grant or revoke group permissions (including the "All members" baseline).
-    ManageGroups {
+    /// Create, rename, archive or delete departments; choose their heads.
+    ManageDepartments {
         branch_id: Uuid,
     },
-    /// List, create and change school-wide groups (no branch), their members
-    /// and grants.
-    ManageSchoolGroups,
-    /// A member's effective permissions, with the group each comes from.
+    /// Add people to the department called `department`, or remove them.
+    ManageDepartmentMembers {
+        branch_id: Uuid,
+        department: &'a str,
+    },
+
+    // -- permission groups (admin only) ----------------------------------------
+    /// Create, change or delete the branch's permission groups, and attach
+    /// permission groups to its departments.
+    ManagePermissionGroups {
+        branch_id: Uuid,
+    },
+    /// List, create and change school-wide permission groups, "Everyone"
+    /// included.
+    ManageSchoolPermissionGroups,
+    /// A member's effective permissions, with where each comes from.
     ViewEffectivePermissions {
         branch_id: Uuid,
         user_id: Uuid,
@@ -103,8 +120,8 @@ pub enum Action<'a> {
         target: &'a UserFacts,
     },
 
-    /// List the people of every branch (names only), to address a
-    /// school-wide item to them.
+    /// List the people and departments of every branch, to send an item to
+    /// them.
     FindPeopleInOtherBranches,
 
     // -- issues ----------------------------------------------------------------
@@ -123,7 +140,12 @@ pub enum Action<'a> {
     CloseIssue {
         issue: &'a IssueFacts,
     },
-    /// Add or remove a target. Whole-branch targets are super admin only.
+    /// Soft delete: hidden from everyone, its history kept.
+    DeleteIssue {
+        issue: &'a IssueFacts,
+    },
+    /// Add or remove a target. Whole-branch targets are for the branch's
+    /// admins and super admins.
     TargetIssue {
         issue: &'a IssueFacts,
         whole_branch: bool,
@@ -185,6 +207,7 @@ impl Action<'_> {
             ReadIssue { issue }
             | EditIssue { issue }
             | CloseIssue { issue }
+            | DeleteIssue { issue }
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
@@ -208,7 +231,7 @@ impl Action<'_> {
             | EditBranch { .. }
             | SetBranchAdmin { .. }
             | SetSuperAdmin
-            | ManageSchoolGroups
+            | ManageSchoolPermissionGroups
             | EditSettings
             | ManageTemplates
             | ExportPeople => true,
@@ -227,7 +250,10 @@ impl Action<'_> {
     fn is_admin_only(&self) -> bool {
         use Action::*;
         match self {
-            ManageGroups { .. } | ReactivateMember { .. } | CancelWorkItem { .. } => true,
+            // Permission groups decide what people may do: no grant hands that out.
+            ManagePermissionGroups { .. } | ReactivateMember { .. } | CancelWorkItem { .. } | DeleteIssue { .. } => {
+                true
+            }
             // Acting on another admin's membership or profile.
             EditMember { target, .. } | RemoveMember { target, .. } | ResetPassword { target } => {
                 target.is_admin_anywhere()
@@ -242,7 +268,7 @@ impl Action<'_> {
         match self {
             CreateBranch
             | SetSuperAdmin
-            | ManageSchoolGroups
+            | ManageSchoolPermissionGroups
             | FindPeopleInOtherBranches
             | EditSettings
             | ManageTemplates
@@ -250,8 +276,10 @@ impl Action<'_> {
             EditBranch { branch_id }
             | SetBranchAdmin { branch_id }
             | ViewBranch { branch_id }
-            | ViewGroups { branch_id }
-            | ManageGroups { branch_id }
+            | ViewDepartments { branch_id }
+            | ManageDepartments { branch_id }
+            | ManageDepartmentMembers { branch_id, .. }
+            | ManagePermissionGroups { branch_id }
             | ViewEffectivePermissions { branch_id, .. }
             | ViewMembers { branch_id }
             | AddMember { branch_id, .. }
@@ -271,6 +299,7 @@ impl Action<'_> {
             ReadIssue { issue }
             | EditIssue { issue }
             | CloseIssue { issue }
+            | DeleteIssue { issue }
             | TargetIssue { issue, .. }
             | CommentOnIssue { issue }
             | InternalComments { issue }
@@ -337,16 +366,19 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
             return Ok(());
         }
     }
-
     // 2f. A department's heads run what's sent to it.
     if runs_department_work(actor, &action) {
+        return Ok(());
+    }
+    // 2g. What every user may do without a grant.
+    if baseline(actor, &action) {
         return Ok(());
     }
 
     // 3. The resource's branch(es). Not a member of any: it isn't visible.
     let mut ids = action.branches();
     // A school-wide item: its sender works on the item itself under the rules
-    // of their own branches, and only they edit, close or hide it (it spans
+    // of their own branches, and only they edit, close or delete it (it spans
     // branches the receiving admins don't run). Work items still follow the
     // branch they're in.
     if let Some(issue) = action.issue() {
@@ -359,7 +391,7 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
                 | Action::CancelWorkItem { .. }
         );
         if issue_level && issue.branch_id.is_none() {
-            if matches!(action, Action::EditIssue { .. } | Action::CloseIssue { .. }) {
+            if matches!(action, Action::EditIssue { .. } | Action::CloseIssue { .. } | Action::DeleteIssue { .. }) {
                 ids.clear();
             }
             if issue.created_by == actor.user_id {
@@ -382,7 +414,7 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
         if action.is_admin_only() {
             continue;
         }
-        // 6. Grants (and the few rules that need no grant).
+        // 6. Grants.
         if allowed_by_grants(actor, branch_id, access, &action) {
             return Ok(());
         }
@@ -391,62 +423,65 @@ pub fn authorize(actor: &Actor, action: Action<'_>) -> Result<(), AuthzError> {
     Err(Forbidden)
 }
 
-/// Sending to other branches, or to a whole branch: branch admins always
-/// may; others need `issue.target_other_branches` (for the kind, plus the
-/// right to create it) in one of their branches. Only its sender changes who
-/// a school-wide item goes to. `None` for every other action, including a
-/// branch item going to people or groups of its own branch.
+/// Anyone may send items to people and departments in any branch. Whole
+/// branches are for that branch's admins (and super admins). Only its
+/// sender changes who a school-wide item goes to. `None` for every other
+/// action, including a branch item going to people or departments of its
+/// own branch.
 fn across_branches(actor: &Actor, action: &Action<'_>) -> Option<bool> {
-    let branch_only = |s: Scope| s == Scope::Branch;
-    let sends_across = |access: &BranchAccess, issue_type: Option<IssueType>| {
-        access.is_admin
-            || match issue_type {
-                Some(ty) => has_grant(access, Permission::IssueTargetOtherBranches, Some(ty), branch_only),
-                None => access
-                    .grants
-                    .iter()
-                    .any(|g| g.permission == Permission::IssueTargetOtherBranches && g.scope == Scope::Branch),
-            }
-    };
-    let may_send = |issue_type: IssueType| {
-        actor.branches.values().any(|access| {
-            sends_across(access, Some(issue_type))
-                && (access.is_admin || has_grant(access, Permission::IssueCreate, Some(issue_type), branch_only))
-        })
-    };
-    // A branch item going to its whole branch: decided by the branch's rules
-    // once the sender may send to whole branches there.
-    let whole_own_branch = |branch_id: Uuid, issue_type: IssueType| match actor.branch(branch_id) {
-        Some(access) if !sends_across(access, Some(issue_type)) => Some(false),
-        // Not a member: the branch rules answer (not found).
-        _ => None,
-    };
+    let member_somewhere = !actor.branches.is_empty();
     match *action {
-        Action::FindPeopleInOtherBranches => Some(actor.branches.values().any(|access| sends_across(access, None))),
-        Action::CreateIssue { branch_id: None, issue_type, .. } => Some(may_send(issue_type)),
-        Action::TargetIssue { issue, .. } if issue.branch_id.is_none() => {
-            Some(issue.created_by == actor.user_id && may_send(issue.issue_type))
+        Action::FindPeopleInOtherBranches => Some(member_somewhere),
+        Action::CreateIssue { branch_id: None, targets_whole_branches, .. } => {
+            // A school-wide item reaches whole branches only from super admins.
+            Some(member_somewhere && !targets_whole_branches)
         }
-        Action::CreateIssue { branch_id: Some(b), issue_type, targets_whole_branches: true } => {
-            whole_own_branch(b, issue_type)
+        Action::TargetIssue { issue, whole_branch } if issue.branch_id.is_none() => {
+            Some(issue.created_by == actor.user_id && issue.sender_may_change && !whole_branch)
         }
-        Action::TargetIssue { issue, whole_branch: true } => whole_own_branch(issue.branch_id?, issue.issue_type),
+        Action::CreateIssue { branch_id: Some(b), targets_whole_branches: true, .. } => Some(actor.is_admin_of(b)),
+        Action::TargetIssue { issue, whole_branch: true } => {
+            Some(issue.branch_id.is_some_and(|b| actor.is_admin_of(b)))
+        }
         _ => None,
     }
 }
 
 /// Work sent to a department the actor heads (hand it out, approve or send
-/// it back, cancel it), and closing a question sent to it.
+/// it back, cancel it), and closing a question sent to it, while still a
+/// member of its branch.
 fn runs_department_work(actor: &Actor, action: &Action<'_>) -> bool {
     match *action {
         Action::AssignWorkItem { item } | Action::ApproveWorkItem { item } | Action::CancelWorkItem { item } => {
-            item.target_group_id.is_some_and(|g| actor.heads(g))
+            actor.branch(item.branch_id).is_some() && item.target_department_id.is_some_and(|d| actor.heads(d))
         }
         Action::CloseIssue { issue } => {
             issue.issue_type == IssueType::Ticket
-                && issue.branch_id.is_some()
-                && issue.target_group_ids.iter().any(|g| actor.heads(*g))
+                && issue.branch_id.is_some_and(|b| actor.branch(b).is_some())
+                && issue.target_department_ids.iter().any(|d| actor.heads(*d))
         }
+        _ => false,
+    }
+}
+
+/// What every user may do without a grant, in branches they belong to:
+/// create items and send them to anyone; edit, retarget or delete their own
+/// while open and current (closing them at any time); comment on, and work
+/// on, what's sent to them.
+fn baseline(actor: &Actor, action: &Action<'_>) -> bool {
+    use Action::*;
+    let me = actor.user_id;
+    let own = |issue: &IssueFacts| issue.created_by == me;
+    match *action {
+        CreateIssue { branch_id: Some(b), targets_whole_branches: false, .. } => actor.branch(b).is_some(),
+        EditIssue { issue } | DeleteIssue { issue } | TargetIssue { issue, whole_branch: false } => {
+            own(issue) && issue.sender_may_change
+        }
+        CloseIssue { issue } => own(issue),
+        CommentOnIssue { issue } => own(issue) || issue.actor_targeted,
+        UpdateWorkItem { item } | ClaimWorkItem { item } => work_item_targeted(item, me),
+        ViewDepartments { branch_id } | ViewBranch { branch_id } => actor.branch(branch_id).is_some(),
+        ViewEffectivePermissions { branch_id, user_id } => user_id == me && actor.branch(branch_id).is_some(),
         _ => false,
     }
 }
@@ -461,53 +496,38 @@ pub fn can_read(actor: &Actor, issue: &IssueFacts) -> bool {
     }
     issue.branches().into_iter().any(|b| {
         let Some(access) = actor.branch(b) else { return false };
-        access.is_admin || has_grant(access, Permission::IssueRead, Some(issue.issue_type), |s| s == Scope::Branch)
+        access.is_admin || has_grant(access, Permission::IssueRead, Some(issue.issue_type))
     })
 }
 
 fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, action: &Action<'_>) -> bool {
     use Action::*;
     use Permission as P;
-    let me = actor.user_id;
-    let branch_only = |s: Scope| s == Scope::Branch;
+    let _ = (actor, branch_id);
 
     match *action {
-        // Membership alone is enough.
-        ViewBranch { .. } | ViewGroups { .. } => true,
-        ViewEffectivePermissions { user_id, .. } => user_id == me,
-
-        ViewMembers { .. } => has_grant(access, P::MemberView, None, branch_only),
+        ViewMembers { .. } => has_grant(access, P::MemberView, None),
         AddMember { .. } | EditMember { .. } | RemoveMember { .. } | ResetPassword { .. } | SetUserActive { .. } => {
-            has_grant(access, P::MemberManage, None, branch_only)
+            has_grant(access, P::MemberManage, None)
         }
-        ViewBranchDashboard { .. } => has_grant(access, P::DashboardBranch, None, branch_only),
-        Export { .. } => has_grant(access, P::ExportRun, None, branch_only),
+        ViewBranchDashboard { .. } => has_grant(access, P::DashboardBranch, None),
+        Export { .. } => has_grant(access, P::ExportRun, None),
 
-        CreateIssue { issue_type, .. } => has_grant(access, P::IssueCreate, Some(issue_type), branch_only),
-        EditIssue { issue } => has_issue_grant(access, P::IssueEdit, issue, me),
-        CloseIssue { issue } => {
-            // "Anyone can close the tickets and events they created."
-            (issue.created_by == me && issue.issue_type != IssueType::Action)
-                || has_issue_grant(access, P::IssueClose, issue, me)
-        }
-        TargetIssue { issue, .. } => has_issue_grant(access, P::IssueTarget, issue, me),
-        CommentOnIssue { issue } => has_grant(access, P::CommentCreate, None, |s| match s {
-            Scope::Branch => true,
-            // Only issues you are targeted by or created.
-            Scope::Targeted => issue.actor_targeted || issue.created_by == me,
-            Scope::Own => false,
-        }),
-        InternalComments { .. } => has_grant(access, P::CommentInternal, None, branch_only),
-        ModerateComments { .. } => has_grant(access, P::CommentModerate, None, branch_only),
+        ManageDepartments { .. } => has_grant(access, P::DepartmentManage, None),
+        ManageDepartmentMembers { department, .. } => access.manages_members_of(department),
 
-        UpdateWorkItem { item } => {
-            has_grant(access, P::WorkItemUpdate, Some(item.issue.issue_type), |s| work_item_scope(s, item, me))
+        // Other people's issues.
+        EditIssue { issue } | TargetIssue { issue, .. } => has_grant(access, P::IssueEdit, Some(issue.issue_type)),
+        CloseIssue { issue } => has_grant(access, P::IssueClose, Some(issue.issue_type)),
+        CommentOnIssue { .. } => has_grant(access, P::CommentCreate, None),
+        InternalComments { .. } => has_grant(access, P::CommentInternal, None),
+        ModerateComments { .. } => has_grant(access, P::CommentModerate, None),
+
+        UpdateWorkItem { item } => has_grant(access, P::WorkItemUpdate, Some(item.issue.issue_type)),
+        ClaimWorkItem { item } | AssignWorkItem { item } => {
+            has_grant(access, P::WorkItemAssign, Some(item.issue.issue_type))
         }
-        ClaimWorkItem { item } => {
-            has_grant(access, P::WorkItemAssign, Some(item.issue.issue_type), |s| work_item_scope(s, item, me))
-        }
-        AssignWorkItem { item } => has_grant(access, P::WorkItemAssign, Some(item.issue.issue_type), branch_only),
-        ApproveWorkItem { item } => has_grant(access, P::WorkItemApprove, Some(item.issue.issue_type), branch_only),
+        ApproveWorkItem { item } => has_grant(access, P::WorkItemApprove, Some(item.issue.issue_type)),
 
         // Decided before the grant step.
         CreateBranch
@@ -517,52 +537,36 @@ fn allowed_by_grants(actor: &Actor, branch_id: Uuid, access: &BranchAccess, acti
         | EditSettings
         | ManageTemplates
         | ExportPeople
-        | ManageGroups { .. }
-        | ManageSchoolGroups
+        | ViewBranch { .. }
+        | ViewDepartments { .. }
+        | ManagePermissionGroups { .. }
+        | ManageSchoolPermissionGroups
+        | ViewEffectivePermissions { .. }
         | ReactivateMember { .. }
+        | CreateIssue { .. }
         | ReadIssue { .. }
+        | DeleteIssue { .. }
         | PassWorkItem { .. }
         | PassTicket { .. }
         | FindPeopleInOtherBranches
-        | CancelWorkItem { .. } => {
-            let _ = branch_id;
-            false
-        }
+        | CancelWorkItem { .. } => false,
     }
 }
 
-/// `own` / `branch` scopes for issue-level grants.
-fn has_issue_grant(access: &BranchAccess, permission: Permission, issue: &IssueFacts, me: Uuid) -> bool {
-    has_grant(access, permission, Some(issue.issue_type), |s| match s {
-        Scope::Branch => true,
-        Scope::Own => issue.created_by == me,
-        Scope::Targeted => false,
-    })
-}
-
-/// `targeted` for work items: the assignee, or for an unassigned item a member
-/// of its target.
-fn work_item_scope(scope: Scope, item: &WorkItemFacts, me: Uuid) -> bool {
-    match scope {
-        Scope::Branch => true,
-        Scope::Targeted => match item.assignee_id {
-            Some(assignee) => assignee == me,
-            None => item.actor_in_target,
-        },
-        Scope::Own => false,
+/// Work sent to the actor: they're its assignee, or for an unassigned item a
+/// member of its target.
+fn work_item_targeted(item: &WorkItemFacts, me: Uuid) -> bool {
+    match item.assignee_id {
+        Some(assignee) => assignee == me,
+        None => item.actor_in_target,
     }
 }
 
-/// Does any grant in the branch match the permission, the issue type (a grant
-/// without a type covers all types) and a scope that holds?
-fn has_grant(
-    access: &BranchAccess,
-    permission: Permission,
-    issue_type: Option<IssueType>,
-    scope_holds: impl Fn(Scope) -> bool,
-) -> bool {
+/// Does any grant in the branch match the permission and the issue type (a
+/// grant without a type covers all types)? Every grant is branch-wide.
+fn has_grant(access: &BranchAccess, permission: Permission, issue_type: Option<IssueType>) -> bool {
     access.grants.iter().any(|g| {
-        g.permission == permission && (g.issue_type.is_none() || g.issue_type == issue_type) && scope_holds(g.scope)
+        g.permission == permission && (g.issue_type.is_none() || g.issue_type == issue_type) && g.scope == Scope::Branch
     })
 }
 
@@ -584,24 +588,13 @@ mod tests {
         Grant { permission, issue_type, scope }
     }
 
-    /// The "All members" baseline from the schema trigger.
+    /// A new branch's "All members" permission group (schema trigger).
     fn baseline() -> Vec<Grant> {
-        use IssueType::*;
         use Permission::*;
-        use Scope::*;
         vec![
-            grant(IssueRead, None, Branch),
-            grant(IssueCreate, Some(Ticket), Branch),
-            grant(IssueCreate, Some(Action), Branch),
-            grant(IssueCreate, Some(Event), Branch),
-            grant(IssueEdit, None, Own),
-            grant(IssueClose, None, Own),
-            grant(IssueTarget, Some(Ticket), Own),
-            grant(IssueTarget, Some(Event), Own),
-            grant(WorkItemUpdate, None, Targeted),
-            grant(WorkItemAssign, None, Targeted),
-            grant(CommentCreate, None, Branch),
-            grant(MemberView, None, Branch),
+            grant(IssueRead, None, Scope::Branch),
+            grant(CommentCreate, None, Scope::Branch),
+            grant(MemberView, None, Scope::Branch),
         ]
     }
 
@@ -616,7 +609,9 @@ mod tests {
             is_super_admin: false,
             branches: branches
                 .iter()
-                .map(|(b, is_admin, grants)| (*b, BranchAccess { is_admin: *is_admin, grants: grants.clone() }))
+                .map(|(b, is_admin, grants)| {
+                    (*b, BranchAccess { is_admin: *is_admin, grants: grants.clone(), manages_members_of: vec![] })
+                })
                 .collect(),
             heads: Default::default(),
         }
@@ -657,7 +652,8 @@ mod tests {
             issue_type: ty,
             created_by,
             target_branch_ids: vec![A],
-            target_group_ids: vec![],
+            target_department_ids: vec![],
+            sender_may_change: true,
             actor_targeted: false,
         }
     }
@@ -669,7 +665,7 @@ mod tests {
             assignee_id: assignee,
             reviewer: None,
             actor_in_target,
-            target_group_id: None,
+            target_department_id: None,
             issue,
         }
     }
@@ -702,26 +698,23 @@ mod tests {
     }
 
     #[test]
-    fn admins_send_to_other_branches_and_whole_branches() {
-        let cross =
-            Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
+    fn whole_branches_are_for_their_admins_and_school_wide_ones_for_root_users() {
         let own_branch =
             Action::CreateIssue { branch_id: Some(A), issue_type: IssueType::Action, targets_whole_branches: true };
-        for action in [cross, own_branch] {
-            ok(&super_admin(), action);
-            ok(&admin(1), action);
-            // Holders of the grant may; creating alone isn't enough.
-            ok(&admin_like(2), action);
-            denied(
-                &actor(3, &[(A, false, vec![grant(Permission::IssueCreate, None, Scope::Branch)])]),
-                action,
-                Forbidden,
-            );
-        }
-        // A whole branch elsewhere needs no admin role there.
+        ok(&super_admin(), own_branch);
+        ok(&admin(1), own_branch);
+        // Grants don't open whole branches.
+        denied(&admin_like(2), own_branch, Forbidden);
+        denied(&member(3), own_branch, Forbidden);
+        // Another branch's whole branch: only its own admins.
         let other_branch =
             Action::CreateIssue { branch_id: Some(B), issue_type: IssueType::Action, targets_whole_branches: true };
-        denied(&admin(1), other_branch, NotFound);
+        denied(&admin(1), other_branch, Forbidden);
+        // School-wide items to whole branches: root users only.
+        let cross =
+            Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
+        ok(&super_admin(), cross);
+        denied(&admin(1), cross, Forbidden);
     }
 
     #[test]
@@ -779,14 +772,43 @@ mod tests {
     // ---- 6.2: branch admin only ---------------------------------------------------
 
     #[test]
-    fn group_management_is_admin_only_even_for_admin_like_groups() {
-        let action = Action::ManageGroups { branch_id: A };
+    fn permission_groups_are_admin_only_even_for_admin_like_departments() {
+        let action = Action::ManagePermissionGroups { branch_id: A };
         ok(&super_admin(), action);
         ok(&admin(1), action);
         denied(&admin_like(2), action, Forbidden);
         denied(&member(3), action, Forbidden);
         // Admin of another branch: not visible.
         denied(&actor(4, &[(B, true, vec![])]), action, NotFound);
+    }
+
+    #[test]
+    fn departments_are_managed_by_admins_and_department_manage() {
+        let action = Action::ManageDepartments { branch_id: A };
+        ok(&admin(1), action);
+        ok(&admin_like(2), action);
+        denied(&member(3), action, Forbidden);
+        ok(&member(3), Action::ViewDepartments { branch_id: A });
+        denied(&member(3), Action::ViewDepartments { branch_id: B }, NotFound);
+    }
+
+    #[test]
+    fn department_members_are_chosen_per_department() {
+        let it = Action::ManageDepartmentMembers { branch_id: A, department: "IT" };
+        let health = Action::ManageDepartmentMembers { branch_id: A, department: "Health" };
+        let mut chooser = member(1);
+        chooser.branches.get_mut(&A).unwrap().manages_members_of = vec!["it".into()];
+        ok(&chooser, it);
+        denied(&chooser, health, Forbidden);
+        let mut everywhere = member(2);
+        everywhere.branches.get_mut(&A).unwrap().manages_members_of = vec!["*".into()];
+        ok(&everywhere, health);
+        ok(&admin(3), health);
+        denied(&member(4), it, Forbidden);
+        // Heads choose members only through a grant.
+        let mut head = member(5);
+        head.heads.insert(Uuid::from_u128(0xD));
+        denied(&head, it, Forbidden);
     }
 
     #[test]
@@ -856,8 +878,8 @@ mod tests {
     #[test]
     fn grants_never_carry_over_between_branches() {
         let multi = actor(1, &[(A, true, baseline()), (B, false, vec![])]);
-        ok(&multi, Action::ManageGroups { branch_id: A });
-        denied(&multi, Action::ManageGroups { branch_id: B }, Forbidden);
+        ok(&multi, Action::ManagePermissionGroups { branch_id: A });
+        denied(&multi, Action::ManagePermissionGroups { branch_id: B }, Forbidden);
         denied(&multi, Action::ViewMembers { branch_id: B }, Forbidden);
         ok(&multi, Action::ViewMembers { branch_id: A });
     }
@@ -902,65 +924,71 @@ mod tests {
     }
 
     #[test]
-    fn create_needs_the_type_specific_grant() {
-        let create = |ty| Action::CreateIssue { branch_id: Some(A), issue_type: ty, targets_whole_branches: false };
-        let m = member(1);
-        ok(&m, create(IssueType::Ticket));
-        ok(&m, create(IssueType::Event));
-        // Reports are actions: the baseline creates them, but can't send them.
-        ok(&m, create(IssueType::Action));
-        let ticket_only = actor(4, &[(A, false, vec![grant(Permission::IssueCreate, Some(IssueType::Ticket), Scope::Branch)])]);
-        denied(&ticket_only, create(IssueType::Action), Forbidden);
-        ok(&admin(2), create(IssueType::Action));
-        ok(&admin_like(3), create(IssueType::Action));
+    fn every_member_creates_every_type() {
+        let create = |b, ty| Action::CreateIssue { branch_id: Some(b), issue_type: ty, targets_whole_branches: false };
+        let bare = actor(1, &[(A, false, vec![])]);
+        for ty in [IssueType::Ticket, IssueType::Event, IssueType::Action] {
+            ok(&bare, create(A, ty));
+        }
+        // Not in another branch's name.
+        denied(&bare, create(B, IssueType::Ticket), NotFound);
     }
 
     #[test]
-    fn own_scope_covers_only_issues_you_created() {
-        let m = member(1);
+    fn senders_change_their_own_issues_while_open_and_current() {
+        let m = actor(1, &[(A, false, vec![])]);
         let mine = issue(m.user_id, IssueType::Action);
-        let theirs = issue(uid(9), IssueType::Action);
-        ok(&m, Action::EditIssue { issue: &mine });
-        denied(&m, Action::EditIssue { issue: &theirs }, Forbidden);
-        ok(&admin_like(2), Action::EditIssue { issue: &theirs });
-        // issue.target @own is only granted for tickets and events in the baseline.
-        denied(&m, Action::TargetIssue { issue: &mine, whole_branch: false }, Forbidden);
-        let my_ticket = issue(m.user_id, IssueType::Ticket);
-        ok(&m, Action::TargetIssue { issue: &my_ticket, whole_branch: false });
-        // Whole-branch targets need the cross-branch permission (admins have it).
-        denied(&m, Action::TargetIssue { issue: &my_ticket, whole_branch: true }, Forbidden);
-        ok(&admin(5), Action::TargetIssue { issue: &my_ticket, whole_branch: true });
+        for action in [
+            Action::EditIssue { issue: &mine },
+            Action::TargetIssue { issue: &mine, whole_branch: false },
+            Action::DeleteIssue { issue: &mine },
+            Action::CloseIssue { issue: &mine },
+        ] {
+            ok(&m, action);
+        }
+        // Ended, past its deadline, or closed: closing is all that's left.
+        let stale = IssueFacts { sender_may_change: false, ..mine.clone() };
+        denied(&m, Action::EditIssue { issue: &stale }, Forbidden);
+        denied(&m, Action::TargetIssue { issue: &stale, whole_branch: false }, Forbidden);
+        denied(&m, Action::DeleteIssue { issue: &stale }, Forbidden);
+        ok(&m, Action::CloseIssue { issue: &stale });
+        // Whole-branch targets stay with the branch's admins.
+        denied(&m, Action::TargetIssue { issue: &mine, whole_branch: true }, Forbidden);
+        ok(&admin(5), Action::TargetIssue { issue: &mine, whole_branch: true });
     }
 
     #[test]
-    fn creators_can_always_close_their_tickets_and_events() {
-        let bare = actor(1, &[(A, false, vec![grant(Permission::IssueRead, None, Scope::Branch)])]);
-        for ty in [IssueType::Ticket, IssueType::Event] {
+    fn other_peoples_issues_need_grants_and_deleting_them_admins() {
+        let theirs = issue(uid(9), IssueType::Action);
+        denied(&member(1), Action::EditIssue { issue: &theirs }, Forbidden);
+        denied(&member(1), Action::CloseIssue { issue: &theirs }, Forbidden);
+        denied(&member(1), Action::TargetIssue { issue: &theirs, whole_branch: false }, Forbidden);
+        ok(&admin_like(2), Action::EditIssue { issue: &theirs });
+        ok(&admin_like(2), Action::CloseIssue { issue: &theirs });
+        ok(&admin_like(2), Action::TargetIssue { issue: &theirs, whole_branch: false });
+        denied(&admin_like(2), Action::DeleteIssue { issue: &theirs }, Forbidden);
+        let stale = IssueFacts { sender_may_change: false, ..theirs };
+        ok(&admin(3), Action::DeleteIssue { issue: &stale });
+    }
+
+    #[test]
+    fn creators_can_always_close_what_they_sent() {
+        let bare = actor(1, &[(A, false, vec![])]);
+        for ty in [IssueType::Ticket, IssueType::Event, IssueType::Action] {
             ok(&bare, Action::CloseIssue { issue: &issue(bare.user_id, ty) });
         }
-        denied(&bare, Action::CloseIssue { issue: &issue(bare.user_id, IssueType::Action) }, Forbidden);
-        denied(&bare, Action::CloseIssue { issue: &issue(uid(9), IssueType::Ticket) }, Forbidden);
     }
 
     #[test]
-    fn comment_targeted_scope_means_created_or_targeted() {
-        let commenter = actor(
-            1,
-            &[(
-                A,
-                false,
-                vec![
-                    grant(Permission::IssueRead, None, Scope::Branch),
-                    grant(Permission::CommentCreate, None, Scope::Targeted),
-                ],
-            )],
-        );
+    fn everyone_comments_on_what_they_sent_or_were_sent() {
+        let reader = actor(1, &[(A, false, vec![grant(Permission::IssueRead, None, Scope::Branch)])]);
         let other = issue(uid(9), IssueType::Ticket);
-        denied(&commenter, Action::CommentOnIssue { issue: &other }, Forbidden);
+        denied(&reader, Action::CommentOnIssue { issue: &other }, Forbidden);
         let targeted = IssueFacts { actor_targeted: true, ..other.clone() };
-        ok(&commenter, Action::CommentOnIssue { issue: &targeted });
-        let mine = IssueFacts { created_by: commenter.user_id, ..other };
-        ok(&commenter, Action::CommentOnIssue { issue: &mine });
+        ok(&reader, Action::CommentOnIssue { issue: &targeted });
+        let mine = IssueFacts { created_by: reader.user_id, ..other.clone() };
+        ok(&reader, Action::CommentOnIssue { issue: &mine });
+        ok(&member(2), Action::CommentOnIssue { issue: &other });
     }
 
     #[test]
@@ -973,54 +1001,43 @@ mod tests {
     }
 
     #[test]
-    fn school_wide_groups_are_super_admin_only() {
-        ok(&super_admin(), Action::ManageSchoolGroups);
-        denied(&admin(1), Action::ManageSchoolGroups, Forbidden);
-        denied(&admin_like(2), Action::ManageSchoolGroups, Forbidden);
+    fn school_wide_permission_groups_are_super_admin_only() {
+        ok(&super_admin(), Action::ManageSchoolPermissionGroups);
+        denied(&admin(1), Action::ManageSchoolPermissionGroups, Forbidden);
+        denied(&admin_like(2), Action::ManageSchoolPermissionGroups, Forbidden);
     }
 
     #[test]
-    fn school_wide_items_need_admin_or_target_other_branches() {
-        use IssueType::Event;
+    fn anyone_sends_to_people_and_departments_in_other_branches() {
         let create = |ty| Action::CreateIssue { branch_id: None, issue_type: ty, targets_whole_branches: false };
-        let mut grants = baseline();
-        grants.push(grant(Permission::IssueTargetOtherBranches, Some(IssueType::Action), Scope::Branch));
-        let sender = actor(1, &[(A, false, grants)]);
-        ok(&sender, create(IssueType::Action));
-        // Needs the grant for that kind, and the right to create it.
-        denied(&sender, create(Event), Forbidden);
-        let mut no_create = vec![grant(Permission::IssueTargetOtherBranches, None, Scope::Branch)];
-        no_create.push(grant(Permission::IssueRead, None, Scope::Branch));
-        denied(&actor(2, &[(A, false, no_create)]), create(IssueType::Action), Forbidden);
-        // Admins always may.
-        ok(&admin(3), create(IssueType::Action));
-        ok(&admin(3), Action::FindPeopleInOtherBranches);
-        ok(&sender, Action::FindPeopleInOtherBranches);
-        ok(&super_admin(), Action::FindPeopleInOtherBranches);
-        denied(&member(4), create(IssueType::Action), Forbidden);
-        denied(&member(4), Action::FindPeopleInOtherBranches, Forbidden);
-        // Whole branches too, with the grant.
-        let whole = Action::CreateIssue { branch_id: None, issue_type: IssueType::Action, targets_whole_branches: true };
-        ok(&sender, whole);
+        let bare = actor(1, &[(A, false, vec![])]);
+        for ty in [IssueType::Ticket, IssueType::Event, IssueType::Action] {
+            ok(&bare, create(ty));
+        }
+        ok(&bare, Action::FindPeopleInOtherBranches);
+        // Someone in no branch at all can't.
+        let nowhere = actor(2, &[]);
+        denied(&nowhere, create(IssueType::Ticket), Forbidden);
+        denied(&nowhere, Action::FindPeopleInOtherBranches, Forbidden);
     }
 
     #[test]
     fn the_sender_of_a_school_wide_item_keeps_their_own_branch_rules() {
-        let mut grants = baseline();
-        grants.push(grant(Permission::IssueTargetOtherBranches, None, Scope::Branch));
-        let sender = actor(1, &[(A, false, grants.clone())]);
+        let sender = member(1);
         let sent = IssueFacts { branch_id: None, target_branch_ids: vec![B], ..issue(uid(1), IssueType::Action) };
         ok(&sender, Action::ReadIssue { issue: &sent });
         ok(&sender, Action::EditIssue { issue: &sent });
         ok(&sender, Action::CloseIssue { issue: &sent });
         ok(&sender, Action::CommentOnIssue { issue: &sent });
         ok(&sender, Action::TargetIssue { issue: &sent, whole_branch: false });
-        ok(&sender, Action::TargetIssue { issue: &sent, whole_branch: true });
+        ok(&sender, Action::DeleteIssue { issue: &sent });
+        // Whole branches: root users only.
+        denied(&sender, Action::TargetIssue { issue: &sent, whole_branch: true }, Forbidden);
         // The sender approves the work, wherever it is.
         let work = WorkItemFacts { branch_id: B, ..item(sent.clone(), Some(uid(7)), false) };
         ok(&sender, Action::ApproveWorkItem { item: &work });
-        // Another holder of the grant can't change someone else's recipients.
-        let other = actor(2, &[(A, true, grants)]);
+        // Nobody else changes the sender's recipients, admins included.
+        let other = actor(2, &[(A, true, baseline())]);
         let mut targeted = sent.clone();
         targeted.actor_targeted = true;
         denied(&other, Action::TargetIssue { issue: &targeted, whole_branch: false }, Forbidden);
@@ -1033,6 +1050,7 @@ mod tests {
         denied(&admin_b, Action::TargetIssue { issue: &sent, whole_branch: false }, Forbidden);
         denied(&admin_b, Action::EditIssue { issue: &sent }, Forbidden);
         denied(&admin_b, Action::CloseIssue { issue: &sent }, Forbidden);
+        denied(&admin_b, Action::DeleteIssue { issue: &sent }, Forbidden);
     }
 
     #[test]
@@ -1138,20 +1156,29 @@ mod tests {
         head.heads.insert(DEPT);
         let plain = actor(6, &[(A, false, baseline())]);
 
-        let ticket = IssueFacts { target_group_ids: vec![DEPT], actor_targeted: true, ..issue(uid(1), IssueType::Ticket) };
+        let ticket =
+            IssueFacts { target_department_ids: vec![DEPT], actor_targeted: true, ..issue(uid(1), IssueType::Ticket) };
         assert_eq!(authorize(&head, Action::CloseIssue { issue: &ticket }), Ok(()));
         assert_eq!(authorize(&plain, Action::CloseIssue { issue: &ticket }), Err(Forbidden));
 
         let task = IssueFacts { actor_targeted: true, ..issue(uid(1), IssueType::Action) };
-        let work = WorkItemFacts { target_group_id: Some(DEPT), ..item(task.clone(), Some(uid(7)), true) };
-        for action in [Action::AssignWorkItem { item: &work }, Action::ApproveWorkItem { item: &work }, Action::CancelWorkItem { item: &work }] {
+        let work = WorkItemFacts { target_department_id: Some(DEPT), ..item(task.clone(), Some(uid(7)), true) };
+        for action in [
+            Action::AssignWorkItem { item: &work },
+            Action::ApproveWorkItem { item: &work },
+            Action::CancelWorkItem { item: &work },
+        ] {
             assert_eq!(authorize(&head, action), Ok(()));
         }
         assert_eq!(authorize(&plain, Action::ApproveWorkItem { item: &work }), Err(Forbidden));
         // Never their own work, and only their department's.
         let own = WorkItemFacts { assignee_id: Some(head.user_id), ..work.clone() };
         assert_eq!(authorize(&head, Action::ApproveWorkItem { item: &own }), Err(Forbidden));
-        let elsewhere = WorkItemFacts { target_group_id: Some(Uuid::from_u128(0xE)), ..work };
+        let elsewhere = WorkItemFacts { target_department_id: Some(Uuid::from_u128(0xE)), ..work.clone() };
         assert_eq!(authorize(&head, Action::ApproveWorkItem { item: &elsewhere }), Err(Forbidden));
+        // A head who left the branch runs nothing there.
+        let mut gone = actor(5, &[(B, false, baseline())]);
+        gone.heads.insert(DEPT);
+        assert_eq!(authorize(&gone, Action::ApproveWorkItem { item: &work }), Err(Forbidden));
     }
 }

@@ -1,7 +1,7 @@
 // Helpers shared by item screens.
 import { useQuery } from "@tanstack/react-query";
 import { getAll } from "@/api/client";
-import type { Group, IssueDetail, Target, WorkItem } from "@/api/types";
+import type { Department, IssueDetail, Target, WorkItem } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { UNKNOWN_PERSON, usePeople, type Directory } from "@/people/usePeople";
 import { canApprove, canClaim, canComment, isMine, type Viewer } from "./can";
@@ -9,31 +9,31 @@ import { joinList, t, tn } from "@/i18n";
 
 export const numberOf = (key: string) => key.replace(/^ISS-/, "");
 
-/** Groups of every branch in view, by id (for "Sent to Science"). */
-export function useGroupDirectory() {
+/** Departments of every branch in view, by id (for "Sent to Science"). */
+export function useDepartmentDirectory() {
   const { options } = useBranch();
   const ids = options.map((o) => o.id).sort();
   const { data } = useQuery({
-    queryKey: ["groups", "directory", ids],
+    queryKey: ["branches", "departments-directory", ids],
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const lists = await Promise.all(
-        ids.map((id) => getAll<Group>(`/branches/${id}/groups`, { include_archived: true }).catch(() => [] as Group[])),
+        ids.map((id) => getAll<Department>(`/branches/${id}/departments`, { include_archived: true }).catch(() => [] as Department[])),
       );
-      return new Map(lists.flat().map((g) => [g.id, g]));
+      return new Map(lists.flat().map((d) => [d.id, d]));
     },
   });
-  return data ?? new Map<string, Group>();
+  return data ?? new Map<string, Department>();
 }
 
-/** What a target is called. On a school-wide item, people and groups also
- * say which branch they're in. */
-export function targetName(target: Target, people: Directory, groups: Map<string, Group>, branchName: (id: string) => string, schoolWide = false) {
+/** What a target is called. On a school-wide item, people and departments
+ * also say which branch they're in. */
+export function targetName(target: Target, people: Directory, departments: Map<string, Department>, branchName: (id: string) => string, schoolWide = false) {
   const where = schoolWide ? ` · ${target.branch_name}` : "";
   if (target.kind === "user") return (people.get(target.user_id) ? people.short(target.user_id) : target.name) + where;
-  if (target.kind === "group") {
-    const g = groups.get(target.group_id ?? "");
-    const name = g ? (g.is_default ? t("All members") : g.name) : target.name === "All members" ? t("All members") : target.name;
+  if (target.kind === "department") {
+    const d = departments.get(target.department_id ?? "");
+    const name = d ? (d.is_default ? t("All members") : d.name) : target.name === "All members" ? t("All members") : target.name;
     return name + where;
   }
   return branchName(target.branch_id) || target.branch_name;
@@ -102,7 +102,7 @@ export function primaryAction(issue: IssueDetail, v: Viewer): PrimaryAction {
  * office. Branches outside the viewer's own are counted, not named. */
 export function useItemLabels(issue: IssueDetail) {
   const people = usePeople();
-  const groups = useGroupDirectory();
+  const groups = useDepartmentDirectory();
   const { branchById, options } = useBranch();
   const branchName = (id?: string | null) =>
     (id && (branchById.get(id)?.name ?? options.find((o) => o.id === id)?.name)) || null;

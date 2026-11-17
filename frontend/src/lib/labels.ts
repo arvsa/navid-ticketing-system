@@ -104,32 +104,29 @@ export const permissionInfo: Record<
   Permission,
   { title: string; help: string; section: PermissionSection }
 > = {
-  "issue.read": { title: t("See items"), help: t("Everyone always sees what they created."), section: "seeing" },
+  "issue.read": {
+    title: t("See every item in the branch"),
+    help: t("Everyone always sees what they sent and what was sent to them."),
+    section: "seeing",
+  },
   "comment.internal": {
     title: t("Read and write staff-only comments"),
     help: t("Hidden from everyone without this"),
     section: "seeing",
   },
-  "issue.create": { title: t("Create items"), help: t("Start new items of these kinds"), section: "creating" },
-  "issue.edit": { title: t("Edit items"), help: t("Title, details, priority and event times"), section: "creating" },
-  "issue.target": {
-    title: t("Give tasks to others"),
-    help: t("Choose who an item goes to, and add people later"),
-    section: "creating",
-  },
-  "issue.target_other_branches": {
-    title: t("Send to people in other branches"),
-    help: t("School-wide items addressed to chosen people in any branch. Admins need it too."),
+  "issue.edit": {
+    title: t("Edit and resend other people's items"),
+    help: t("Everyone already edits their own while they're open and current"),
     section: "creating",
   },
   "issue.close": {
-    title: t("Close or cancel items"),
-    help: t("Everyone can already close what they created"),
+    title: t("Close or cancel other people's items"),
+    help: t("Everyone can already close what they sent"),
     section: "creating",
   },
   "work_item.update": {
-    title: t("Update progress"),
-    help: t("Start, block and send work for approval"),
+    title: t("Update progress on any work"),
+    help: t("Everyone already updates the work sent to them"),
     section: "work",
   },
   "work_item.approve": {
@@ -138,11 +135,15 @@ export const permissionInfo: Record<
     section: "work",
   },
   "work_item.assign": {
-    title: t("Assign or reassign work"),
+    title: t("Assign or reassign any work"),
     help: t("Hand work to someone, including unassigned work"),
     section: "work",
   },
-  "comment.create": { title: t("Comment"), help: t("Join the discussion on items"), section: "work" },
+  "comment.create": {
+    title: t("Comment on any item"),
+    help: t("Everyone already comments on what they sent or were sent"),
+    section: "work",
+  },
   "comment.moderate": { title: t("Remove other people's comments"), help: t("For keeping discussions tidy"), section: "work" },
   "member.view": { title: t("See the member directory"), help: t("Names and emails of the branch"), section: "people" },
   "member.manage": {
@@ -152,7 +153,25 @@ export const permissionInfo: Record<
   },
   "dashboard.branch": { title: t("See branch-wide numbers"), help: t("On the Home dashboard"), section: "people" },
   "export.run": { title: t("Export the branch to Excel"), help: t("Every export is recorded"), section: "people" },
+  "department.manage": {
+    title: t("Run departments"),
+    help: t("Create, rename and archive departments, choose their heads and members"),
+    section: "people",
+  },
+  "department.members.manage": {
+    title: t("Choose who's in departments"),
+    help: t("Add people to the departments named, and remove them"),
+    section: "people",
+  },
 };
+
+/** A grant in plain words: "Approve or send back work (Actions)", "Choose
+ * who's in departments: IT". */
+export function grantTitle(g: { permission: Permission; issue_type?: IssueType | null; department?: string | null }) {
+  const title = permissionInfo[g.permission]?.title ?? g.permission;
+  if (g.department) return `${title}: ${g.department === "*" ? t("all of them") : g.department}`;
+  return g.issue_type ? `${title} (${typePlural[g.issue_type]})` : title;
+}
 
 export type PermissionSection = "seeing" | "creating" | "work" | "people";
 export const permissionSections: { key: PermissionSection; title: string }[] = [
@@ -176,8 +195,6 @@ const errorCopy: Record<string, string> = {
   email_taken: t("There's already an account with this email."),
   branch_code_taken: t("That code is already used."),
   branch_name_taken: t("That name is already used."),
-  group_name_taken: t("That name is already used."),
-  grant_exists: t("That's already allowed."),
   target_exists: t("It's already sent to them."),
   already_assigned: t("Someone else picked this up a moment ago."),
   already_member: t("They're already a member here."),
@@ -186,7 +203,6 @@ const errorCopy: Record<string, string> = {
   last_super_admin: t("There must always be at least one root user."),
   default_group: t("'All members' can't be renamed, archived or changed by hand."),
   not_a_member: t("They aren't a member of this branch."),
-  group_archived: t("This group is archived. Restore it first."),
   issue_not_open: t("This item is closed, so it can't be changed."),
   event_not_open: t("This event is over or cancelled, so replies are closed."),
   invalid_transition: t("This work has moved on. Here's where it stands now."),
@@ -208,13 +224,11 @@ const errorCopy: Record<string, string> = {
   invalid_current_password: t("The current password isn't right."),
   invalid_email: t("Enter a valid email address."),
   invalid_name: t("Enter a name (it can't be empty)."),
-  reserved_group_name: t("Every branch already has an All members group, so pick another name. To change what everyone can do, edit All members in each branch."),
   invalid_timezone: t("Pick a time zone from the list."),
   invalid_branch_code: t("Use 2 to 10 capital letters or digits."),
   invalid_admin: t("The first admin must be an active person."),
   user_inactive: t("A deactivated person can't be made an admin."),
   unknown_permission: t("That permission doesn't exist any more. Reload the page."),
-  invalid_scope: t("That reach isn't allowed for this permission."),
   invalid_issue_type: t("That kind can't be chosen for this permission."),
   invalid_title: t("Give it a title (up to 200 characters)."),
   invalid_target:
@@ -245,11 +259,29 @@ const errorCopy: Record<string, string> = {
   export_too_large: t("That's more than 50,000 rows. Try a shorter date range."),
   internal_error: t("Something went wrong on our side. Try again in a moment."),
   network_error: t("Can't reach the server. Check your connection and try again."),
+  template_name_taken: t("Another template in use has this name. Choose another name."),
+  department_name_taken: t("This branch already has a department with this name."),
+  permission_group_name_taken: t("There's already a permission group with this name."),
+  not_yours: t("Only a question asked to you can be passed on."),
+  default_department: t("\"All members\" can't be renamed, archived, deleted, given heads or joined by hand."),
+  department_archived: t("Restore the department first."),
+  invalid_bio: t("Your bio can be at most 500 characters."),
+  department_required: t("Choose which departments this permission covers."),
+  invalid_department: t("Only choosing department members is granted per department."),
+  invalid_config: t("The file can't be read, or names something that doesn't exist. Check it and try again."),
+  invalid_template: t("That template can't be used: it's archived, of another kind, or doesn't exist."),
+  invalid_tag: t("Tags are 1 to 40 characters, at most 10."),
+  invalid_description: t("A description is at most 500 characters."),
+  invalid_import: t("The file can't be read, has no email column, has no people, or has over 500."),
+  duplicate_email: t("The same email is on an earlier row."),
 };
 
 export function errorMessage(err: unknown): string {
-  const code = (err as { code?: string } | null)?.code;
-  if (code && errorCopy[code]) return errorCopy[code];
+  const e = err as { code?: string; status?: number; message?: string } | null;
+  if (e?.code && errorCopy[e.code]) return errorCopy[e.code];
+  // A request problem the app has no words for: the server's own message
+  // says what's wrong, which beats blaming the server.
+  if (e?.status && e.status >= 400 && e.status < 500 && e.message) return e.message;
   return errorCopy.internal_error;
 }
 

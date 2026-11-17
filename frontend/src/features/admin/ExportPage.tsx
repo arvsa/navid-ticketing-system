@@ -82,7 +82,7 @@ export function ExportPage() {
     <div className="mx-auto max-w-[760px]">
       <PageHeader
         title={t("Export to Excel")}
-        subtitle={people ? t("Everyone in the chosen branches: email, name, admin, groups and last sign-in.") : t("Tickets, actions, reports and events for a date range.")}
+        subtitle={people ? t("Everyone in the chosen branches: email, name, admin, departments and last sign-in.") : t("Tickets, actions, reports and events for a date range.")}
       />
       {superAdmin && (
         <div className="mb-4">

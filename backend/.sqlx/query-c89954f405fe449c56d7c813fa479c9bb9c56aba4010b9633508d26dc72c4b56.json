@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM department_member dm USING department d\n         WHERE d.id = dm.department_id AND d.is_default AND dm.user_id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c89954f405fe449c56d7c813fa479c9bb9c56aba4010b9633508d26dc72c4b56"
+}

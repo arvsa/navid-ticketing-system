@@ -1,21 +1,22 @@
-// "What they can do" for a group (Groups & permissions design; UX_SPEC §4.12).
-// A change of reach or kinds is delete + create; the save bar sends them all
-// in one request, so it's all or nothing and admins are told once.
+// What a permission group lets its people do (Groups & permissions design;
+// UX_SPEC §4.12). Every grant is branch-wide: what people may do with their
+// own items and with what's sent to them needs no grant. The save bar sends
+// the whole set in one request, so it's all or nothing and admins are told once.
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Info, Lock, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useCatalog, useGroupGrants } from "@/api/hooks";
-import { keys } from "@/api/keys";
-import type { CatalogEntry, Group, GroupGrant, IssueType, Permission, Scope } from "@/api/types";
-import { Button, Dialog, LoadingRows, Segmented, Switch, cx, inputClass } from "@/components/ui";
-import { errorMessage, permissionInfo, permissionSections, reachLabel, typeLabel } from "@/lib/labels";
+import { useCatalog } from "@/api/hooks";
+import type { CatalogEntry, GrantSpec, IssueType, Permission, PermissionGroup } from "@/api/types";
+import { Button, Dialog, LoadingRows, Switch, cx, inputClass } from "@/components/ui";
+import { errorMessage, grantTitle, permissionInfo, permissionSections, typeLabel } from "@/lib/labels";
 import { useUnsaved } from "@/lib/unsaved";
 import { quote, t, tn, tx } from "@/i18n";
 
 type Kinds = "all" | IssueType[];
-type Row = { on: boolean; scope: Scope; kinds: Kinds; custom?: boolean };
+/** `departments`: for department.members.manage, names or `*`. */
+type Row = { on: boolean; kinds: Kinds; departments: string[] };
 type State = Record<string, Row>;
 
 const KIND_OPTIONS: { value: string; label: string; kinds: Kinds }[] = [
@@ -26,70 +27,63 @@ const KIND_OPTIONS: { value: string; label: string; kinds: Kinds }[] = [
   { value: "ticket,event", label: t("Tickets and Events"), kinds: ["ticket", "event"] },
 ];
 const kindsValue = (k: Kinds) => (k === "all" ? "all" : [...k].sort().join(","));
+const perDepartment = (key: string) => key === "department.members.manage";
 
-function fromGrants(catalog: CatalogEntry[], grants: GroupGrant[]): State {
+function fromGrants(catalog: CatalogEntry[], grants: GrantSpec[]): State {
   const s: State = {};
   for (const c of catalog) {
     const gs = grants.filter((g) => g.permission === c.key);
-    if (!gs.length) {
-      s[c.key] = { on: false, scope: c.allowed_scopes[c.allowed_scopes.length - 1], kinds: "all" };
-      continue;
-    }
-    const scopes = new Set(gs.map((g) => g.scope));
     const all = gs.some((g) => !g.issue_type);
-    const kinds: Kinds = all ? "all" : (gs.map((g) => g.issue_type!).sort() as IssueType[]);
-    s[c.key] = { on: true, scope: gs[0].scope, kinds, custom: scopes.size > 1 || (all && gs.length > 1) };
+    const kinds: Kinds = !gs.length || all ? "all" : (gs.map((g) => g.issue_type!).sort() as IssueType[]);
+    const departments = [...new Set(gs.map((g) => g.department).filter((d): d is string => !!d))].sort();
+    s[c.key] = { on: gs.length > 0, kinds, departments };
   }
   return s;
 }
 
-function toGrants(state: State): { permission: Permission; scope: Scope; issue_type: IssueType | null }[] {
-  const out: { permission: Permission; scope: Scope; issue_type: IssueType | null }[] = [];
+function toGrants(state: State): GrantSpec[] {
+  const out: GrantSpec[] = [];
   for (const [key, row] of Object.entries(state)) {
+    const permission = key as Permission;
     if (!row.on) continue;
-    if (row.kinds === "all") out.push({ permission: key as Permission, scope: row.scope, issue_type: null });
-    else for (const k of row.kinds) out.push({ permission: key as Permission, scope: row.scope, issue_type: k });
+    if (perDepartment(key)) for (const department of row.departments) out.push({ permission, department });
+    else if (row.kinds === "all") out.push({ permission });
+    else for (const issue_type of row.kinds) out.push({ permission, issue_type });
   }
   return out;
 }
 
-const sig = (g: { permission: string; scope: string; issue_type?: string | null }) => `${g.permission}|${g.scope}|${g.issue_type ?? ""}`;
+const same = (a: Row, b: Row) =>
+  a.on === b.on && (!a.on || (kindsValue(a.kinds) === kindsValue(b.kinds) && a.departments.join("|") === b.departments.join("|")));
 
-export function PermissionEditor({ group, branchName }: { group: Group; branchName: string }) {
+/** `editable` false: shown read-only (another branch's or a school-wide
+ * group, for branch admins). `departments`: the branch's department names,
+ * offered for the per-department permission. */
+export function PermissionEditor({ group, editable, departments }: { group: PermissionGroup; editable: boolean; departments: string[] }) {
   const qc = useQueryClient();
   const catalog = useCatalog();
-  const grants = useGroupGrants(group.id);
-  const base = useMemo(() => (catalog.data && grants.data ? fromGrants(catalog.data, grants.data) : null), [catalog.data, grants.data]);
+  const base = useMemo(() => (catalog.data ? fromGrants(catalog.data, group.grants) : null), [catalog.data, group.grants]);
   const [state, setState] = useState<State | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => setState(base), [base]);
 
-  const changed =
-    state && base
-      ? Object.keys(state).filter((k) => {
-          const a = state[k];
-          const b = base[k];
-          return a.on !== b.on || (a.on && (a.scope !== b.scope || kindsValue(a.kinds) !== kindsValue(b.kinds)));
-        })
-      : [];
+  const changed = state && base ? Object.keys(state).filter((k) => !same(state[k], base[k])) : [];
   useUnsaved(`permissions:${group.id}`, changed.length > 0);
 
-  if (!catalog.data || !grants.data || !state || !base) return <LoadingRows rows={6} />;
+  if (!catalog.data || !state || !base) return <LoadingRows rows={6} />;
 
-  const set = (key: string, patch: Partial<Row>) => setState({ ...state, [key]: { ...state[key], ...patch, custom: false } });
+  const set = (key: string, patch: Partial<Row>) => setState({ ...state, [key]: { ...state[key], ...patch } });
+  const reach = group.is_default
+    ? t("every user, in every branch")
+    : tn(group.department_ids.length, "the members of {n} department", "the members of {n} departments");
 
   const save = async () => {
     setSaving(true);
-    const want = new Set(toGrants(state).map(sig));
-    const touched = new Set(changed);
-    const toDelete = grants.data!.filter((g) => touched.has(g.permission) && !want.has(sig(g)));
-    const have = new Set(grants.data!.map(sig));
-    const toAdd = toGrants(state).filter((g) => touched.has(g.permission) && !have.has(sig(g)));
     try {
-      await api.put(`/groups/${group.id}/permissions`, { revoke: toDelete.map((g) => g.id), grant: toAdd });
-      toast.success(tn(group.member_count, "Saved. {n} person affected.", "Saved. {n} people affected."));
+      await api.patch(`/permission-groups/${group.id}`, { grants: toGrants(state) });
+      toast.success(t("Saved. It applies to {reach}.", { reach }));
     } catch (e) {
       // Nothing was saved; the changes stay on screen to try again.
       toast.error(t("Nothing was saved: {reason}", { reason: errorMessage(e) }));
@@ -98,12 +92,13 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
     }
     setSaving(false);
     setConfirm(false);
-    await qc.invalidateQueries({ queryKey: keys.groupGrants(group.id) });
+    qc.invalidateQueries({ queryKey: ["branches"] });
+    qc.invalidateQueries({ queryKey: ["school-permission-groups"] });
     qc.invalidateQueries({ queryKey: ["effective-permissions"] });
   };
 
-  const gained = changed.filter((k) => state[k].on).map((k) => describe(k as Permission, state[k]));
-  const lost = changed.filter((k) => !state[k].on).map((k) => permissionInfo[k as Permission]?.title.toLowerCase() ?? k);
+  const gained = changed.filter((k) => state[k].on).flatMap((k) => toGrants({ [k]: state[k] }).map(grantTitle));
+  const lost = changed.filter((k) => !state[k].on).map((k) => permissionInfo[k as Permission]?.title ?? k);
   const term = q.trim().toLowerCase();
   const matching = catalog.data.filter((c) => {
     // Staff-only comments are switched off in the app for now.
@@ -118,13 +113,10 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
       <div className="mx-6 mt-5 flex gap-3 rounded-[12px] bg-sunken px-5 py-4 text-text-2">
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden />
         <p>
-          {group.is_default ? (
-            t("Everyone in {branch} can do these.", { branch: branchName })
-          ) : !group.branch_id ? (
-            tx("Applies in every branch, on top of {all}.", { all: <b className="text-text">{t("All members")}</b> })
-          ) : (
-            tx("On top of what {all} can do.", { all: <b className="text-text">{t("All members")}</b> })
-          )}
+          {group.is_default
+            ? t("Every user can do these, in every branch they belong to.")
+            : tx("On top of the basics everyone has, for {reach}.", { reach: <b className="text-text">{reach}</b> })}{" "}
+          {t("Everyone already creates items, sends them to anyone, works on what's sent to them, and edits or deletes their own while they're open.")}
         </p>
       </div>
 
@@ -152,10 +144,14 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
                 const row = state[c.key];
                 const info = permissionInfo[c.key] ?? { title: c.description, help: "" };
                 const isChanged = changed.includes(c.key);
-                const scopes = c.allowed_scopes.filter((sc) => !(c.key === "issue.read" && sc === "own") || row.scope === sc);
                 return (
                   <li key={c.key} className={cx("flex gap-4 px-6 py-4", isChanged && "bg-warning-soft/60")}>
-                    <Switch checked={row.on} onChange={(on) => set(c.key, { on })} label={info.title} />
+                    <Switch
+                      checked={row.on}
+                      disabled={!editable}
+                      onChange={(on) => set(c.key, { on, departments: on && perDepartment(c.key) && !row.departments.length ? ["*"] : row.departments })}
+                      label={info.title}
+                    />
                     <div className="min-w-0 flex-1 space-y-2.5">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -163,31 +159,27 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
                           {isChanged && <span className="rounded-md bg-warning-soft px-2 text-[13px] font-semibold text-warning">{t("Changed")}</span>}
                         </div>
                         <div className="text-text-2">{info.help || c.description}</div>
-                        {row.custom && <div className="mt-1 text-[13px] text-warning">{t("Custom setup. Changing it here replaces it with the choice shown.")}</div>}
                       </div>
-                      {row.on && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {scopes.length > 1 ? (
-                            <Segmented<Scope> size="sm" label={t("Reach for {name}", { name: info.title })} value={row.scope} onChange={(scope) => set(c.key, { scope })} options={scopes.map((sc) => ({ value: sc, label: reachLabel(c.key, sc) }))} />
-                          ) : (
-                            <span className="rounded-full bg-sunken px-3 py-1 text-[14px] text-text-2">{reachLabel(c.key, scopes[0])}</span>
+                      {row.on && c.per_issue_type && (
+                        <select
+                          value={kindsValue(row.kinds)}
+                          disabled={!editable}
+                          onChange={(e) => set(c.key, { kinds: KIND_OPTIONS.find((o) => o.value === e.target.value)?.kinds ?? "all" })}
+                          className={cx("h-8 rounded-full border border-input bg-surface px-3 text-[14px]", isChanged && "border-warning-edge")}
+                          aria-label={t("Kinds for {name}", { name: info.title })}
+                        >
+                          {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && (
+                            <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(t(", "))}</option>
                           )}
-                          {c.per_issue_type && (
-                            <select
-                              value={kindsValue(row.kinds)}
-                              onChange={(e) => set(c.key, { kinds: KIND_OPTIONS.find((o) => o.value === e.target.value)?.kinds ?? "all" })}
-                              className={cx("h-8 rounded-full border border-input bg-surface px-3 text-[14px]", isChanged && "border-warning-edge")}
-                              aria-label={t("Kinds for {name}", { name: info.title })}
-                            >
-                              {!KIND_OPTIONS.some((o) => o.value === kindsValue(row.kinds)) && <option value={kindsValue(row.kinds)}>{(row.kinds as IssueType[]).map((k) => typeLabel[k]).join(t(", "))}</option>}
-                              {KIND_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value}>
-                                  {o.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
+                          {KIND_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {row.on && perDepartment(c.key) && (
+                        <DepartmentChoice value={row.departments} options={departments} disabled={!editable} onChange={(d) => set(c.key, { departments: d })} />
                       )}
                     </div>
                   </li>
@@ -203,16 +195,16 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
           <Lock className="size-4" />{" "}{t("What only admins can do")}
         </summary>
         <p className="mt-2 ps-6 text-[14px]">
-          {t("Creating groups and choosing their permissions · adding people to groups · cancelling one person's assignment · appointing admins · approving work a root user sent out · exporting several branches")}
+          {t("Making permission groups and attaching them to departments · sending to the whole branch · deleting other people's items · cancelling one person's assignment · appointing admins · exporting several branches")}
         </p>
       </details>
 
-      {changed.length > 0 && (
+      {editable && changed.length > 0 && (
         <div className="sticky bottom-0 mt-6 flex flex-wrap items-center gap-3 border-t border-border bg-surface-2 px-6 py-4 max-md:bottom-[72px]">
           <span>
             {tx("{changes} not saved yet · {affected}", {
               changes: <b className="text-warning">{tn(changed.length, "{n} change", "{n} changes")}</b>,
-              affected: tn(group.member_count, "{n} person affected", "{n} people affected"),
+              affected: t("for {reach}", { reach }),
             })}
           </span>
           <div className="ms-auto flex gap-2">
@@ -228,7 +220,7 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={t("Save changes to {name}?", { name: group.is_default ? t("All members") : group.name })}
+        title={t("Save changes to {name}?", { name: group.is_default ? t("Everyone") : group.name })}
         footer={
           <>
             <Button onClick={() => setConfirm(false)}>{t("Keep editing")}</Button>
@@ -249,32 +241,61 @@ export function PermissionEditor({ group, branchName }: { group: Group; branchNa
               <b>{t("Will no longer be able to:")}</b> {lost.join(t("; "))}{t(".")}
             </p>
           )}
-          <p className="text-text-2">{tn(group.member_count, "It applies right away to {n} person.", "It applies right away to {n} people.")}</p>
+          <p className="text-text-2">{t("It applies right away to {reach}.", { reach })}</p>
         </div>
       </Dialog>
     </div>
   );
 }
 
-function describe(key: Permission, row: Row) {
-  const title = permissionInfo[key]?.title.toLowerCase() ?? key;
-  const kinds = row.kinds === "all" ? "" : ` (${row.kinds.map((k) => typeLabel[k]).join(t(", "))})`;
-  return `${title}${kinds} — ${reachLabel(key, row.scope).toLowerCase()}`;
+/** Which departments a per-department permission covers: all of them, or
+ * the ones named. Names (not ids) so a school-wide group means the same
+ * department in every branch. */
+function DepartmentChoice({ value, options, disabled, onChange }: { value: string[]; options: string[]; disabled: boolean; onChange: (v: string[]) => void }) {
+  const all = value.includes("*");
+  const named = value.filter((d) => d !== "*");
+  // Names that no department of this branch has (another branch's, or renamed).
+  const extra = named.filter((d) => !options.some((o) => o.toLowerCase() === d.toLowerCase()));
+  const toggle = (name: string) => {
+    const has = named.some((d) => d.toLowerCase() === name.toLowerCase());
+    const next = has ? named.filter((d) => d.toLowerCase() !== name.toLowerCase()) : [...named, name];
+    onChange(next.length ? next.sort() : ["*"]);
+  };
+  return (
+    <fieldset className="space-y-2" disabled={disabled}>
+      <legend className="sr-only">{t("Which departments")}</legend>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={all} onChange={(e) => onChange(e.target.checked ? ["*"] : [])} />
+        {t("Every department")}
+      </label>
+      {!all && (
+        <div className="flex flex-wrap gap-2">
+          {[...options, ...extra].map((name) => (
+            <label key={name} className="inline-flex items-center gap-1.5 rounded-full border border-input px-3 py-1 text-[14px]">
+              <input type="checkbox" checked={named.some((d) => d.toLowerCase() === name.toLowerCase())} onChange={() => toggle(name)} />
+              {name}
+            </label>
+          ))}
+        </div>
+      )}
+      {!all && named.length === 0 && <p className="text-[13px] text-warning">{t("Choose at least one department.")}</p>}
+    </fieldset>
+  );
 }
 
-/** One-line summary for the group list ("Can approve and manage members"). */
-export function summarizeGrants(grants: GroupGrant[] | undefined) {
+/** One-line summary for the list ("Can approve, manage members"). */
+export function summarizeGrants(grants: GrantSpec[] | undefined) {
   if (!grants) return "";
-  if (!grants.length) return t("No extra permissions");
-  const words: Record<string, string> = {
+  if (!grants.length) return t("Nothing beyond the basics");
+  const words: Partial<Record<Permission, string>> = {
     "work_item.approve": t("approve"),
     "member.manage": t("manage members"),
     "issue.close": t("close items"),
     "export.run": t("export"),
     "work_item.assign": t("assign work"),
-    "issue.target": t("give tasks"),
-    "issue.target_other_branches": t("send to other branches"),
     "dashboard.branch": t("see branch numbers"),
+    "department.manage": t("run departments"),
+    "department.members.manage": t("choose department members"),
   };
   const parts = [...new Set(grants.map((g) => words[g.permission]).filter(Boolean))];
   return parts.length ? t("Can {list}", { list: parts.slice(0, 3).join(t(", ")) }) : tn(grants.length, "{n} permission", "{n} permissions");

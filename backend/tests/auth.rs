@@ -296,7 +296,7 @@ async fn must_change_password_gates_everything_but_me_password_and_logout(pool: 
     // The gate is lifted for this session...
     let after = app.req(Method::GET, "/api/permissions").cookie(&cookie).send().await;
     assert_eq!(after.status, StatusCode::OK);
-    assert_eq!(after.body.as_array().unwrap().len(), 16);
+    assert_eq!(after.body.as_array().unwrap().len(), 15);
     // ...the other session was signed out...
     assert_eq!(app.req(Method::GET, "/api/me").cookie(&other_cookie).send().await.status, StatusCode::UNAUTHORIZED);
     // ...and only the new password works.
@@ -386,12 +386,13 @@ async fn me_reports_memberships_and_effective_grants(pool: PgPool) {
     assert_eq!(m["branch"]["code"], "NORTH");
     assert_eq!(m["is_admin"], false);
 
-    // The "All members" baseline from the schema trigger.
+    // The "All members" permission group from the schema trigger; the
+    // baseline (creating, sending, own issues) needs no grant.
     let grants = m["grants"].as_array().unwrap();
-    assert_eq!(grants.len(), 12, "{grants:#?}");
+    assert_eq!(grants.len(), 3, "{grants:#?}");
     assert!(grants.contains(&json!({ "permission": "issue.read", "issue_type": null, "scope": "branch" })));
-    assert!(grants.contains(&json!({ "permission": "issue.create", "issue_type": "ticket", "scope": "branch" })));
-    assert!(grants.contains(&json!({ "permission": "work_item.update", "issue_type": null, "scope": "targeted" })));
+    assert!(grants.contains(&json!({ "permission": "member.view", "issue_type": null, "scope": "branch" })));
+    assert_eq!(m["departments"].as_array().unwrap().len(), 1, "All members");
 
     let admin_cookie = app.session("admin@example.com", PW).await;
     let admin_me = app.req(Method::GET, "/api/me").cookie(&admin_cookie).send().await;
@@ -399,7 +400,7 @@ async fn me_reports_memberships_and_effective_grants(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MIGRATOR")]
-async fn group_and_membership_changes_apply_on_the_next_request(pool: PgPool) {
+async fn department_and_membership_changes_apply_on_the_next_request(pool: PgPool) {
     let app = TestApp::new(pool);
     create_root(&app.db).await;
     let admin = member(&app, "admin@example.com").await;
@@ -410,36 +411,21 @@ async fn group_and_membership_changes_apply_on_the_next_request(pool: PgPool) {
 
     let grants = |res: &TestResponse| res.body["memberships"][0]["grants"].as_array().map_or(0, Vec::len);
 
-    // An extra group with one grant.
-    let group =
-        sqlx::query_scalar!("INSERT INTO user_group (branch_id, name) VALUES ($1, 'Staff') RETURNING id", branch)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
-    sqlx::query!(
-        "INSERT INTO group_permission (group_id, permission_key, scope) VALUES ($1, 'export.run', 'branch')",
-        group
-    )
-    .execute(&app.db)
-    .await
-    .unwrap();
-    sqlx::query!("INSERT INTO group_member (group_id, user_id, branch_id) VALUES ($1, $2, $3)", group, ann, branch)
+    // An extra department whose permission group has one grant.
+    let staff = create_department(&app.db, branch, "Staff", &[("export.run", None, "branch")], &[ann]).await;
+    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 4);
+
+    // Archived departments pass on nothing.
+    sqlx::query!("UPDATE department SET archived_at = now() WHERE id = $1", staff).execute(&app.db).await.unwrap();
+    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 3);
+    sqlx::query!("UPDATE department SET archived_at = NULL WHERE id = $1", staff).execute(&app.db).await.unwrap();
+
+    // Removed from the department: the grant is gone on the next request.
+    sqlx::query!("DELETE FROM department_member WHERE department_id = $1 AND user_id = $2", staff, ann)
         .execute(&app.db)
         .await
         .unwrap();
-    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 13);
-
-    // Archived groups grant nothing.
-    sqlx::query!("UPDATE user_group SET archived_at = now() WHERE id = $1", group).execute(&app.db).await.unwrap();
-    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 12);
-    sqlx::query!("UPDATE user_group SET archived_at = NULL WHERE id = $1", group).execute(&app.db).await.unwrap();
-
-    // Removed from the group: the grant is gone on the next request.
-    sqlx::query!("DELETE FROM group_member WHERE group_id = $1 AND user_id = $2", group, ann)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 12);
+    assert_eq!(grants(&app.req(Method::GET, "/api/me").cookie(&cookie).send().await), 3);
 
     // Left the branch: the membership and every grant in it disappear.
     sqlx::query!("UPDATE branch_membership SET left_at = now() WHERE user_id = $1 AND branch_id = $2", ann, branch)
@@ -468,7 +454,7 @@ async fn permission_enum_matches_the_table(pool: PgPool) {
 
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn permission_catalog_detects_scope_drift(pool: PgPool) {
-    sqlx::query!("UPDATE permission SET allowed_scopes = '{branch}' WHERE key = 'issue.read'")
+    sqlx::query!("UPDATE permission SET allowed_scopes = '{own,branch}' WHERE key = 'issue.read'")
         .execute(&pool)
         .await
         .unwrap();

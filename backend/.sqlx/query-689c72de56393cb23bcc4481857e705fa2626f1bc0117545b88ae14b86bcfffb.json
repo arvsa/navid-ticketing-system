@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT dm.user_id AS \"user_id?\" FROM department_member dm JOIN app_user u ON u.id = dm.user_id\n                   WHERE dm.department_id = $1 AND u.is_active ORDER BY dm.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "department_member",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "689c72de56393cb23bcc4481857e705fa2626f1bc0117545b88ae14b86bcfffb"
+}

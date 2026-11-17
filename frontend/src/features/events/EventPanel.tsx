@@ -8,7 +8,7 @@ import { Avatar, DateBlock, TypeBadge } from "@/components/badges";
 import { Button, Card, Dialog, inputClass } from "@/components/ui";
 import { describeReminders, formatTime, inZone, zoneSuffix } from "@/lib/dates";
 import { rsvpLabel } from "@/lib/labels";
-import { targetName, useGroupDirectory } from "@/lib/items";
+import { targetName, useDepartmentDirectory } from "@/lib/items";
 import { usePeople } from "@/people/usePeople";
 import { RsvpButtons } from "./RsvpButtons";
 import { PersonName, PersonPopover } from "@/people/PersonPopover";
@@ -85,7 +85,7 @@ export function RsvpCard({ issue }: { issue: IssueDetail }) {
 export function WhosComing({ issue }: { issue: IssueDetail }) {
   const ev = issue.event!;
   const people = usePeople();
-  const groups = useGroupDirectory();
+  const groups = useDepartmentDirectory();
   const { branchById } = useBranch();
   const rsvps = useRsvps(issue.id);
   const [all, setAll] = useState(false);

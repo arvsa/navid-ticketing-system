@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { useGroups, useRecipientGroups, useRecipients, useTemplates } from "@/api/hooks";
+import { useDepartments, useRecipientDepartments, useRecipients, useTemplates } from "@/api/hooks";
 import type { CompletionMode, IssueDetail, IssueType, NewIssue, Priority, Template } from "@/api/types";
 import { ISSUE_TYPES, PRIORITIES } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
@@ -91,7 +91,7 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const templates = useTemplates();
 
   const [d, setD] = useState<Draft>(() => {
-    const saved = initial.type || initial.templateTag || initial.date || initial.group ? {} : readDraft();
+    const saved = initial.type || initial.templateTag || initial.date || initial.department ? {} : readDraft();
     const type = initial.type ?? saved.type;
     const start = initial.date ? `${initial.date}T18:00` : format(setMinutes(setHours(addDays(new Date(), 1), 18), 0), "yyyy-MM-dd'T'HH:mm");
     return {
@@ -144,45 +144,45 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
   const createBranch = d.branch === "school" ? null : d.branch;
   const zone = zoneOf(createBranch) ?? zoneOf(options[0]?.id);
   const branch = options.find((o) => o.id === createBranch);
-  const groups = useGroups(createBranch ?? undefined);
+  const departments = useDepartments(createBranch ?? undefined);
   const kinds = creatableTypes(viewer, createBranch);
   // School-wide: super admins and holders of issue.target_other_branches.
   const canGoSchoolWide = superAdmin || creatableTypes(viewer, null).length > 0;
-  // People and groups of other branches, offered beside this branch's own
+  // People and departments of other branches, offered beside this branch's own
   // when the sender may send this kind across.
   const sendsAcross = canGoSchoolWide && (createBranch === null || (!!d.type && creatableTypes(viewer, null).includes(d.type)));
   const crossPeople = useRecipients(sendsAcross);
-  const crossGroups = useRecipientGroups(sendsAcross);
+  const crossDepartments = useRecipientDepartments(sendsAcross);
   // A branch item with someone from another branch is sent school-wide.
   const issueBranch = createBranch !== null && d.recipients.every((r) => r.branchId === createBranch) ? createBranch : null;
-  // Whole branches: every branch for school-wide items (members know the
-  // other branches from their people), or this one for a branch item.
+  // Whole branches: every branch for root users' school-wide items, or this
+  // one for its admins.
   const wholeBranches =
     createBranch === null
       ? superAdmin
         ? options.map((o) => ({ id: o.id, name: o.name }))
-        : [...new Map((crossPeople.data ?? []).map((p) => [p.branch_id, { id: p.branch_id, name: p.branch_name }])).values()]
-      : d.type && canTargetWholeBranch(viewer, createBranch, d.type)
+        : undefined
+      : canTargetWholeBranch(viewer, createBranch)
         ? options.filter((o) => o.id === createBranch).map((o) => ({ id: o.id, name: o.name }))
         : undefined;
   const canSend = d.type ? canSendType(viewer, createBranch, d.type) : false;
   const hasWork = d.type === "action";
-  const groupGoing = d.recipients.some((r) => r.kind !== "user");
+  const departmentGoing = d.recipients.some((r) => r.kind !== "user");
 
   useEffect(() => {
-    if (initial.group && groups.data && !d.recipients.length && createBranch) {
-      const g = groups.data.find((x) => x.id === initial.group);
-      if (g) set({ recipients: [{ kind: "group", id: g.id, branchId: createBranch, label: g.name, count: g.member_count, whole: g.is_default }] });
+    if (initial.department && departments.data && !d.recipients.length && createBranch) {
+      const g = departments.data.find((x) => x.id === initial.department && !x.is_default);
+      if (g) set({ recipients: [{ kind: "department", id: g.id, branchId: createBranch, label: g.name, count: g.member_ids.length, memberIds: g.member_ids }] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial.group, groups.data]);
+  }, [initial.department, departments.data]);
 
   const headcount = useMemo(() => {
     const ids = new Set<string>();
     let extra = 0;
     for (const r of d.recipients) {
       if (r.kind === "user") ids.add(r.id);
-      else if (r.kind === "group") extra += r.count;
+      else if (r.kind === "department") extra += r.count;
       else extra += people.inBranch(r.id).length;
     }
     return ids.size + extra;
@@ -207,12 +207,12 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                 ? { user_id: r.id, branch_id: r.branchId }
                 : { user_id: r.id }
               : issueBranch === null
-                ? { group_id: r.id, branch_id: r.branchId }
-                : { group_id: r.id },
+                ? { department_id: r.id, branch_id: r.branchId }
+                : { department_id: r.id },
         ),
       };
       if (hasWork) {
-        body.completion_mode = groupGoing ? d.mode : "per_member";
+        body.completion_mode = departmentGoing ? d.mode : "per_member";
         if (d.recipients.length) body.sla_due_at = fromLocalInput(d.due, zone);
       }
       if (d.type === "event") {
@@ -397,19 +397,21 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
                   value={d.recipients}
                   onChange={(recipients) => set({ recipients })}
                   people={branchPeople.filter((p) => p.id !== viewer.me.user.id || d.type === "event")}
-                  groups={groups.data ?? []}
+                  departments={departments.data ?? []}
                   branches={wholeBranches}
                   crossPeople={sendsAcross ? (crossPeople.data ?? []).filter((p) => p.user_id !== viewer.me.user.id || d.type === "event") : undefined}
-                  crossGroups={sendsAcross ? crossGroups.data : undefined}
+                  crossDepartments={sendsAcross ? crossDepartments.data : undefined}
                   branchId={createBranch}
                   branchName={branch?.name}
-                  placeholder={createBranch === null ? t("Add a branch, group or person") : sendsAcross ? t("Add a person or group, in any branch") : t("Add a person or group")}
+                  placeholder={createBranch === null ? (superAdmin ? t("Add a branch, department or person") : t("Add a person or department, in any branch")) : sendsAcross ? t("Add a person or department, in any branch") : t("Add a person or department")}
                 />
                 <p className={cx("text-[13px]", error?.field === "recipients" ? "text-danger" : "text-text-3")}>
                   {error?.field === "recipients"
                     ? error.text
                     : createBranch === null
-                      ? t("Send it to whole branches, or to chosen groups and people in any branch.")
+                      ? superAdmin
+                        ? t("Send it to whole branches, or to chosen departments and people in any branch.")
+                        : t("Send it to departments and people in any branch.")
                       : issueBranch === null
                         ? t("It goes to more than one branch, so it's sent school-wide.")
                         : d.type === "ticket"
@@ -419,9 +421,9 @@ export function NewItemModal({ initial, onClose }: { initial: NewItemOptions; on
               </div>
             )}
 
-            {hasWork && groupGoing && (
+            {hasWork && departmentGoing && (
               <Segmented<CompletionMode>
-                label={t("How should groups do this?")}
+                label={t("How should departments do this?")}
                 value={d.mode}
                 onChange={(mode) => set({ mode })}
                 options={[

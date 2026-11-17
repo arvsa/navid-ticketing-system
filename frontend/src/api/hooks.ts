@@ -11,7 +11,7 @@ import { api, getAll } from "./client";
 import { keys } from "./keys";
 import type {
   Branch,
-  BranchGroup,
+  BranchDepartment,
   PublicProfile,
   BranchPerson,
   CalendarEntry,
@@ -19,8 +19,9 @@ import type {
   Comment,
   Dashboard,
   EffectivePermissions,
-  Group,
-  GroupGrant,
+  Department,
+  PermissionGroup,
+  RootUserName,
   HistoryEntry,
   IssueDetail,
   IssueState,
@@ -76,7 +77,7 @@ export function useTemplates(includeArchived = false) {
   });
 }
 
-// ---------- branches, people, groups ----------
+// ---------- branches, people, departments, permission groups ----------
 
 export function useBranches(enabled = true) {
   return useQuery({
@@ -87,45 +88,48 @@ export function useBranches(enabled = true) {
   });
 }
 
-export function useMembers(branchId: string | undefined, opts: { includeLeft?: boolean; groupId?: string } = {}) {
-  const extra = { include_left: opts.includeLeft ?? false, group_id: opts.groupId };
+export function useMembers(branchId: string | undefined, opts: { includeLeft?: boolean; departmentId?: string } = {}) {
+  const extra = { include_left: opts.includeLeft ?? false, department_id: opts.departmentId };
   return useQuery({
     queryKey: keys.members(branchId ?? "", extra),
     queryFn: () =>
       getAll<Member>(`/branches/${branchId}/members`, {
         include_left: opts.includeLeft || undefined,
-        group_id: opts.groupId,
+        department_id: opts.departmentId,
       }),
     enabled: !!branchId,
     staleTime: 5 * 60_000,
   });
 }
 
-export function useGroups(branchId: string | undefined, includeArchived = false) {
+/** The branch's departments, with their members, heads and permission groups. */
+export function useDepartments(branchId: string | undefined, includeArchived = false) {
   return useQuery({
-    queryKey: keys.groups(branchId ?? "", { include_archived: includeArchived }),
+    queryKey: keys.departments(branchId ?? "", { include_archived: includeArchived }),
     queryFn: () =>
-      getAll<Group>(`/branches/${branchId}/groups`, { include_archived: includeArchived || undefined }),
+      getAll<Department>(`/branches/${branchId}/departments`, { include_archived: includeArchived || undefined }),
     enabled: !!branchId,
     staleTime: 60_000,
   });
 }
 
-/** School-wide groups (super admins). */
-export function useSchoolGroups(enabled: boolean) {
+/** The branch's own permission groups and the school-wide ones (admins). */
+export function usePermissionGroups(branchId: string | undefined, enabled = true) {
   return useQuery({
-    queryKey: keys.schoolGroups,
-    queryFn: () => api.get<Group[]>("/school-groups", { include_archived: true }),
-    enabled,
+    queryKey: keys.permissionGroups(branchId ?? ""),
+    queryFn: () => api.get<PermissionGroup[]>(`/branches/${branchId}/permission-groups`),
+    enabled: !!branchId && enabled,
     staleTime: 60_000,
   });
 }
 
-/** A school-wide group's copy in each branch. */
-export function useSchoolGroupCopies(groupId: string) {
+/** School-wide permission groups, "Everyone" first (super admins). */
+export function useSchoolPermissionGroups(enabled: boolean) {
   return useQuery({
-    queryKey: keys.schoolGroupCopies(groupId),
-    queryFn: () => api.get<Group[]>(`/school-groups/${groupId}/copies`),
+    queryKey: keys.schoolPermissionGroups,
+    queryFn: () => api.get<PermissionGroup[]>("/school-permission-groups"),
+    enabled,
+    staleTime: 60_000,
   });
 }
 
@@ -143,14 +147,6 @@ export function useCatalog() {
     queryKey: keys.catalog,
     queryFn: () => api.get<CatalogEntry[]>("/permissions"),
     staleTime: 5 * 60_000,
-  });
-}
-
-export function useGroupGrants(groupId?: string) {
-  return useQuery({
-    queryKey: keys.groupGrants(groupId ?? ""),
-    queryFn: () => getAll<GroupGrant>(`/groups/${groupId}/permissions`),
-    enabled: !!groupId,
   });
 }
 
@@ -192,6 +188,15 @@ export function useIssueList(filters: IssueFilters, limit = 25) {
 }
 
 /** People in every branch (names only), for school-wide items. */
+/** Active root users' names, for naming and @mentioning them. */
+export function useRootUserNames() {
+  return useQuery({
+    queryKey: ["root-users", "names"],
+    queryFn: () => api.get<RootUserName[]>("/root-users/names"),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useRecipients(enabled: boolean) {
   return useQuery({
     queryKey: keys.recipients,
@@ -212,11 +217,11 @@ export function useUserProfile(userId: string | null | undefined) {
   });
 }
 
-/** Groups in every branch (not All members), for school-wide items. */
-export function useRecipientGroups(enabled: boolean) {
+/** Departments in every branch (not All members), to send items to. */
+export function useRecipientDepartments(enabled: boolean) {
   return useQuery({
-    queryKey: keys.recipientGroups,
-    queryFn: () => api.get<BranchGroup[]>("/recipient-groups"),
+    queryKey: keys.recipientDepartments,
+    queryFn: () => api.get<BranchDepartment[]>("/recipient-departments"),
     enabled,
     staleTime: 5 * 60_000,
   });

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO department_member (department_id, user_id, branch_id, added_by) VALUES ($1, $2, $3, $4)\n           ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d158785480295436c2d043811c6ee2f46e19603ef2141a63ed520869ed710514"
+}

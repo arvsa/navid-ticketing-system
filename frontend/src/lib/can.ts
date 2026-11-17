@@ -5,8 +5,6 @@ import type { IssueDetail, IssueType, MeResponse, Permission, WorkItem } from "@
 
 export type Viewer = {
   me: MeResponse;
-  /** Group ids I'm in, per branch id (gap G-4). Missing = unknown. */
-  myGroups?: Record<string, string[] | undefined>;
 };
 
 export const isSuper = (v: Viewer) => v.me.user.is_super_admin;
@@ -23,7 +21,7 @@ export function isAdminAnywhere(v: Viewer) {
   return isSuper(v) || v.me.memberships.some((m) => m.is_admin);
 }
 
-/** Holds the permission in the branch at any reach. Used for navigation. */
+/** Holds the permission in the branch. Used for navigation. */
 export function hasGrant(v: Viewer, branchId: string | undefined | null, perm: Permission, type?: IssueType) {
   if (isAdminOf(v, branchId)) return true;
   const m = membership(v, branchId);
@@ -34,29 +32,27 @@ export function hasGrantAnywhere(v: Viewer, perm: Permission) {
   return isSuper(v) || v.me.memberships.some((m) => m.is_admin || m.grants.some((g) => g.permission === perm));
 }
 
-/** How the viewer relates to an item, for grant reach. */
+/** The viewer is in the department (in that branch). */
+export function inDepartment(v: Viewer, branchId: string, departmentId?: string | null) {
+  return !!departmentId && !!membership(v, branchId)?.departments.includes(departmentId);
+}
+
+/** How the viewer relates to an item. */
 export function relation(v: Viewer, issue: IssueDetail) {
   const myId = v.me.user.id;
   const createdByMe = issue.created_by === myId;
   const targetedMe = issue.targets.some((t) => {
     if (t.kind === "user") return t.user_id === myId;
     if (t.kind === "branch") return !!membership(v, t.branch_id);
-    const groups = v.myGroups?.[t.branch_id];
-    return groups ? groups.includes(t.group_id ?? "") : false;
+    return inDepartment(v, t.branch_id, t.department_id);
   }) || issue.work_items.some((w) => w.assignee_id === myId);
   return { createdByMe, targetedMe };
 }
 
+/** A branch-wide grant of the permission, for the item's type. */
 function grantApplies(v: Viewer, issue: IssueDetail, perm: Permission, branchId = issue.branch_id) {
   const m = membership(v, branchId);
-  if (!m) return false;
-  const rel = relation(v, issue);
-  return m.grants.some(
-    (g) =>
-      g.permission === perm &&
-      (!g.issue_type || g.issue_type === issue.type) &&
-      (g.scope === "branch" || (g.scope === "own" && rel.createdByMe) || (g.scope === "targeted" && rel.targetedMe)),
-  );
+  return !!m?.grants.some((g) => g.permission === perm && (!g.issue_type || g.issue_type === issue.type));
 }
 
 function adminCanManage(v: Viewer, branchId?: string | null) {
@@ -65,12 +61,23 @@ function adminCanManage(v: Viewer, branchId?: string | null) {
 
 const isOpen = (issue: IssueDetail) => issue.state === "open";
 
+/** Open and current: not an event that has ended, not work past its
+ * deadline. Senders change, resend and delete their own items only then. */
+export function senderMayChange(issue: IssueDetail, now = Date.now()) {
+  if (!isOpen(issue)) return false;
+  if (issue.event && Date.parse(issue.event.ends_at) < now) return false;
+  return !issue.work_items.some((w) => w.sla_due_at && Date.parse(w.sla_due_at) < now);
+}
+
+/** The sender, while they may still change it. */
+const ownAndCurrent = (v: Viewer, issue: IssueDetail) => issue.created_by === v.me.user.id && senderMayChange(issue);
+
 /** A school-wide item (sent to other branches): run by its sender. */
 const sentAcross = (issue: IssueDetail) => !issue.branch_id;
 
-/** Edit, close or hide the item itself. A school-wide item sent below super
- * admin belongs to its sender, under the rules of the sender's own branches;
- * the receiving branches' admins don't manage it. */
+/** Edit or close the item itself, beyond the sender's own rights. A
+ * school-wide item belongs to its sender, under the rules of the sender's own
+ * branches; the receiving branches' admins don't manage it. */
 function itemRule(v: Viewer, issue: IssueDetail, perm: Permission) {
   if (!sentAcross(issue)) return adminCanManage(v, issue.branch_id) || grantApplies(v, issue, perm);
   if (isSuper(v)) return true;
@@ -80,21 +87,26 @@ function itemRule(v: Viewer, issue: IssueDetail, perm: Permission) {
 
 export function canEdit(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  return itemRule(v, issue, "issue.edit");
+  return ownAndCurrent(v, issue) || itemRule(v, issue, "issue.edit");
 }
 
 export function canClose(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  const ownerClose = issue.created_by === v.me.user.id && issue.type !== "action";
   // Heads close the questions sent to their department.
-  const headClose = issue.type === "ticket" && !!issue.branch_id && issue.targets.some((t) => headsGroup(v, t.group_id));
-  return ownerClose || headClose || itemRule(v, issue, "issue.close");
+  const headClose = issue.type === "ticket" && !!issue.branch_id && issue.targets.some((t) => headsDepartment(v, t.department_id));
+  return issue.created_by === v.me.user.id || headClose || itemRule(v, issue, "issue.close");
+}
+
+/** Soft delete: the sender while open and current; the branch's admins any time. */
+export function canDelete(v: Viewer, issue: IssueDetail) {
+  if (ownAndCurrent(v, issue) || isSuper(v)) return true;
+  return !sentAcross(issue) && isAdminOf(v, issue.branch_id);
 }
 
 export function canTarget(v: Viewer, issue: IssueDetail) {
   if (!isOpen(issue)) return false;
-  if (sentAcross(issue)) return isSuper(v) || (issue.created_by === v.me.user.id && canSendAcross(v, issue.type));
-  return adminCanManage(v, issue.branch_id) || grantApplies(v, issue, "issue.target");
+  if (sentAcross(issue)) return isSuper(v) || ownAndCurrent(v, issue);
+  return ownAndCurrent(v, issue) || adminCanManage(v, issue.branch_id) || grantApplies(v, issue, "issue.edit");
 }
 
 /** The branch the viewer acts in for this item. School-wide items have no
@@ -108,7 +120,8 @@ export function issueBranch(v: Viewer, issue: IssueDetail): string | undefined {
 
 export function canComment(v: Viewer, issue: IssueDetail) {
   const branchId = issueBranch(v, issue);
-  return isAdminOf(v, branchId) || isSuper(v) || grantApplies(v, issue, "comment.create", branchId) || issue.created_by === v.me.user.id;
+  const rel = relation(v, issue);
+  return isAdminOf(v, branchId) || rel.createdByMe || rel.targetedMe || grantApplies(v, issue, "comment.create", branchId);
 }
 
 // Not used while staff-only comments are switched off in the UI.
@@ -122,14 +135,31 @@ export function canModerate(v: Viewer, issue: IssueDetail) {
   return isAdminOf(v, branchId) || grantApplies(v, issue, "comment.moderate", branchId);
 }
 
-/** The viewer heads a department: they run its members and what's sent to it. */
-export function headsGroup(v: Viewer, groupId?: string | null) {
-  return !!groupId && v.me.memberships.some((m) => m.heads.includes(groupId));
+/** The viewer heads the department: they run what's sent to it. */
+export function headsDepartment(v: Viewer, departmentId?: string | null) {
+  return !!departmentId && v.me.memberships.some((m) => m.heads.includes(departmentId));
 }
 
 /** Work sent to a department the viewer heads. */
 function headsWork(v: Viewer, issue: IssueDetail, w: WorkItem) {
-  return headsGroup(v, issue.targets.find((t) => t.id === w.target_id)?.group_id);
+  return headsDepartment(v, issue.targets.find((t) => t.id === w.target_id)?.department_id);
+}
+
+/** May create, rename and archive the branch's departments and choose heads. */
+export function canManageDepartments(v: Viewer, branchId?: string | null) {
+  return isAdminOf(v, branchId) || hasGrant(v, branchId, "department.manage");
+}
+
+/** May choose who's in the department called `name`. */
+export function canChooseMembers(v: Viewer, branchId: string, name: string) {
+  if (canManageDepartments(v, branchId)) return true;
+  const lower = name.toLowerCase();
+  return !!membership(v, branchId)?.manages_members_of.some((d) => d === "*" || d === lower);
+}
+
+/** May choose the members of some department of the branch. */
+export function choosesMembersSomewhere(v: Viewer, branchId?: string | null) {
+  return canManageDepartments(v, branchId) || !!membership(v, branchId)?.manages_members_of.length;
 }
 
 export function canApprove(v: Viewer, issue: IssueDetail, w: WorkItem) {
@@ -170,9 +200,7 @@ export function canCancelWork(v: Viewer, issue: IssueDetail, w: WorkItem) {
 export function canClaim(v: Viewer, issue: IssueDetail, w: WorkItem) {
   if (w.assignee_id || w.status !== "open" || issue.completion_mode !== "shared" || !isOpen(issue)) return false;
   const target = issue.targets.find((t) => t.id === w.target_id);
-  if (!target || target.kind !== "group") return false;
-  const groups = v.myGroups?.[target.branch_id];
-  return groups ? groups.includes(target.group_id ?? "") : false;
+  return target?.kind === "department" && inDepartment(v, target.branch_id, target.department_id);
 }
 
 /** Pass work you hold on to someone else in its branch. */
@@ -189,42 +217,26 @@ export function isMine(v: Viewer, w: WorkItem) {
   return w.assignee_id === v.me.user.id;
 }
 
-/** Kinds the viewer may create in a branch (`null` = school-wide). */
+/** Kinds the viewer may create in a branch (`null` = school-wide): every
+ * kind, for anyone in the branch (or in any branch). */
 export function creatableTypes(v: Viewer, branchId: string | null): IssueType[] {
   const all: IssueType[] = ["ticket", "action", "event"];
   if (isSuper(v)) return all;
-  if (branchId === null) return all.filter((t) => canSendAcross(v, t));
-  return all.filter((t) => hasGrant(v, branchId, "issue.create", t));
+  if (branchId === null) return v.me.memberships.length ? all : [];
+  return membership(v, branchId) ? all : [];
 }
 
-/** May send this kind to other people (staff can send their own tickets and events). */
+/** May send this kind to other people: anyone who may create it. */
 export function canSendType(v: Viewer, branchId: string | null, type: IssueType) {
-  if (branchId === null) return canSendAcross(v, type);
-  if (isSuper(v) || isAdminOf(v, branchId)) return true;
-  return hasGrant(v, branchId, "issue.target", type);
+  return creatableTypes(v, branchId).includes(type);
 }
 
-type Membership = MeResponse["memberships"][number];
-const holdsForType = (m: Membership, perm: Permission, type: IssueType) =>
-  m.grants.some((g) => g.permission === perm && g.scope === "branch" && (!g.issue_type || g.issue_type === type));
-
-/** May send to other branches or to whole branches from this membership:
- * branch admins always; others with `issue.target_other_branches`. */
-function sendsAcrossFrom(m: Membership, type: IssueType) {
-  return m.is_admin || holdsForType(m, "issue.target_other_branches", type);
+/** May send items to people and departments in other branches: everyone. */
+export function canSendAcross(v: Viewer) {
+  return isSuper(v) || v.me.memberships.length > 0;
 }
 
-/** May send a school-wide item of this kind, to people or whole branches
- * anywhere. Mirrors the server: the cross-branch permission plus the right to
- * create the kind, both in one branch. */
-export function canSendAcross(v: Viewer, type: IssueType) {
-  if (isSuper(v)) return true;
-  return v.me.memberships.some((m) => sendsAcrossFrom(m, type) && (m.is_admin || holdsForType(m, "issue.create", type)));
-}
-
-/** May send an item of this kind to the whole of this branch. */
-export function canTargetWholeBranch(v: Viewer, branchId: string, type: IssueType) {
-  if (isSuper(v)) return true;
-  const m = membership(v, branchId);
-  return !!m && sendsAcrossFrom(m, type);
+/** May send an item to the whole of this branch: its admins (and root users). */
+export function canTargetWholeBranch(v: Viewer, branchId: string) {
+  return isSuper(v) || !!membership(v, branchId)?.is_admin;
 }

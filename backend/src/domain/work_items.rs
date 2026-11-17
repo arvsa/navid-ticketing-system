@@ -345,8 +345,11 @@ pub async fn transition(
             Open
         }
         Transition::Claim => {
-            if cur.target_kind != TargetKind::Group || cur.completion_mode != CompletionMode::Shared {
-                return Err(AppError::conflict("not_claimable", "only shared work sent to a group can be claimed"));
+            if cur.target_kind != TargetKind::Department || cur.completion_mode != CompletionMode::Shared {
+                return Err(AppError::conflict(
+                    "not_claimable",
+                    "only shared work sent to a department can be claimed",
+                ));
             }
             if assignee.is_some() {
                 return Err(AppError::conflict("already_assigned", "someone has already taken this work"));
@@ -510,7 +513,7 @@ fn invalid(t: Transition, from: WorkStatus) -> AppError {
 
 /// Everyone who can approve work on the issue: its sender, the branch's
 /// admins and members holding `work_item.approve` for the type (through a
-/// group, or through Everyone).
+/// department's permission groups, or through Everyone).
 async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, sender: Uuid) -> AppResult<Vec<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
@@ -519,14 +522,15 @@ async fn approvers(tx: &mut Tx, branch_id: Uuid, issue_type: &str, sender: Uuid)
         SELECT m.user_id FROM branch_membership m JOIN app_user u ON u.id = m.user_id
         WHERE m.branch_id = $1 AND m.left_at IS NULL AND u.is_active
           AND (m.is_admin OR EXISTS (
-                SELECT 1 FROM user_group g
-                JOIN group_permission gp ON gp.group_id = g.id
-                WHERE g.archived_at IS NULL
-                  AND ((g.branch_id IS NULL AND g.is_default)
-                       OR g.id IN (SELECT gm.group_id FROM group_member gm
-                                   WHERE gm.user_id = m.user_id AND gm.branch_id = $1))
-                  AND gp.permission_key = 'work_item.approve' AND gp.scope = 'branch'
-                  AND (gp.issue_type_id IS NULL OR gp.issue_type_id = (SELECT id FROM issue_type WHERE code = $2))))
+                SELECT 1 FROM permission_group g
+                JOIN permission_group_grant gg ON gg.group_id = g.id
+                WHERE (g.is_default
+                       OR g.id IN (SELECT x.group_id FROM department_member dm
+                                   JOIN department d ON d.id = dm.department_id AND d.archived_at IS NULL
+                                   JOIN department_permission_group x ON x.department_id = d.id
+                                   WHERE dm.user_id = m.user_id AND dm.branch_id = $1))
+                  AND gg.permission_key = 'work_item.approve'
+                  AND (gg.issue_type_id IS NULL OR gg.issue_type_id = (SELECT id FROM issue_type WHERE code = $2))))
         "#,
         branch_id,
         issue_type,

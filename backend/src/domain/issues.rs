@@ -155,15 +155,13 @@ async fn detail(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult<IssueDe
     let event = events::view(db, actor, issue_id).await?;
     let targets = sqlx::query_as!(
         Target,
-        r#"SELECT t.id, t.kind AS "kind: TargetKind", t.branch_id, t.user_id, t.group_id, t.created_at,
-                  coalesce(u.first_name || ' ' || u.last_name,
-                           CASE WHEN g.is_default THEN 'All members' ELSE g.name END,
-                           b.name) AS "name!",
+        r#"SELECT t.id, t.kind AS "kind: TargetKind", t.branch_id, t.user_id, t.department_id, t.created_at,
+                  coalesce(u.first_name || ' ' || u.last_name, d.name, b.name) AS "name!",
                   b.name AS branch_name
            FROM issue_target t
            JOIN branch b ON b.id = t.branch_id
            LEFT JOIN app_user u ON u.id = t.user_id
-           LEFT JOIN user_group g ON g.id = t.group_id
+           LEFT JOIN department d ON d.id = t.department_id
            WHERE t.issue_id = $1 AND t.removed_at IS NULL ORDER BY t.created_at, t.id"#,
         issue_id
     )
@@ -530,7 +528,8 @@ pub async fn create(db: &PgPool, actor: &Actor, input: NewIssue) -> AppResult<Is
         issue_type,
         created_by: actor.user_id,
         target_branch_ids: resolved.iter().map(|t| t.branch_id).collect(),
-        target_group_ids: resolved.iter().filter_map(|t| t.group_id).collect(),
+        target_department_ids: resolved.iter().filter_map(|t| t.department_id).collect(),
+        sender_may_change: true,
         actor_targeted: false,
     };
     if !resolved.is_empty() {
@@ -872,6 +871,51 @@ pub async fn close(
     detail(db, actor, issue_id).await
 }
 
+/// DELETE /issues/{id}: a soft delete. The issue disappears for everyone
+/// (lists, links, notifications) but its rows and history stay. Its sender
+/// may delete it while it's open and current; branch admins at any time.
+pub async fn delete(db: &PgPool, actor: &Actor, issue_id: Uuid, version: i32) -> AppResult<()> {
+    let facts = readable(db, actor, issue_id).await?;
+    authorize(actor, Action::DeleteIssue { issue: &facts })?;
+
+    let mut tx = db.begin().await?;
+    let row =
+        sqlx::query!(r#"SELECT state AS "state: IssueState", version FROM issue WHERE id = $1 FOR UPDATE"#, issue_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if row.version != version {
+        return Err(AppError::version_conflict());
+    }
+    sqlx::query!(
+        "UPDATE issue SET deleted_at = now(), deleted_by = $2, version = version + 1 WHERE id = $1",
+        issue_id,
+        actor.user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    audit::record(
+        &mut tx,
+        AuditEntry {
+            entity_type: "issue",
+            entity_id: issue_id.to_string(),
+            branch_id: facts.branch_id,
+            actor_id: Some(actor.user_id),
+            action: "delete",
+            old_value: Some(json!({ "state": row.state })),
+            new_value: Some(json!({ "deleted": true })),
+        },
+    )
+    .await?;
+    targets::cancel_items(&mut tx, Some(actor.user_id), issue_id, None, "issue_deleted").await?;
+    if facts.issue_type == IssueType::Event && row.state == IssueState::Open {
+        events::on_cancelled(&mut tx, actor, issue_id, facts.branch_id).await?;
+    }
+    notify_owner(&mut tx, actor, &facts, json!({ "change": "delete" })).await?;
+    emit(&mut tx, "issue_updated", issue_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 struct OpenIssue {
     title: String,
     description: Option<String>,
@@ -1021,7 +1065,7 @@ pub async fn pass_ticket(db: &PgPool, actor: &Actor, issue_id: Uuid, input: Pass
         return Err(AppError::validation("invalid_target", "pass it to someone else"));
     }
     let target = targets::resolve(
-        &TargetInput { user_id: Some(input.user_id), group_id: None, branch_id: Some(mine.branch_id) },
+        &TargetInput { user_id: Some(input.user_id), department_id: None, branch_id: Some(mine.branch_id) },
         facts.branch_id,
     )?;
 

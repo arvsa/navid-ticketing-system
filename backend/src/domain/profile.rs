@@ -158,7 +158,13 @@ fn image_subtype(data: &[u8]) -> Option<&'static str> {
 
 /// Replaces the actor's cover or picture. The new file is stored first; the
 /// old one is removed after the switch.
-pub async fn set_image(db: &PgPool, store: &dyn ObjectStore, actor: &Actor, image: Image, data: Bytes) -> AppResult<()> {
+pub async fn set_image(
+    db: &PgPool,
+    store: &dyn ObjectStore,
+    actor: &Actor,
+    image: Image,
+    data: Bytes,
+) -> AppResult<()> {
     if data.len() > image.max_bytes() {
         let mb = image.max_bytes() / (1024 * 1024);
         return Err(AppError::PayloadTooLarge { message: format!("a {} is limited to {mb} MB", image.noun()).into() });
@@ -266,7 +272,13 @@ pub struct ImageFile {
     pub reader: ObjectReader,
 }
 
-pub async fn image(db: &PgPool, store: &dyn ObjectStore, _actor: &Actor, user_id: Uuid, image: Image) -> AppResult<ImageFile> {
+pub async fn image(
+    db: &PgPool,
+    store: &dyn ObjectStore,
+    _actor: &Actor,
+    user_id: Uuid,
+    image: Image,
+) -> AppResult<ImageFile> {
     let row = sqlx::query!("SELECT cover_key, avatar_key FROM app_user WHERE id = $1", user_id)
         .fetch_optional(db)
         .await?

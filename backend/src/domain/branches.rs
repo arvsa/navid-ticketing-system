@@ -326,6 +326,24 @@ pub struct RootUser {
     pub last_login_at: Option<OffsetDateTime>,
 }
 
+/// An active root user's name, for everyone: root users belong to no
+/// branch, yet they send items, comment, and can be @mentioned.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct RootUserName {
+    pub user_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+pub async fn root_user_names(db: &PgPool, _actor: &Actor) -> AppResult<Vec<RootUserName>> {
+    Ok(sqlx::query_as!(
+        RootUserName,
+        "SELECT id AS user_id, first_name, last_name FROM app_user WHERE is_super_admin AND is_active ORDER BY first_name, last_name, id"
+    )
+    .fetch_all(db)
+    .await?)
+}
+
 /// Every root user (super admin), for root users.
 pub async fn root_users(db: &PgPool, actor: &Actor) -> AppResult<Vec<RootUser>> {
     authorize(actor, Action::SetSuperAdmin)?;

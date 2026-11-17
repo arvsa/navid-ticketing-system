@@ -3,7 +3,7 @@
 //! | Target | `shared` (default)              | `per_member`                       |
 //! |--------|---------------------------------|------------------------------------|
 //! | user   | 1 item, assigned to that user   | same                               |
-//! | group  | 1 unassigned item; claimable    | 1 item per current member          |
+//! | department | 1 unassigned item; claimable | 1 item per current member        |
 //! | branch | 1 unassigned item; admin assigns| 1 item per current branch member   |
 //!
 //! Only Actions and Reports get work items.
@@ -24,15 +24,16 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-/// A recipient: exactly one of `user_id`, `group_id` or `branch_id` (whole
-/// branch; super admins only), e.g. `{"group_id": "..."}`. On a cross-branch
-/// issue a person or group also names their branch: `{"user_id": "...",
-/// "branch_id": "..."}`, `{"group_id": "...", "branch_id": "..."}`. Anything
-/// else is `422 invalid_target`. Send one target per recipient.
+/// A recipient: exactly one of `user_id`, `department_id` or `branch_id`
+/// (whole branch: its admins and super admins), e.g. `{"department_id":
+/// "..."}`. On a cross-branch issue a person or department also names their
+/// branch: `{"user_id": "...", "branch_id": "..."}`, `{"department_id":
+/// "...", "branch_id": "..."}`. Anything else is `422 invalid_target`. Send
+/// one target per recipient.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TargetInput {
     pub user_id: Option<Uuid>,
-    pub group_id: Option<Uuid>,
+    pub department_id: Option<Uuid>,
     pub branch_id: Option<Uuid>,
 }
 
@@ -41,7 +42,7 @@ pub struct ResolvedTarget {
     pub kind: TargetKind,
     pub branch_id: Uuid,
     pub user_id: Option<Uuid>,
-    pub group_id: Option<Uuid>,
+    pub department_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -50,10 +51,10 @@ pub struct Target {
     pub kind: TargetKind,
     pub branch_id: Uuid,
     pub user_id: Option<Uuid>,
-    pub group_id: Option<Uuid>,
-    /// What to call it: the person's full name, the group's ("All members"
-    /// for a branch's default group) or the branch's. Readers of the issue
-    /// may not see the other branches' people and groups.
+    pub department_id: Option<Uuid>,
+    /// What to call it: the person's full name, the department's ("All
+    /// members" for a branch's default department) or the branch's. Readers
+    /// of the issue may not see the other branches' people and departments.
     pub name: String,
     pub branch_name: String,
     #[serde(with = "time::serde::rfc3339")]
@@ -76,11 +77,11 @@ impl IssueCtx {
 }
 
 /// Shape check. Cross-branch issues take whole branches and people (with
-/// their branch); branch issues take users and groups of their branch, or the
+/// their branch); branch issues take users and departments of their branch, or the
 /// branch itself.
 pub fn resolve(input: &TargetInput, issue_branch: Option<Uuid>) -> AppResult<ResolvedTarget> {
     let invalid = |msg: &'static str| AppError::validation("invalid_target", msg);
-    let target = match (input.user_id, input.group_id, input.branch_id) {
+    let target = match (input.user_id, input.department_id, input.branch_id) {
         (Some(user), None, branch) => {
             let branch = match (issue_branch, branch) {
                 (Some(issue_branch), None) => issue_branch,
@@ -89,30 +90,35 @@ pub fn resolve(input: &TargetInput, issue_branch: Option<Uuid>) -> AppResult<Res
                 (None, Some(b)) => b,
                 (None, None) => return Err(invalid("on a cross-branch issue a person needs their branch_id")),
             };
-            ResolvedTarget { kind: TargetKind::User, branch_id: branch, user_id: Some(user), group_id: None }
+            ResolvedTarget { kind: TargetKind::User, branch_id: branch, user_id: Some(user), department_id: None }
         }
-        (None, Some(group), branch) => {
+        (None, Some(department), branch) => {
             let branch = match (issue_branch, branch) {
                 (Some(issue_branch), None) => issue_branch,
                 (Some(issue_branch), Some(b)) if b == issue_branch => b,
                 (Some(_), Some(_)) => return Err(invalid("targets must be in the issue's branch")),
                 (None, Some(b)) => b,
-                (None, None) => return Err(invalid("on a cross-branch issue a group needs its branch_id")),
+                (None, None) => return Err(invalid("on a cross-branch issue a department needs its branch_id")),
             };
-            ResolvedTarget { kind: TargetKind::Group, branch_id: branch, user_id: None, group_id: Some(group) }
+            ResolvedTarget {
+                kind: TargetKind::Department,
+                branch_id: branch,
+                user_id: None,
+                department_id: Some(department),
+            }
         }
         (None, None, Some(branch)) => {
             if issue_branch.is_some_and(|b| b != branch) {
                 return Err(invalid("targets must be in the issue's branch"));
             }
-            ResolvedTarget { kind: TargetKind::Branch, branch_id: branch, user_id: None, group_id: None }
+            ResolvedTarget { kind: TargetKind::Branch, branch_id: branch, user_id: None, department_id: None }
         }
-        _ => return Err(invalid("a target has exactly one of user_id, group_id or branch_id")),
+        _ => return Err(invalid("a target has exactly one of user_id, department_id or branch_id")),
     };
     Ok(target)
 }
 
-/// The referenced user, group or branch must exist and be usable.
+/// The referenced user, department or branch must exist and be usable.
 async fn validate(tx: &mut Tx, t: &ResolvedTarget) -> AppResult<()> {
     let ok = match t.kind {
         TargetKind::User => sqlx::query_scalar!(
@@ -123,10 +129,11 @@ async fn validate(tx: &mut Tx, t: &ResolvedTarget) -> AppResult<()> {
         )
         .fetch_one(&mut **tx)
         .await?,
-        TargetKind::Group => sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM user_group
-                              WHERE id = $1 AND branch_id = $2 AND archived_at IS NULL) AS "ok!""#,
-            t.group_id,
+        TargetKind::Department => sqlx::query_scalar!(
+            // "All members" is the whole branch: send to the branch instead.
+            r#"SELECT EXISTS (SELECT 1 FROM department
+                              WHERE id = $1 AND branch_id = $2 AND archived_at IS NULL AND NOT is_default) AS "ok!""#,
+            t.department_id,
             t.branch_id
         )
         .fetch_one(&mut **tx)
@@ -141,7 +148,7 @@ async fn validate(tx: &mut Tx, t: &ResolvedTarget) -> AppResult<()> {
     if !ok {
         let msg = match t.kind {
             TargetKind::User => "the user is not an active member of the branch",
-            TargetKind::Group => "the group doesn't exist in the branch or is archived",
+            TargetKind::Department => "the department doesn't exist in the branch, is archived, or is \"All members\"",
             TargetKind::Branch => "the branch doesn't exist or is inactive",
         };
         return Err(AppError::validation("invalid_target", msg));
@@ -169,14 +176,14 @@ pub async fn add(
     validate(tx, &target).await?;
     let target_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO issue_target (issue_id, branch_id, kind, group_id, user_id, created_by)
+        INSERT INTO issue_target (issue_id, branch_id, kind, department_id, user_id, created_by)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         "#,
         issue.id,
         target.branch_id,
         target.kind as TargetKind,
-        target.group_id,
+        target.department_id,
         target.user_id,
         actor.user_id,
     )
@@ -193,8 +200,8 @@ pub async fn add(
             action: "add",
             old_value: None,
             new_value: Some(json!({
-                "issue_id": issue.id, "kind": target.kind, "user_id": target.user_id, "group_id": target.group_id,
-                "branch_id": target.branch_id,
+                "issue_id": issue.id, "kind": target.kind, "user_id": target.user_id,
+                "department_id": target.department_id, "branch_id": target.branch_id,
             })),
         },
     )
@@ -202,29 +209,28 @@ pub async fn add(
 
     let mut work_items = Vec::new();
     if issue.has_work_items() {
-        let assignees: Vec<Option<Uuid>> = match (target.kind, issue.completion_mode) {
-            (TargetKind::User, _) => vec![target.user_id],
-            (_, CompletionMode::Shared) => vec![None],
-            // A snapshot of the current, active members.
-            (TargetKind::Group, CompletionMode::PerMember) => {
-                sqlx::query_scalar!(
-                    r#"SELECT gm.user_id AS "user_id?" FROM group_member gm JOIN app_user u ON u.id = gm.user_id
-                   WHERE gm.group_id = $1 AND u.is_active ORDER BY gm.user_id"#,
-                    target.group_id
+        let assignees: Vec<Option<Uuid>> =
+            match (target.kind, issue.completion_mode) {
+                (TargetKind::User, _) => vec![target.user_id],
+                (_, CompletionMode::Shared) => vec![None],
+                // A snapshot of the current, active members.
+                (TargetKind::Department, CompletionMode::PerMember) => sqlx::query_scalar!(
+                    r#"SELECT dm.user_id AS "user_id?" FROM department_member dm JOIN app_user u ON u.id = dm.user_id
+                   WHERE dm.department_id = $1 AND u.is_active ORDER BY dm.user_id"#,
+                    target.department_id
                 )
                 .fetch_all(&mut **tx)
-                .await?
-            }
-            (TargetKind::Branch, CompletionMode::PerMember) => {
-                sqlx::query_scalar!(
-                    r#"SELECT m.user_id AS "user_id?" FROM branch_membership m JOIN app_user u ON u.id = m.user_id
+                .await?,
+                (TargetKind::Branch, CompletionMode::PerMember) => {
+                    sqlx::query_scalar!(
+                        r#"SELECT m.user_id AS "user_id?" FROM branch_membership m JOIN app_user u ON u.id = m.user_id
                    WHERE m.branch_id = $1 AND m.left_at IS NULL AND u.is_active ORDER BY m.user_id"#,
-                    target.branch_id
-                )
-                .fetch_all(&mut **tx)
-                .await?
-            }
-        };
+                        target.branch_id
+                    )
+                    .fetch_all(&mut **tx)
+                    .await?
+                }
+            };
 
         for assignee in assignees {
             let item_id = sqlx::query_scalar!(
@@ -281,11 +287,11 @@ pub async fn add(
     if issue.issue_type == IssueType::Ticket {
         notified = match target.kind {
             TargetKind::User => target.user_id.into_iter().collect(),
-            TargetKind::Group => {
+            TargetKind::Department => {
                 sqlx::query_scalar!(
-                    r#"SELECT gm.user_id FROM group_member gm JOIN app_user u ON u.id = gm.user_id
-                   WHERE gm.group_id = $1 AND u.is_active ORDER BY gm.user_id"#,
-                    target.group_id
+                    r#"SELECT dm.user_id FROM department_member dm JOIN app_user u ON u.id = dm.user_id
+                   WHERE dm.department_id = $1 AND u.is_active ORDER BY dm.user_id"#,
+                    target.department_id
                 )
                 .fetch_all(&mut **tx)
                 .await?
@@ -320,7 +326,7 @@ pub async fn remove(tx: &mut Tx, actor: &Actor, issue_id: Uuid, target_id: Uuid)
     let target = sqlx::query!(
         r#"UPDATE issue_target SET removed_at = now(), removed_by = $3
            WHERE id = $1 AND issue_id = $2 AND removed_at IS NULL
-           RETURNING branch_id, kind AS "kind: TargetKind", user_id, group_id"#,
+           RETURNING branch_id, kind AS "kind: TargetKind", user_id, department_id"#,
         target_id,
         issue_id,
         actor.user_id,
@@ -338,7 +344,8 @@ pub async fn remove(tx: &mut Tx, actor: &Actor, issue_id: Uuid, target_id: Uuid)
             actor_id: Some(actor.user_id),
             action: "remove",
             old_value: Some(json!({
-                "issue_id": issue_id, "kind": target.kind, "user_id": target.user_id, "group_id": target.group_id,
+                "issue_id": issue_id, "kind": target.kind, "user_id": target.user_id,
+                "department_id": target.department_id,
             })),
             new_value: None,
         },

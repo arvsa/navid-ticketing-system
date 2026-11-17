@@ -13,8 +13,7 @@ import { Avatar, Cover } from "@/components/badges";
 import { Button, Card, Field, Segmented, cx, inputClass } from "@/components/ui";
 import { formatDateTime } from "@/lib/dates";
 import { errorMessage } from "@/lib/labels";
-import { useGroupDirectory } from "@/lib/items";
-import { useViewer } from "@/lib/useViewer";
+import { useDepartmentDirectory } from "@/lib/items";
 import { calendar, lang, localeTag, num, setCalendar, setLang, t, type CalendarSystem, type Lang } from "@/i18n";
 
 const BIO_MAX = 500;
@@ -228,34 +227,34 @@ export function ProfilePage() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [theme, setT] = useState<Theme>(getTheme);
-  const viewer = useViewer();
-  const groups = useGroupDirectory();
+  const groups = useDepartmentDirectory();
   const u = me.user;
   return (
     <div className="mx-auto max-w-[860px] space-y-6">
       <ProfileHero />
 
       <Card className="p-6">
-        <h2 className="mb-1 text-[20px] font-semibold">{t("Your branches and groups")}</h2>
-        <p className="mb-4 text-text-2">{t("Work sent to these groups comes to you. Ask an admin if one is missing.")}</p>
+        <h2 className="mb-1 text-[20px] font-semibold">{t("Your branches and departments")}</h2>
+        <p className="mb-4 text-text-2">{t("Work sent to these departments comes to you. Ask an admin if one is missing.")}</p>
         {me.memberships.length === 0 && <p className="text-text-2">{u.is_super_admin ? t("As a root user you work across every branch.") : t("You aren't a member of any branch.")}</p>}
         <ul className="space-y-4">
           {me.memberships.map((m) => {
-            const mine = (viewer.myGroups?.[m.branch.id] ?? []).map((id) => groups.get(id)).filter(Boolean);
+            const mine = m.departments.map((id) => groups.get(id)).filter((d) => !!d);
             return (
               <li key={m.branch.id}>
                 <p className="font-semibold">
                   {m.branch.name} <span className="font-normal text-text-3">· {m.is_admin ? t("Admin") : t("Member")}</span>
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {viewer.myGroups?.[m.branch.id] === undefined ? (
+                  {mine.length < m.departments.length ? (
                     <span className="text-text-3">{t("Loading…")}</span>
                   ) : (
                     mine
-                      .sort((a, b) => Number(b!.is_default) - Number(a!.is_default) || a!.name.localeCompare(b!.name, localeTag))
-                      .map((g) => (
-                        <span key={g!.id} className="rounded-full bg-sunken px-3 py-1">
-                          {g!.is_default ? t("All members") : g!.name}
+                      .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag))
+                      .map((d) => (
+                        <span key={d.id} className="rounded-full bg-sunken px-3 py-1">
+                          {d.is_default ? t("All members") : d.name}
+                          {m.heads.includes(d.id) && <span className="ms-1.5 text-[12px] font-semibold text-primary">{t("Head")}</span>}
                         </span>
                       ))
                   )}

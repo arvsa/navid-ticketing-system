@@ -1,5 +1,5 @@
-//! The school directory: every active branch, its departments (groups of
-//! kind `department`) and its people, for everyone signed in. Names, emails
+//! The school directory: every active branch, its departments and its
+//! people, for everyone signed in. Names, emails
 //! and who runs what only; bios and pictures come from the profile endpoints.
 
 use std::collections::HashMap;
@@ -18,12 +18,12 @@ pub struct DirectoryBranch {
     /// The branch's contact address.
     pub email: Option<String>,
     pub timezone: String,
-    pub groups: Vec<DirectoryGroup>,
+    pub departments: Vec<DirectoryDepartment>,
     pub people: Vec<DirectoryPerson>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct DirectoryGroup {
+pub struct DirectoryDepartment {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
@@ -44,32 +44,33 @@ pub struct DirectoryPerson {
 }
 
 pub async fn list(db: &PgPool, _actor: &Actor) -> AppResult<Vec<DirectoryBranch>> {
-    let branches = sqlx::query!("SELECT id, code, name, email::text, timezone FROM branch WHERE is_active ORDER BY name, id").fetch_all(db).await?;
-    let mut groups: HashMap<Uuid, Vec<DirectoryGroup>> = HashMap::new();
-    for g in sqlx::query!(
+    let branches =
+        sqlx::query!("SELECT id, code, name, email::text, timezone FROM branch WHERE is_active ORDER BY name, id")
+            .fetch_all(db)
+            .await?;
+    let mut departments: HashMap<Uuid, Vec<DirectoryDepartment>> = HashMap::new();
+    for d in sqlx::query!(
         r#"
-        SELECT g.id, g.branch_id AS "branch_id!", g.name, g.description,
-               ARRAY(SELECT gm.user_id FROM group_member gm
-                     JOIN app_user u ON u.id = gm.user_id AND u.is_active
-                     JOIN branch_membership m ON m.user_id = gm.user_id AND m.branch_id = g.branch_id
-                                             AND m.left_at IS NULL
-                     WHERE gm.group_id = g.id
+        SELECT d.id, d.branch_id, d.name, d.description,
+               ARRAY(SELECT dm.user_id FROM department_member dm
+                     JOIN app_user u ON u.id = dm.user_id AND u.is_active
+                     WHERE dm.department_id = d.id
                      ORDER BY u.first_name, u.last_name, u.id) AS "member_ids!",
-               ARRAY(SELECT gm.user_id FROM group_member gm WHERE gm.group_id = g.id AND gm.is_head) AS "head_ids!"
-        FROM user_group g
-        WHERE g.branch_id IS NOT NULL AND NOT g.is_default AND g.archived_at IS NULL AND g.kind = 'department'
-        ORDER BY lower(g.name), g.id
+               ARRAY(SELECT dm.user_id FROM department_member dm WHERE dm.department_id = d.id AND dm.is_head) AS "head_ids!"
+        FROM department d
+        WHERE NOT d.is_default AND d.archived_at IS NULL
+        ORDER BY lower(d.name), d.id
         "#
     )
     .fetch_all(db)
     .await?
     {
-        groups.entry(g.branch_id).or_default().push(DirectoryGroup {
-            id: g.id,
-            name: g.name,
-            description: g.description,
-            member_ids: g.member_ids,
-            head_ids: g.head_ids,
+        departments.entry(d.branch_id).or_default().push(DirectoryDepartment {
+            id: d.id,
+            name: d.name,
+            description: d.description,
+            member_ids: d.member_ids,
+            head_ids: d.head_ids,
         });
     }
     let mut people: HashMap<Uuid, Vec<DirectoryPerson>> = HashMap::new();
@@ -95,7 +96,7 @@ pub async fn list(db: &PgPool, _actor: &Actor) -> AppResult<Vec<DirectoryBranch>
     Ok(branches
         .into_iter()
         .map(|b| DirectoryBranch {
-            groups: groups.remove(&b.id).unwrap_or_default(),
+            departments: departments.remove(&b.id).unwrap_or_default(),
             people: people.remove(&b.id).unwrap_or_default(),
             id: b.id,
             code: b.code,

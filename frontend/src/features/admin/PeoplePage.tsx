@@ -1,21 +1,23 @@
-// People & groups (UX_SPEC §4.11–4.12).
+// People, departments and permission groups (UX_SPEC §4.11–4.12).
+//
+// Departments are who does what (IT, Health, Teachers): items are sent to
+// them and their heads run the work. Permission groups are what people may
+// do: attached to departments, their grants reach the departments' members.
 import { useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, Building2, ChevronDown, ChevronRight, Copy, FileSpreadsheet, Globe, Lock, Pencil, Plus, Shield, ShieldCheck, Trash2, UserPlus, UserRound, Users, X } from "lucide-react";
+import { Archive, ArchiveRestore, Building2, ChevronDown, ChevronRight, Copy, Download, FileSpreadsheet, Globe, KeyRound, Lock, Pencil, Plus, Shield, ShieldCheck, Trash2, Upload, UserPlus, UserRound, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useEffectivePermissions, useGroupGrants, useGroups, useMembers, useSchoolGroupCopies, useSchoolGroups } from "@/api/hooks";
-import { keys } from "@/api/keys";
-import type { AddedMember, DeleteOutcome, Group, Member } from "@/api/types";
-import { useBranch } from "@/app/BranchContext";
+import { useDepartments, useEffectivePermissions, useMembers, usePermissionGroups, useSchoolPermissionGroups } from "@/api/hooks";
+import type { AddedMember, ConfigImportOutcome, DeleteOutcome, Department, Member, PermissionGroup } from "@/api/types";
 import { Avatar } from "@/components/badges";
 import { PeopleChecklist, PersonSelect } from "@/components/pickers";
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, IconButton, LoadingRows, Menu, MenuItem, PageHeader, SectionLabel, Segmented, TabPanel, Tabs, cx, inputClass } from "@/components/ui";
-import { hasGrant, headsGroup, isAdminOf, isSuper } from "@/lib/can";
+import { canChooseMembers, canManageDepartments, hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { guard } from "@/lib/unsaved";
 import { formatDay } from "@/lib/dates";
-import { errorMessage, permissionInfo, reachLabel, typePlural } from "@/lib/labels";
+import { errorMessage, grantTitle } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { ConfirmDialog } from "@/features/items/ItemDialogs";
@@ -26,26 +28,22 @@ import { PermissionEditor, summarizeGrants } from "./PermissionEditor";
 import { useManagedBranch } from "./useManagedBranch";
 import { localeTag, num, quote, t, tn } from "@/i18n";
 
+type Tab = "departments" | "members" | "permissions" | "school";
+
 export function PeoplePage() {
   const viewer = useViewer();
   const search = useSearch({ from: "/authed/shell/people" });
   const navigate = useNavigate({ from: "/people" });
   const { branchId, branch, choices, pick } = useManagedBranch(viewer, "member.manage", search.branch, true);
   const openPerson = (id: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, person: id }) });
-  const ctx = useBranch();
-  // From a school-wide group to its copy in one branch, and back.
-  const openCopy = (copyBranch: string, groupId: string) =>
-    guard(() => {
-      if (ctx.branchId && ctx.branchId !== copyBranch) ctx.setBranch(copyBranch);
-      else pick(copyBranch);
-      navigate({ search: (s: PeopleSearch) => ({ ...s, tab: undefined, group: groupId }) });
-    });
-  const openTemplate = (templateId: string) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: templateId }) });
   const members = useMembers(branchId);
-  const groups = useGroups(branchId, true);
+  const departments = useDepartments(branchId);
   const superAdmin = isSuper(viewer);
-  const schoolGroups = useSchoolGroups(superAdmin);
-  const tab = search.tab === "school" && !superAdmin ? "groups" : (search.tab ?? "groups");
+  const admin = isAdminOf(viewer, branchId);
+  const permissionGroups = usePermissionGroups(branchId, admin);
+  const schoolGroups = useSchoolPermissionGroups(superAdmin);
+  const tab: Tab =
+    search.tab === "school" ? (superAdmin ? "school" : "departments") : search.tab === "permissions" ? (admin ? "permissions" : "departments") : (search.tab ?? "departments");
   if (!branchId)
     return superAdmin ? (
       <EmptyState
@@ -61,45 +59,51 @@ export function PeoplePage() {
     ) : (
       <EmptyState title={t("You don't manage a branch.")} />
     );
-  const activeGroups = groups.data?.filter((g) => !g.archived_at).length;
   const openBranch = (id: string) =>
     guard(() => {
       pick(id);
-      navigate({ search: (s: PeopleSearch) => ({ ...s, tab: tab === "school" ? undefined : s.tab, group: undefined }) });
+      navigate({ search: (s: PeopleSearch) => ({ ...s, tab: tab === "school" ? undefined : s.tab, department: undefined, group: undefined }) });
     });
-  const openTab = (v: "members" | "groups") =>
-    navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "groups" ? undefined : v, group: undefined }) });
+  const openTab = (v: Tab) =>
+    guard(() => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: v === "departments" ? undefined : v, department: undefined, group: undefined }) }));
+  const subtitle = tab === "school" ? t("School-wide permission groups · for every branch") : branch?.name;
   return (
     <div>
-      <PageHeader title={t("People & groups")} subtitle={tab === "school" ? t("School-wide groups · for every branch") : branch?.name} />
+      <PageHeader title={t("People & departments")} subtitle={subtitle} />
       <div className="grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)]">
         <PeopleNav
           branches={choices.length ? choices : branch ? [branch] : []}
           branchId={tab === "school" ? undefined : branchId}
           tab={tab}
-          members={members.data?.length}
-          groups={activeGroups}
-          schoolGroups={superAdmin ? (schoolGroups.data?.filter((g) => !g.archived_at).length ?? null) : undefined}
-          everyone={superAdmin ? schoolGroups.data?.find((g) => g.is_default) : undefined}
-          selectedGroup={search.group}
-          onEveryone={(id) => guard(() => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: id }) }))}
+          counts={{
+            members: members.data?.length,
+            departments: departments.data?.filter((d) => !d.archived_at).length,
+            permissions: admin ? permissionGroups.data?.filter((g) => g.branch_id).length : undefined,
+          }}
+          schoolGroups={superAdmin ? (schoolGroups.data?.length ?? null) : undefined}
           onBranch={openBranch}
           onTab={openTab}
-          onSchool={() => guard(() => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "school", group: undefined }) }))}
         />
         <div className="min-w-0">
           {tab === "members" ? (
             <MembersTab branchId={branchId} branchName={branch?.name ?? ""} onOpen={openPerson} />
-          ) : tab === "school" ? (
-            <SchoolGroupsTab selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} onOpenCopy={openCopy} />
-          ) : (
-            <GroupsTab
+          ) : tab === "permissions" ? (
+            <PermissionGroupsTab
               branchId={branchId}
               branchName={branch?.name ?? ""}
               selected={search.group}
               onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })}
+            />
+          ) : tab === "school" ? (
+            <PermissionGroupsTab branchId={null} branchName={t("every branch")} selected={search.group} onSelect={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, group: g }) })} />
+          ) : (
+            <DepartmentsTab
+              branchId={branchId}
+              branchName={branch?.name ?? ""}
+              selected={search.department}
+              onSelect={(d) => navigate({ search: (s: PeopleSearch) => ({ ...s, department: d }) })}
               onOpen={openPerson}
-              onOpenTemplate={superAdmin ? openTemplate : undefined}
+              onOpenGroup={(g) => navigate({ search: (s: PeopleSearch) => ({ ...s, tab: "permissions", group: g, department: undefined }) })}
             />
           )}
         </div>
@@ -110,49 +114,47 @@ export function PeoplePage() {
 }
 
 /** The page's own navigation: a floating card with the branches and, under
- * the open one, its members and groups. Super admins also get the
- * school-wide groups. */
+ * the open one, its members, departments and (admins) permission groups.
+ * Super admins also get the school-wide permission groups. */
 function PeopleNav({
   branches,
   branchId,
   tab,
-  members,
-  groups,
+  counts,
   schoolGroups,
-  everyone,
-  selectedGroup,
   onBranch,
   onTab,
-  onSchool,
-  onEveryone,
 }: {
   branches: { id: string; name: string }[];
   /** Unset while the school-wide groups are open. */
   branchId?: string;
-  tab: string;
-  members?: number;
-  groups?: number;
+  tab: Tab;
+  /** `permissions` undefined: not an admin of the branch. */
+  counts: { members?: number; departments?: number; permissions?: number };
   /** `undefined` hides the entry (not a super admin); `null` while loading. */
   schoolGroups?: number | null;
-  /** The school-wide "Everyone" group (super admins). */
-  everyone?: Group;
-  selectedGroup?: string;
   onBranch: (id: string) => void;
-  onTab: (tab: "members" | "groups") => void;
-  onSchool: () => void;
-  onEveryone: (id: string) => void;
+  onTab: (tab: Tab) => void;
 }) {
-  const onEveryonePage = tab === "school" && !!everyone && selectedGroup === everyone.id;
   const row = (active: boolean) =>
     cx(
       "flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-start transition-colors",
       active ? "bg-selected font-semibold text-on-selected" : "text-text-2 hover:bg-sunken hover:text-text",
     );
   const count = (n?: number | null) => n != null && <span className="ms-auto text-[14px] tabular opacity-80">{num(n)}</span>;
+  const entry = (value: Tab, icon: React.ReactNode, label: string, n?: number) => (
+    <li>
+      <button onClick={() => onTab(value)} aria-current={tab === value ? "page" : undefined} className={row(tab === value)}>
+        {icon}
+        {label}
+        {count(n)}
+      </button>
+    </li>
+  );
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <Card className="p-2 shadow-2">
-        <nav aria-label={t("People & groups")} className="space-y-1">
+        <nav aria-label={t("People & departments")} className="space-y-1">
           {branches.length > 1 && <SectionLabel className="px-3 pt-2 pb-1">{t("Branches")}</SectionLabel>}
           <ul className="space-y-1">
             {branches.map((b) => {
@@ -173,20 +175,10 @@ function PeopleNav({
                   )}
                   {open && (
                     <ul className="mt-1 space-y-1 border-s-2 border-border ps-2 ms-5">
-                      <li>
-                        <button onClick={() => onTab("members")} aria-current={tab === "members" ? "page" : undefined} className={row(tab === "members")}>
-                          <UserRound className="size-[18px] shrink-0" aria-hidden />
-                          {t("Members")}
-                          {count(members)}
-                        </button>
-                      </li>
-                      <li>
-                        <button onClick={() => onTab("groups")} aria-current={tab === "groups" ? "page" : undefined} className={row(tab === "groups")}>
-                          <Users className="size-[18px] shrink-0" aria-hidden />
-                          {t("Groups")}
-                          {count(groups)}
-                        </button>
-                      </li>
+                      {entry("members", <UserRound className="size-[18px] shrink-0" aria-hidden />, t("Members"), counts.members)}
+                      {entry("departments", <Users className="size-[18px] shrink-0" aria-hidden />, t("Departments"), counts.departments)}
+                      {counts.permissions !== undefined &&
+                        entry("permissions", <KeyRound className="size-[18px] shrink-0" aria-hidden />, t("Permission groups"), counts.permissions)}
                     </ul>
                   )}
                 </li>
@@ -194,19 +186,9 @@ function PeopleNav({
             })}
           </ul>
           {schoolGroups !== undefined && (
-            <div className="mt-1 space-y-1 border-t border-border pt-2">
-              <button onClick={onSchool} aria-current={tab === "school" && !onEveryonePage ? "page" : undefined} className={row(tab === "school" && !onEveryonePage)}>
-                <Globe className="size-[18px] shrink-0" aria-hidden />
-                {t("School-wide groups")}
-                {count(schoolGroups)}
-              </button>
-              {everyone && (
-                <button onClick={() => onEveryone(everyone.id)} aria-current={onEveryonePage ? "page" : undefined} className={row(onEveryonePage)}>
-                  <ShieldCheck className="size-[18px] shrink-0" aria-hidden />
-                  {t("Permissions for everyone")}
-                </button>
-              )}
-            </div>
+            <ul className="mt-1 space-y-1 border-t border-border pt-2">
+              {entry("school", <Globe className="size-[18px] shrink-0" aria-hidden />, t("School-wide permission groups"), schoolGroups ?? undefined)}
+            </ul>
           )}
         </nav>
       </Card>
@@ -214,65 +196,61 @@ function PeopleNav({
   );
 }
 
-// ---------- groups ----------
+// ---------- departments ----------
 
-function GroupsTab({
+function DepartmentsTab({
   branchId,
   branchName,
   selected,
   onSelect,
   onOpen,
-  onOpenTemplate,
+  onOpenGroup,
 }: {
   branchId: string;
   branchName: string;
   selected?: string;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
-  onOpenTemplate?: (id: string) => void;
+  onOpenGroup: (id: string) => void;
 }) {
   const viewer = useViewer();
-  const groups = useGroups(branchId, true);
+  const departments = useDepartments(branchId, true);
   const [creating, setCreating] = useState(false);
-  const admin = isAdminOf(viewer, branchId);
-  const list = groups.data ?? [];
-  const [gq, setGq] = useState("");
-  const active = list.filter((g) => !g.archived_at && (!gq.trim() || (g.is_default ? t("All members").toLowerCase() : g.name.toLowerCase()).includes(gq.trim().toLowerCase()))).sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
-  const archived = list.filter((g) => g.archived_at);
-  const current = list.find((g) => g.id === selected) ?? active.find((g) => !g.is_default) ?? active[0];
-  if (groups.isLoading) return <LoadingRows />;
-  if (groups.error) return <ErrorPanel error={groups.error} />;
+  const manage = canManageDepartments(viewer, branchId);
+  const list = departments.data ?? [];
+  const [q, setQ] = useState("");
+  const term = q.trim().toLowerCase();
+  const active = list
+    .filter((d) => !d.archived_at && (!term || departmentName(d).toLowerCase().includes(term)))
+    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
+  const archived = list.filter((d) => d.archived_at);
+  const current = list.find((d) => d.id === selected) ?? active.find((d) => !d.is_default) ?? active[0];
+  if (departments.isLoading) return <LoadingRows />;
+  if (departments.error) return <ErrorPanel error={departments.error} />;
   return (
     <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
       <div className="space-y-6">
         <Card className="p-2">
           {list.length > 5 && (
-            <input
-              type="search"
-              value={gq}
-              onChange={(e) => setGq(e.target.value)}
-              placeholder={t("Find a group")}
-              aria-label={t("Find a group")}
-              className={cx(inputClass, "mb-1 h-10 rounded-full py-0")}
-            />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Find a department")} aria-label={t("Find a department")} className={cx(inputClass, "mb-1 h-10 rounded-full py-0")} />
           )}
-          {gq && active.length === 0 && <p className="px-4 py-3 text-text-2">{t("No group matches {q}.", { q: quote(gq) })}</p>}
+          {term && active.length === 0 && <p className="px-4 py-3 text-text-2">{t("No department matches {q}.", { q: quote(q) })}</p>}
           <ul>
-            {active.map((g) => (
-              <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
+            {active.map((d) => (
+              <DepartmentListItem key={d.id} d={d} active={current?.id === d.id} onClick={() => onSelect(d.id)} />
             ))}
           </ul>
-          {admin && (
+          {manage && (
             <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-3 font-semibold text-primary hover:underline">
-              <Plus className="size-5" />{" "}{t("New group")}
+              <Plus className="size-5" />{" "}{t("New department")}
             </button>
           )}
           {archived.length > 0 && (
             <details className="border-t border-border px-4 py-3">
               <summary className="cursor-pointer text-text-2">{t("Archived ({n})", { n: archived.length })}</summary>
               <ul className="mt-2">
-                {archived.map((g) => (
-                  <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
+                {archived.map((d) => (
+                  <DepartmentListItem key={d.id} d={d} active={current?.id === d.id} onClick={() => onSelect(d.id)} />
                 ))}
               </ul>
             </details>
@@ -280,251 +258,107 @@ function GroupsTab({
         </Card>
         <CheckSomeone branchId={branchId} onOpen={onOpen} />
       </div>
-      {current && <GroupDetail key={current.id} group={current} branchId={branchId} branchName={branchName} editable={admin} onOpen={onOpen} onOpenTemplate={onOpenTemplate} />}
-      <NewGroupDialog open={creating} onOpenChange={setCreating} branchId={branchId} onCreated={onSelect} />
+      {current && <DepartmentDetail key={current.id} department={current} branchName={branchName} onOpen={onOpen} onOpenGroup={onOpenGroup} />}
+      <NewDepartmentDialog open={creating} onOpenChange={setCreating} branchId={branchId} onCreated={onSelect} />
     </div>
   );
 }
 
-/** Groups with no branch (super admins): their permissions apply in every
- * branch their members belong to. Members can come from any branch. */
-function SchoolGroupsTab({ selected, onSelect, onOpenCopy }: { selected?: string; onSelect: (id: string) => void; onOpenCopy: (branchId: string, groupId: string) => void }) {
-  const groups = useSchoolGroups(true);
-  const [creating, setCreating] = useState(false);
-  const [gq, setGq] = useState("");
-  const list = groups.data ?? [];
-  const term = gq.trim().toLowerCase();
-  const active = list
-    .filter((g) => !g.archived_at && (!term || groupName(g).toLowerCase().includes(term)))
-    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
-  const archived = list.filter((g) => g.archived_at);
-  const current = list.find((g) => g.id === selected) ?? active.find((g) => !g.is_default) ?? active[0];
-  if (groups.isLoading) return <LoadingRows />;
-  if (groups.error) return <ErrorPanel error={groups.error} />;
-  return (
-    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <div className="space-y-6">
-        <Card className="p-2">
-          <p className="flex gap-2 px-4 py-3 text-[14px] text-text-2">
-            <Globe className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {t("Common groups between branches")}
-          </p>
-          {list.length > 5 && (
-            <input type="search" value={gq} onChange={(e) => setGq(e.target.value)} placeholder={t("Find a group")} aria-label={t("Find a group")} className={cx(inputClass, "mb-1 h-10 rounded-full py-0")} />
-          )}
-          {term && active.length === 0 && <p className="px-4 py-3 text-text-2">{t("No group matches {q}.", { q: quote(gq) })}</p>}
-          {!list.some((g) => !g.is_default) && <p className="px-4 py-3 text-text-2">{t("No school-wide groups yet.")}</p>}
-          <ul>
-            {active.map((g) => (
-              <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
-            ))}
-          </ul>
-          <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-3 font-semibold text-primary hover:underline">
-            <Plus className="size-5" />{" "}{t("New school-wide group")}
-          </button>
-          {archived.length > 0 && (
-            <details className="border-t border-border px-4 py-3">
-              <summary className="cursor-pointer text-text-2">{t("Archived ({n})", { n: archived.length })}</summary>
-              <ul className="mt-2">
-                {archived.map((g) => (
-                  <GroupListItem key={g.id} g={g} active={current?.id === g.id} onClick={() => onSelect(g.id)} />
-                ))}
-              </ul>
-            </details>
-          )}
-        </Card>
-      </div>
-      {current && <GroupDetail key={current.id} group={current} branchId={null} branchName={t("every branch")} editable onOpenCopy={onOpenCopy} />}
-      <NewGroupDialog open={creating} onOpenChange={setCreating} branchId={null} onCreated={onSelect} />
-    </div>
-  );
+/** The built-in "All members" is named in the reader's language. */
+function departmentName(d: Department) {
+  return d.is_default ? t("All members") : d.name;
 }
 
-/** Built-in groups: each branch's "All members", and the school-wide "Everyone". */
-function groupName(g: Group) {
-  return g.is_default ? (g.branch_id ? t("All members") : t("Everyone")) : g.name;
-}
-
-function GroupListItem({ g, active, onClick }: { g: Group; active: boolean; onClick: () => void }) {
-  const grants = useGroupGrants(g.id);
+function DepartmentListItem({ d, active, onClick }: { d: Department; active: boolean; onClick: () => void }) {
+  const groups = d.permission_groups.map((g) => g.name);
   return (
     <li>
       <button onClick={onClick} aria-current={active} className={cx("w-full rounded-[10px] px-4 py-3 text-start", active ? "bg-primary-soft" : "hover:bg-surface-2")}>
         <span className="flex items-baseline justify-between gap-2">
           <span className="flex items-center gap-1.5 font-semibold">
-            {g.template_id && <Globe className="size-3.5 shrink-0 text-text-3" aria-label={t("School-wide")} />}
-            {groupName(g)}
-            {g.kind === "department" && <span className="rounded-md bg-sunken px-1.5 text-[12px] font-medium text-text-2">{t("Department")}</span>}
+            {d.is_default && <Lock className="size-3.5 shrink-0 text-text-3" aria-hidden />}
+            {departmentName(d)}
           </span>
-          <span className="text-text-2 tabular">{num(g.member_count)}</span>
+          <span className="text-text-2 tabular">{num(d.member_ids.length)}</span>
         </span>
-        <span className="block text-[14px] text-text-2">{g.is_default ? (g.branch_id ? t("Everyone's everyday permissions") : t("Every user, in every branch")) : g.archived_at ? t("Archived") : summarizeGrants(grants.data)}</span>
+        <span className="block truncate text-[14px] text-text-2">
+          {d.archived_at ? t("Archived") : groups.length ? t("Permissions: {list}", { list: groups.join(t(", ")) }) : t("Only the basics")}
+        </span>
       </button>
     </li>
   );
 }
 
-/** `branchId` null: a school-wide group (a template with a copy in every
- * branch). A branch group with `template_id` is such a copy: only its members
- * are chosen here. */
-function GroupDetail({
-  group,
-  branchId,
-  branchName,
-  editable,
-  onOpen,
-  onOpenCopy,
-  onOpenTemplate,
-}: {
-  group: Group;
-  branchId: string | null;
-  branchName: string;
-  editable: boolean;
-  onOpen?: (id: string) => void;
-  onOpenCopy?: (branchId: string, groupId: string) => void;
-  onOpenTemplate?: (id: string) => void;
-}) {
+function DepartmentDetail({ department, branchName, onOpen, onOpenGroup }: { department: Department; branchName: string; onOpen: (id: string) => void; onOpenGroup: (id: string) => void }) {
   const viewer = useViewer();
-  const [tab, setTab] = useState<"can" | "members" | "branches">(() => (!editable && headsGroup(viewer, group.id) ? "members" : "can"));
+  const branchId = department.branch_id;
+  const manage = canManageDepartments(viewer, branchId);
+  const [tab, setTab] = useState<"members" | "permissions">("members");
   const [renaming, setRenaming] = useState(false);
-  const title = groupName(group);
-  const isCopy = !!group.template_id;
-  const isEveryone = group.is_default && !group.branch_id;
-  // A copy's name, permissions and archiving come from the school-wide group.
-  const shapeEditable = editable && !group.is_default && !isCopy;
   return (
     <Card className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
         <div>
           <h2 className="flex items-center gap-2 text-[28px] font-bold">
-            {group.is_default && <Lock className="size-5 text-text-3" />}
-            {(!group.branch_id || isCopy) && <Globe className="size-5 text-text-3" aria-label={t("School-wide")} />}
-            {title}
+            {department.is_default && <Lock className="size-5 text-text-3" />}
+            {departmentName(department)}
           </h2>
           <p className="text-text-2">
-            {isEveryone ? t("Every user, in every branch") : group.is_default ? t("Everyone in {name}", { name: branchName }) : group.description || t("No description")} ·{" "}
-            {isEveryone
-              ? tn(group.member_count, "{n} person", "{n} people")
-              : !branchId
-                ? tn(group.member_count, "{n} member across branches", "{n} members across branches")
-                : tn(group.member_count, "{n} member", "{n} members")}
-            {group.archived_at && ` · ${t("Archived")}`}
-            {group.kind === "department" && ` · ${tn(group.head_ids.length, "{n} head", "{n} heads")}`}
+            {department.is_default ? t("Everyone in {name}", { name: branchName }) : department.description || t("No description")} · {tn(department.member_ids.length, "{n} member", "{n} members")}
+            {!department.is_default && ` · ${tn(department.head_ids.length, "{n} head", "{n} heads")}`}
+            {department.archived_at && ` · ${t("Archived")}`}
           </p>
         </div>
-        {shapeEditable && <GroupActions group={group} onRename={() => setRenaming(true)} />}
+        {manage && !department.is_default && <DepartmentActions department={department} onRename={() => setRenaming(true)} />}
       </div>
-      {isCopy && (
-        <div className="mx-6 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[12px] bg-sunken px-4 py-3 text-text-2">
-          <Globe className="size-4 shrink-0" aria-hidden />
-          <span className="flex-1">{t("Set up for every branch by the school office. You choose who's in it.")}</span>
-          {onOpenTemplate && (
-            <button className="font-semibold text-primary hover:underline" onClick={() => onOpenTemplate(group.template_id!)}>
-              {t("Edit for every branch")}
-            </button>
-          )}
-        </div>
-      )}
       <Tabs
-        id="group"
+        id="department"
         className="mx-6 mt-4"
         value={tab}
         onChange={(v) => guard(() => setTab(v))}
         tabs={[
-          { value: "can", label: t("What they can do") },
-          ...(isEveryone
-            ? []
-            : [
-                branchId
-                  ? { value: "members" as const, label: t("Members"), count: group.member_count }
-                  : { value: "branches" as const, label: t("Branches") },
-              ]),
+          { value: "members", label: t("Members"), count: department.member_ids.length },
+          { value: "permissions", label: t("What they can do"), count: department.permission_groups.length },
         ]}
       />
-      <TabPanel id="group" value={tab}>
-      {tab === "can" && (shapeEditable || (editable && group.is_default) ? <PermissionEditor group={group} branchName={branchName} /> : <ReadOnlyGrants groupId={group.id} />)}
-      {tab === "members" && branchId && (
-        <GroupMembers
-          group={group}
-          branchId={branchId}
-          editable={(editable || headsGroup(viewer, group.id)) && !group.is_default && !group.archived_at}
-          admin={editable}
-          onOpen={onOpen}
-        />
-      )}
-      {tab === "branches" && <GroupCopies group={group} onOpenCopy={onOpenCopy} />}
+      <TabPanel id="department" value={tab}>
+        {tab === "members" && (
+          <DepartmentMembers
+            department={department}
+            editable={canChooseMembers(viewer, branchId, department.name) && !department.is_default && !department.archived_at}
+            heads={manage && !department.is_default && !department.archived_at}
+            onOpen={onOpen}
+          />
+        )}
+        {tab === "permissions" && <DepartmentPermissions department={department} onOpenGroup={onOpenGroup} />}
       </TabPanel>
-      <RenameDialog group={group} open={renaming} onOpenChange={setRenaming} />
+      <RenameDepartmentDialog department={department} open={renaming} onOpenChange={setRenaming} />
     </Card>
   );
 }
 
-/** A school-wide group's copy in each branch, to open and fill with people. */
-function GroupCopies({ group, onOpenCopy }: { group: Group; onOpenCopy?: (branchId: string, groupId: string) => void }) {
-  const copies = useSchoolGroupCopies(group.id);
-  const { branchById } = useBranch();
-  if (copies.isLoading) return <LoadingRows />;
-  if (copies.error) return <ErrorPanel error={copies.error} />;
-  return (
-    <div className="px-6 py-5">
-      <p className="mb-3 text-text-2">{t("Each branch has its own copy. Its admins choose who's in it; new branches get one automatically.")}</p>
-      <ul className="divide-y divide-border">
-        {(copies.data ?? []).map((c) => (
-          <li key={c.id}>
-            <button
-              onClick={() => c.branch_id && onOpenCopy?.(c.branch_id, c.id)}
-              className="flex w-full items-center gap-3 rounded-[10px] px-2 py-3 text-start hover:bg-surface-2"
-            >
-              <span className="min-w-0 flex-1 font-semibold">{(c.branch_id && branchById.get(c.branch_id)?.name) ?? t("Branch")}</span>
-              <span className="text-text-2">{tn(c.member_count, "{n} member", "{n} members")}</span>
-              <ChevronRight className="size-4 text-text-3 rtl:-scale-x-100" aria-hidden />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+const refreshDepartments = (qc: ReturnType<typeof useQueryClient>, branchId: string) => {
+  qc.invalidateQueries({ queryKey: ["branches", branchId] });
+  qc.invalidateQueries({ queryKey: ["directory"] });
+  qc.invalidateQueries({ queryKey: ["effective-permissions"] });
+};
 
-function ReadOnlyGrants({ groupId }: { groupId: string }) {
-  const grants = useGroupGrants(groupId);
-  if (!grants.data) return <LoadingRows />;
-  if (!grants.data.length) return <p className="px-6 py-6 text-text-2">{t("No extra permissions.")}</p>;
-  return (
-    <ul className="divide-y divide-border px-6 py-2">
-      {grants.data.map((g) => (
-        <li key={g.id} className="py-3">
-          <b>{permissionInfo[g.permission]?.title ?? g.permission}</b>
-          <span className="text-text-2">
-            {" "}
-            · {reachLabel(g.permission, g.scope)}
-            {g.issue_type && ` · ${typePlural[g.issue_type]}`}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** `editable`: may choose members (admins, and the department's heads).
- * `admin`: may also choose its heads. */
-function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Group; branchId: string; editable: boolean; admin: boolean; onOpen?: (id: string) => void }) {
+/** `editable`: may choose members (admins, `department.manage`, or a grant
+ * for this department). `heads`: may also choose its heads. */
+function DepartmentMembers({ department, editable, heads, onOpen }: { department: Department; editable: boolean; heads: boolean; onOpen?: (id: string) => void }) {
   const qc = useQueryClient();
   const people = usePeople();
-  const members = useMembers(branchId, { groupId: group.id });
+  const branchId = department.branch_id;
+  const members = useMembers(branchId, { departmentId: department.id });
   const [adding, setAdding] = useState(false);
   const [mq, setMq] = useState("");
   const [picks, setPicks] = useState<string[]>([]);
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["branches", branchId] });
-    qc.invalidateQueries({ queryKey: ["school-groups"] });
-    qc.invalidateQueries({ queryKey: ["my-groups"] });
-  };
+  const refresh = () => refreshDepartments(qc, branchId);
   // One request each; whoever was added stays added if a later one fails.
   const add = useMutation({
     mutationFn: async (ids: string[]) => {
       for (const id of ids) {
-        await api.put(`/groups/${group.id}/members/${id}`);
+        await api.put(`/departments/${department.id}/members/${id}`);
         setPicks((p) => p.filter((x) => x !== id));
       }
       return ids.length;
@@ -534,26 +368,23 @@ function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Gro
     onSettled: refresh,
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api.del(`/groups/${group.id}/members/${id}`),
-    onSuccess: () => (toast.success(t("Removed from the group")), refresh()),
+    mutationFn: (id: string) => api.del(`/departments/${department.id}/members/${id}`),
+    onSuccess: () => (toast.success(t("Removed from the department")), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
   const setHead = useMutation({
-    mutationFn: ({ id, head }: { id: string; head: boolean }) => (head ? api.put : api.del)(`/groups/${group.id}/heads/${id}`),
+    mutationFn: ({ id, head }: { id: string; head: boolean }) => (head ? api.put : api.del)(`/departments/${department.id}/heads/${id}`),
     onSuccess: (_, { head }) => (
-      toast.success(head ? t("Now a head of {name}", { name: group.name }) : t("No longer a head of {name}", { name: group.name })),
-      qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] }),
-      qc.invalidateQueries({ queryKey: ["groups"] })
+      toast.success(head ? t("Now a head of {name}", { name: department.name }) : t("No longer a head of {name}", { name: department.name })), refresh()
     ),
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const isDept = group.kind === "department";
   const ids = new Set((members.data ?? []).map((m) => m.user_id));
   const term = mq.trim().toLowerCase();
   const shown = (members.data ?? []).filter((m) => !term || `${m.first_name} ${m.last_name} ${m.email}`.toLowerCase().includes(term));
   return (
     <div className="px-6 py-5">
-      {group.is_default && <p className="mb-4 rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Everyone in the branch is in this group automatically.")}</p>}
+      {department.is_default && <p className="mb-4 rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("Everyone in the branch is in this department automatically.")}</p>}
       {(members.data?.length ?? 0) > 6 && (
         <input
           type="search"
@@ -572,7 +403,7 @@ function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Gro
               <PeopleChecklist people={people.inBranch(branchId)} value={picks} onChange={setPicks} exclude={[...ids]} />
               <div className="flex gap-2">
                 <Button variant="primary" disabled={!picks.length} loading={add.isPending} onClick={() => add.mutate(picks)}>
-                  {picks.length > 1 ? t("Add {n} to {name}", { n: picks.length, name: group.name }) : t("Add to {name}", { name: group.name })}
+                  {picks.length > 1 ? t("Add {n} to {name}", { n: picks.length, name: department.name }) : t("Add to {name}", { name: department.name })}
                 </Button>
                 <Button onClick={() => (setAdding(false), setPicks([]))}>{t("Done")}</Button>
               </div>
@@ -587,92 +418,147 @@ function GroupMembers({ group, branchId, editable, admin, onOpen }: { group: Gro
       {members.isLoading ? (
         <LoadingRows />
       ) : !members.data?.length ? (
-        <p className="text-text-2">{t("No one is in this group yet. Add people to give them its permissions.")}</p>
+        <p className="text-text-2">{t("No one is in this department yet. Items sent to it reach its members.")}</p>
       ) : (
         <ul className="divide-y divide-border">
-          {shown.map((m) => (
-            <li key={m.user_id} className="flex items-center gap-3 py-3">
-              <button
-                onClick={() => onOpen?.(m.user_id)}
-                disabled={!onOpen}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-start enabled:hover:bg-surface-2 disabled:cursor-default"
-              >
-                <Avatar first={m.first_name} last={m.last_name} id={m.user_id} size={36} />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">
-                    {m.first_name} {m.last_name}
-                    {group.head_ids.includes(m.user_id) && (
-                      <span className="ms-2 rounded-md bg-primary-soft px-1.5 text-[12px] font-semibold text-primary">{t("Head")}</span>
-                    )}
-                  </span>
-                  <span className="block truncate text-[14px] text-text-3">{m.email}</span>
-                </span>
-              </button>
-              {admin && isDept && !group.archived_at && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  loading={setHead.isPending && setHead.variables?.id === m.user_id}
-                  onClick={() => setHead.mutate({ id: m.user_id, head: !group.head_ids.includes(m.user_id) })}
+          {shown.map((m) => {
+            const isHead = department.head_ids.includes(m.user_id);
+            return (
+              <li key={m.user_id} className="flex items-center gap-3 py-3">
+                <button
+                  onClick={() => onOpen?.(m.user_id)}
+                  disabled={!onOpen}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-start enabled:hover:bg-surface-2 disabled:cursor-default"
                 >
-                  {group.head_ids.includes(m.user_id) ? t("Remove as head") : t("Make head")}
-                </Button>
-              )}
-              {editable && (
-                <Button variant="ghost" size="sm" aria-label={t("Remove {person} from {group}", { person: m.first_name, group: group.name })} onClick={() => remove.mutate(m.user_id)}>
-                  <X className="size-4" />
-                </Button>
-              )}
-            </li>
-          ))}
+                  <Avatar first={m.first_name} last={m.last_name} id={m.user_id} size={36} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">
+                      {m.first_name} {m.last_name}
+                      {isHead && <span className="ms-2 rounded-md bg-primary-soft px-1.5 text-[12px] font-semibold text-primary">{t("Head")}</span>}
+                    </span>
+                    <span className="block truncate text-[14px] text-text-3">{m.email}</span>
+                  </span>
+                </button>
+                {heads && (
+                  <Button variant="ghost" size="sm" loading={setHead.isPending && setHead.variables?.id === m.user_id} onClick={() => setHead.mutate({ id: m.user_id, head: !isHead })}>
+                    {isHead ? t("Remove as head") : t("Make head")}
+                  </Button>
+                )}
+                {/* Heads are removed by those who choose heads. */}
+                {editable && (!isHead || heads) && (
+                  <Button variant="ghost" size="sm" aria-label={t("Remove {person} from {group}", { person: m.first_name, group: department.name })} onClick={() => remove.mutate(m.user_id)}>
+                    <X className="size-4" />
+                  </Button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
 }
 
-/** Rename, archive (or restore) and delete, as icons beside the group's name. */
-function GroupActions({ group, onRename }: { group: Group; onRename: () => void }) {
+/** The permission groups attached to a department: their grants reach its
+ * members. Branch admins attach and detach them. */
+function DepartmentPermissions({ department, onOpenGroup }: { department: Department; onOpenGroup: (id: string) => void }) {
+  const viewer = useViewer();
+  const qc = useQueryClient();
+  const branchId = department.branch_id;
+  const admin = isAdminOf(viewer, branchId);
+  const groups = usePermissionGroups(branchId, admin);
+  const [choosing, setChoosing] = useState("");
+  const attached = new Set(department.permission_groups.map((g) => g.id));
+  const available = (groups.data ?? []).filter((g) => !g.is_default && !attached.has(g.id));
+  const byId = new Map((groups.data ?? []).map((g) => [g.id, g]));
+  const change = useMutation({
+    mutationFn: ({ id, attach }: { id: string; attach: boolean }) => (attach ? api.put : api.del)(`/departments/${department.id}/permission-groups/${id}`),
+    onSuccess: (_, { attach }) => (toast.success(attach ? t("Attached") : t("Detached")), setChoosing(""), refreshDepartments(qc, branchId)),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <div className="space-y-4 px-6 py-5">
+      <p className="text-text-2">
+        {t("Members get the basics everyone has, plus what these permission groups allow. Adding someone to the department gives them these too.")}
+      </p>
+      {department.permission_groups.length === 0 ? (
+        <p className="rounded-[10px] bg-sunken px-4 py-3 text-text-2">{t("No permission groups: its members have only the basics.")}</p>
+      ) : (
+        <ul className="divide-y divide-border rounded-[12px] border border-border">
+          {department.permission_groups.map((g) => (
+            <li key={g.id} className="flex items-center gap-3 px-4 py-3">
+              {g.school_wide ? <Globe className="size-4 shrink-0 text-text-3" aria-label={t("School-wide")} /> : <KeyRound className="size-4 shrink-0 text-text-3" aria-hidden />}
+              <span className="min-w-0 flex-1">
+                {admin ? (
+                  <button className="font-semibold text-primary hover:underline" onClick={() => onOpenGroup(g.id)}>
+                    {g.name}
+                  </button>
+                ) : (
+                  <b>{g.name}</b>
+                )}
+                <span className="block text-[14px] text-text-2">{summarizeGrants(byId.get(g.id)?.grants)}</span>
+              </span>
+              {admin && (
+                <Button variant="ghost" size="sm" loading={change.isPending && change.variables?.id === g.id} onClick={() => change.mutate({ id: g.id, attach: false })}>
+                  {t("Detach")}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {admin && !department.archived_at && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={choosing} onChange={(e) => setChoosing(e.target.value)} className={cx(inputClass, "h-11 w-auto min-w-56")} aria-label={t("Permission group to attach")}>
+            <option value="">{t("Choose a permission group…")}</option>
+            {available.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.branch_id ? g.name : t("{name} (school-wide)", { name: g.name })}
+              </option>
+            ))}
+          </select>
+          <Button disabled={!choosing} loading={change.isPending && change.variables?.attach} onClick={() => change.mutate({ id: choosing, attach: true })}>
+            {t("Attach")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Rename, archive (or restore) and delete, as icons beside the name. */
+function DepartmentActions({ department, onRename }: { department: Department; onRename: () => void }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
-  const refresh = () => (qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }), qc.invalidateQueries({ queryKey: keys.schoolGroups }));
+  const refresh = () => refreshDepartments(qc, department.branch_id);
   const archive = useMutation({
-    mutationFn: () => api.patch(`/groups/${group.id}`, { archived: !group.archived_at }),
-    onSuccess: () => (toast.success(group.archived_at ? t("Restored") : t("Archived")), refresh()),
+    mutationFn: () => api.patch(`/departments/${department.id}`, { archived: !department.archived_at }),
+    onSuccess: () => (toast.success(department.archived_at ? t("Restored") : t("Archived")), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
   const del = useMutation({
-    mutationFn: () => api.del<DeleteOutcome>(`/groups/${group.id}`),
-    onSuccess: (o) => (toast.success(o.deleted ? t("Group deleted") : t("It was sent work before, so it was archived instead.")), setConfirm(false), refresh()),
+    mutationFn: () => api.del<DeleteOutcome>(`/departments/${department.id}`),
+    onSuccess: (o) => (toast.success(o.deleted ? t("Department deleted") : t("It was sent work before, so it was archived instead.")), setConfirm(false), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const archiveLabel = group.archived_at
-    ? t("Restore group")
-    : group.branch_id
-      ? t("Archive group. It can't be sent new work; its history stays.")
-      : t("Archive group, and its copy in every branch");
   return (
     <div className="flex items-center gap-1">
       <IconButton variant="ghost" label={t("Rename")} hintAlign="end" icon={<Pencil className="size-4" />} onClick={onRename} />
       <IconButton
         variant="ghost"
-        label={archiveLabel}
+        label={department.archived_at ? t("Restore department") : t("Archive department. It can't be sent new work; its history stays.")}
         hintAlign="end"
         loading={archive.isPending}
-        icon={group.archived_at ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+        icon={department.archived_at ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
         onClick={() => archive.mutate()}
       />
-      <IconButton variant="ghost-danger" label={t("Delete group")} hintAlign="end" icon={<Trash2 className="size-4" />} onClick={() => setConfirm(true)} />
+      <IconButton variant="ghost-danger" label={t("Delete department")} hintAlign="end" icon={<Trash2 className="size-4" />} onClick={() => setConfirm(true)} />
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={t("Delete {name}?", { name: group.name })}
-        body={
-          group.branch_id
-            ? t("If this group was ever sent work it will be archived instead, so its history stays.")
-            : t("Each branch keeps its copy, with its people and permissions, as an ordinary group of that branch.")
-        }
-        confirm={t("Delete group")}
+        title={t("Delete {name}?", { name: department.name })}
+        body={t("If this department was ever sent work it will be archived instead, so its history stays.")}
+        confirm={t("Delete department")}
         danger
         loading={del.isPending}
         onConfirm={() => del.mutate()}
@@ -681,27 +567,20 @@ function GroupActions({ group, onRename }: { group: Group; onRename: () => void 
   );
 }
 
-function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boolean; onOpenChange: (v: boolean) => void }) {
+function RenameDepartmentDialog({ department, open, onOpenChange }: { department: Department; open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
-  const [name, setName] = useState(group.name);
-  const [description, setDescription] = useState(group.description ?? "");
-  const [kind, setKind] = useState(group.kind);
+  const [name, setName] = useState(department.name);
+  const [description, setDescription] = useState(department.description ?? "");
   const save = useMutation({
-    mutationFn: () => api.patch(`/groups/${group.id}`, { name: name.trim(), description: description.trim() || null, kind }),
-    onSuccess: () => (
-      toast.success(t("Saved")),
-      onOpenChange(false),
-      qc.invalidateQueries({ queryKey: ["branches", group.branch_id, "groups"] }),
-      qc.invalidateQueries({ queryKey: ["groups"] }),
-      qc.invalidateQueries({ queryKey: keys.schoolGroups })
-    ),
+    mutationFn: () => api.patch(`/departments/${department.id}`, { name: name.trim(), description: description.trim() || null }),
+    onSuccess: () => (toast.success(t("Saved")), onOpenChange(false), refreshDepartments(qc, department.branch_id)),
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("Edit group")}
+      title={t("Edit department")}
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
@@ -716,51 +595,267 @@ function RenameDialog({ group, open, onOpenChange }: { group: Group; open: boole
         <Field label={t("Description")} optional>
           {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />}
         </Field>
-        <KindChoice value={kind} onChange={setKind} />
-        {group.kind === "department" && kind === "team" && group.head_ids.length > 0 && (
-          <p className="text-[14px] text-warning">{t("As a team it has no heads: its heads become ordinary members.")}</p>
+        {name.trim() !== department.name && (
+          <p className="text-[14px] text-text-2">{t("Grants that name departments use their names: check permission groups that name the old one.")}</p>
         )}
       </div>
     </Dialog>
   );
 }
 
-/** Department or team, with what the difference means. */
-function KindChoice({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function NewDepartmentDialog({ open, onOpenChange, branchId, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; branchId: string; onCreated: (id: string) => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const create = useMutation({
+    mutationFn: () => api.post<Department>(`/branches/${branchId}/departments`, { name: name.trim(), description: description.trim() || null }),
+    onSuccess: (d) => {
+      toast.success(t("{name} created", { name: d.name }));
+      refreshDepartments(qc, branchId);
+      setName("");
+      setDescription("");
+      onOpenChange(false);
+      onCreated(d.id);
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
   return (
-    <div className="space-y-1.5">
-      <Segmented
-        label={t("Kind of group")}
-        value={value}
-        onChange={onChange}
-        options={[
-          { value: "team", label: t("Team or role") },
-          { value: "department", label: t("Department") },
-        ]}
-      />
-      <p className="text-[13px] text-text-3">
-        {value === "department"
-          ? t("Handles work for others, like IT or Health. It's listed in the directory, and its heads choose its members and run the work sent to it.")
-          : t("People who share a role or job, like Principals or a committee.")}
-      </p>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("New department")}
+      description={t("A team that does work for others or shares a role: IT, Health, Teachers. Items can be sent to it; admins choose what it can do.")}
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
+          <Button variant="primary" disabled={!name.trim()} loading={create.isPending} onClick={() => create.mutate()}>
+            {t("Create department")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label={t("Name")}>{(p) => <input {...p} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("IT")} className={inputClass} />}</Field>
+        <Field label={t("Description")} optional>
+          {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Computers, projectors and the network")} className={inputClass} />}
+        </Field>
+      </div>
+    </Dialog>
+  );
+}
+
+// ---------- permission groups ----------
+
+/** `branchId` null: the school-wide groups (super admins). A branch's list
+ * shows its own groups and, read-only, the school-wide ones it can attach. */
+function PermissionGroupsTab({ branchId, branchName, selected, onSelect }: { branchId: string | null; branchName: string; selected?: string; onSelect: (id: string) => void }) {
+  const viewer = useViewer();
+  const branchGroups = usePermissionGroups(branchId ?? undefined, branchId !== null);
+  const schoolGroups = useSchoolPermissionGroups(branchId === null);
+  const groups = branchId === null ? schoolGroups : branchGroups;
+  const departments = useDepartments(branchId ?? undefined);
+  const [creating, setCreating] = useState(false);
+  const [config, setConfig] = useState(false);
+  const [q, setQ] = useState("");
+  const list = groups.data ?? [];
+  const term = q.trim().toLowerCase();
+  const shown = list.filter((g) => !term || groupName(g).toLowerCase().includes(term));
+  const own = shown.filter((g) => (branchId === null ? true : g.branch_id === branchId));
+  const school = branchId === null ? [] : shown.filter((g) => !g.branch_id);
+  const current = list.find((g) => g.id === selected) ?? own.find((g) => !g.is_default) ?? own[0] ?? school[0];
+  const editable = (g: PermissionGroup) => (g.branch_id ? isAdminOf(viewer, g.branch_id) : isSuper(viewer));
+  const departmentNames = (departments.data ?? []).filter((d) => !d.is_default && !d.archived_at).map((d) => d.name);
+  if (groups.isLoading) return <LoadingRows />;
+  if (groups.error) return <ErrorPanel error={groups.error} />;
+  const item = (g: PermissionGroup) => (
+    <li key={g.id}>
+      <button onClick={() => onSelect(g.id)} aria-current={current?.id === g.id} className={cx("w-full rounded-[10px] px-4 py-3 text-start", current?.id === g.id ? "bg-primary-soft" : "hover:bg-surface-2")}>
+        <span className="flex items-center gap-1.5 font-semibold">
+          {g.is_default ? <ShieldCheck className="size-3.5 shrink-0 text-text-3" aria-hidden /> : !g.branch_id && <Globe className="size-3.5 shrink-0 text-text-3" aria-label={t("School-wide")} />}
+          {groupName(g)}
+        </span>
+        <span className="block truncate text-[14px] text-text-2">
+          {g.is_default ? t("Every user, in every branch") : `${summarizeGrants(g.grants)} · ${tn(g.department_ids.length, "{n} department", "{n} departments")}`}
+        </span>
+      </button>
+    </li>
+  );
+  return (
+    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-6">
+        <Card className="p-2">
+          <p className="flex gap-2 px-4 py-3 text-[14px] text-text-2">
+            <KeyRound className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {branchId === null ? t("Attachable to departments in every branch.") : t("Attach them to departments: their members get what they allow.")}
+          </p>
+          {list.length > 6 && (
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Find a permission group")} aria-label={t("Find a permission group")} className={cx(inputClass, "mb-1 h-10 rounded-full py-0")} />
+          )}
+          {term && shown.length === 0 && <p className="px-4 py-3 text-text-2">{t("No permission group matches {q}.", { q: quote(q) })}</p>}
+          <ul>{own.map(item)}</ul>
+          <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-3 font-semibold text-primary hover:underline">
+            <Plus className="size-5" />{" "}{branchId === null ? t("New school-wide group") : t("New permission group")}
+          </button>
+          {school.length > 0 && (
+            <div className="border-t border-border pt-2">
+              <SectionLabel className="px-4 py-2">{t("School-wide")}</SectionLabel>
+              <ul>{school.map(item)}</ul>
+            </div>
+          )}
+        </Card>
+        <Card className="space-y-3 p-5">
+          <h3 className="text-[18px] font-semibold">{t("As a file")}</h3>
+          <p className="text-[14px] text-text-2">{t("Every permission group and which departments use it, as YAML or JSON: to review, keep, or edit and load back.")}</p>
+          <Button icon={<Upload className="size-4" />} onClick={() => setConfig(true)}>
+            {t("Download or load the setup")}
+          </Button>
+        </Card>
+      </div>
+      {current && (
+        <PermissionGroupDetail key={current.id} group={current} branchName={branchName} editable={editable(current)} departments={departments.data ?? []} departmentNames={departmentNames} />
+      )}
+      <NewPermissionGroupDialog open={creating} onOpenChange={setCreating} branchId={branchId} onCreated={onSelect} />
+      <ConfigDialog open={config} onOpenChange={setConfig} />
     </div>
   );
 }
 
+/** The built-in "Everyone" is named in the reader's language. */
+function groupName(g: PermissionGroup) {
+  return g.is_default ? t("Everyone") : g.name;
+}
+
+function PermissionGroupDetail({
+  group,
+  branchName,
+  editable,
+  departments,
+  departmentNames,
+}: {
+  group: PermissionGroup;
+  branchName: string;
+  editable: boolean;
+  departments: Department[];
+  departmentNames: string[];
+}) {
+  const qc = useQueryClient();
+  const [renaming, setRenaming] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const used = departments.filter((d) => group.department_ids.includes(d.id));
+  const del = useMutation({
+    mutationFn: () => api.del(`/permission-groups/${group.id}`),
+    onSuccess: () => (
+      toast.success(t("Permission group deleted")),
+      setConfirm(false),
+      qc.invalidateQueries({ queryKey: ["branches"] }),
+      qc.invalidateQueries({ queryKey: ["school-permission-groups"] })
+    ),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <Card className="min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-[28px] font-bold">
+            {group.is_default ? <ShieldCheck className="size-5 text-text-3" /> : !group.branch_id && <Globe className="size-5 text-text-3" aria-label={t("School-wide")} />}
+            {groupName(group)}
+          </h2>
+          <p className="text-text-2">
+            {group.is_default
+              ? t("Every user, in every branch")
+              : [group.description || (group.branch_id ? branchName : t("School-wide")), tn(group.department_ids.length, "attached to {n} department", "attached to {n} departments")].join(" · ")}
+          </p>
+          {used.length > 0 && (
+            <p className="mt-1 flex flex-wrap gap-1.5">
+              {used.map((d) => (
+                <span key={d.id} className="rounded-full bg-sunken px-2.5 py-0.5 text-[14px]">
+                  {departmentName(d)}
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+        {editable && !group.is_default && (
+          <div className="flex items-center gap-1">
+            <IconButton variant="ghost" label={t("Rename")} hintAlign="end" icon={<Pencil className="size-4" />} onClick={() => setRenaming(true)} />
+            <IconButton variant="ghost-danger" label={t("Delete permission group")} hintAlign="end" icon={<Trash2 className="size-4" />} onClick={() => setConfirm(true)} />
+          </div>
+        )}
+      </div>
+      {!editable && (
+        <p className="mx-6 mt-4 flex gap-2 rounded-[12px] bg-sunken px-4 py-3 text-text-2">
+          <Globe className="mt-0.5 size-4 shrink-0" aria-hidden />
+          {t("Set up for every branch by the school office. You choose which departments use it.")}
+        </p>
+      )}
+      <PermissionEditor group={group} editable={editable} departments={departmentNames} />
+      <RenamePermissionGroupDialog group={group} open={renaming} onOpenChange={setRenaming} />
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title={t("Delete {name}?", { name: group.name })}
+        body={tn(group.department_ids.length, "It's detached from {n} department, whose members lose what it allowed.", "It's detached from {n} departments, whose members lose what it allowed.")}
+        confirm={t("Delete permission group")}
+        danger
+        loading={del.isPending}
+        onConfirm={() => del.mutate()}
+      />
+    </Card>
+  );
+}
+
+function RenamePermissionGroupDialog({ group, open, onOpenChange }: { group: PermissionGroup; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(group.name);
+  const [description, setDescription] = useState(group.description ?? "");
+  const save = useMutation({
+    mutationFn: () => api.patch(`/permission-groups/${group.id}`, { name: name.trim(), description: description.trim() || null }),
+    onSuccess: () => (
+      toast.success(t("Saved")),
+      onOpenChange(false),
+      qc.invalidateQueries({ queryKey: ["branches"] }),
+      qc.invalidateQueries({ queryKey: ["school-permission-groups"] })
+    ),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("Edit permission group")}
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
+          <Button variant="primary" disabled={!name.trim()} loading={save.isPending} onClick={() => save.mutate()}>
+            {t("Save")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label={t("Name")}>{(p) => <input {...p} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />}</Field>
+        <Field label={t("Description")} optional>
+          {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />}
+        </Field>
+      </div>
+    </Dialog>
+  );
+}
+
 /** `branchId` null creates a school-wide group. */
-function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; branchId: string | null; onCreated: (id: string) => void }) {
+function NewPermissionGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; branchId: string | null; onCreated: (id: string) => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [kind, setKind] = useState("team");
   const create = useMutation({
     mutationFn: () =>
-      api.post<Group>(branchId ? `/branches/${branchId}/groups` : "/school-groups", { name: name.trim(), description: description.trim() || null, kind }),
+      api.post<PermissionGroup>(branchId ? `/branches/${branchId}/permission-groups` : "/school-permission-groups", {
+        name: name.trim(),
+        description: description.trim() || null,
+      }),
     onSuccess: (g) => {
       toast.success(t("{name} created", { name: g.name }));
-      if (branchId) qc.invalidateQueries({ queryKey: ["branches", branchId, "groups"] });
-      else qc.invalidateQueries({ queryKey: keys.schoolGroups });
-      qc.invalidateQueries({ queryKey: ["groups"] });
+      qc.invalidateQueries({ queryKey: branchId ? ["branches", branchId, "permission-groups"] : ["school-permission-groups"] });
       setName("");
       setDescription("");
       onOpenChange(false);
@@ -772,27 +867,133 @@ function NewGroupDialog({ open, onOpenChange, branchId, onCreated }: { open: boo
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={branchId ? t("New group") : t("New school-wide group")}
+      title={branchId ? t("New permission group") : t("New school-wide group")}
       description={
         branchId
-          ? t("Departments, year teams, committees. Choose what it can do after creating it.")
-          : t("Every branch gets its own copy. Choose what it can do after creating it.")
+          ? t("A set of permissions, like Approvers or Office staff. Choose what it allows, then attach it to departments.")
+          : t("Any branch can attach it to its departments. Choose what it allows after creating it.")
       }
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("Cancel")}</Button>
           <Button variant="primary" disabled={!name.trim()} loading={create.isPending} onClick={() => create.mutate()}>
-            {t("Create group")}
+            {t("Create")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <Field label={t("Name")}>{(p) => <input {...p} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Coordinators")} className={inputClass} />}</Field>
+        <Field label={t("Name")}>{(p) => <input {...p} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Approvers")} className={inputClass} />}</Field>
         <Field label={t("Description")} optional>
-          {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Heads of year and department coordinators")} className={inputClass} />}
+          {(p) => <input {...p} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Approve the work sent to the branch")} className={inputClass} />}
         </Field>
-        <KindChoice value={kind} onChange={setKind} />
+      </div>
+    </Dialog>
+  );
+}
+
+/** The whole setup as a YAML or JSON document: download it, or paste an
+ * edited one, check what it would change, and apply it. */
+function ConfigDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const qc = useQueryClient();
+  const [format, setFormat] = useState<"yaml" | "json">("yaml");
+  const [text, setText] = useState("");
+  const [checked, setChecked] = useState<{ text: string; outcome: ConfigImportOutcome } | null>(null);
+  const [busy, setBusy] = useState<"load" | "check" | "apply" | null>(null);
+  const type = format === "yaml" ? "application/yaml" : "application/json";
+  const load = async () => {
+    setBusy("load");
+    try {
+      setText(await api.getText("/permission-config", { format }));
+      setChecked(null);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+    setBusy(null);
+  };
+  const download = () => {
+    const blob = new Blob([text], { type });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = format === "yaml" ? "permissions.yaml" : "permissions.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+  };
+  const run = async (dryRun: boolean) => {
+    setBusy(dryRun ? "check" : "apply");
+    try {
+      const outcome = await api.postText<ConfigImportOutcome>("/permission-config", text, type, { format, dry_run: dryRun });
+      if (dryRun) setChecked({ text, outcome });
+      else {
+        toast.success(outcome.changes.length ? tn(outcome.changes.length, "Applied {n} change.", "Applied {n} changes.") : t("Nothing to change."));
+        setChecked(null);
+        qc.invalidateQueries({ queryKey: ["branches"] });
+        qc.invalidateQueries({ queryKey: ["school-permission-groups"] });
+        qc.invalidateQueries({ queryKey: ["me"] });
+      }
+    } catch (e) {
+      setChecked(null);
+      toast.error(errorMessage(e));
+    }
+    setBusy(null);
+  };
+  const upToDate = checked?.text === text;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("Permissions as a file")}
+      description={t("Loading a file creates and changes permission groups, which departments use them, and who heads them. It never deletes: what's missing from the file stays as it is.")}
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>{t("Close")}</Button>
+          <Button disabled={!text.trim()} loading={busy === "check"} onClick={() => run(true)}>
+            {t("Check changes")}
+          </Button>
+          <Button variant="primary" disabled={!upToDate || !checked?.outcome.changes.length} loading={busy === "apply"} onClick={() => run(false)}>
+            {t("Apply")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented size="sm" label={t("Format")} value={format} onChange={(f) => (setFormat(f), setText(""), setChecked(null))} options={[{ value: "yaml", label: "YAML" }, { value: "json", label: "JSON" }]} />
+          <Button size="sm" loading={busy === "load"} onClick={load}>
+            {t("Load the current setup")}
+          </Button>
+          <Button size="sm" icon={<Download className="size-4" />} disabled={!text} onClick={download}>
+            {t("Download")}
+          </Button>
+        </div>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          dir="ltr"
+          spellCheck={false}
+          rows={14}
+          placeholder={t("Load the current setup, or paste a file here.")}
+          aria-label={t("Permission setup")}
+          className={cx(inputClass, "h-auto font-mono text-[13px] leading-5")}
+        />
+        {checked && upToDate && (
+          <div className="rounded-[12px] border border-border px-4 py-3">
+            {checked.outcome.changes.length === 0 ? (
+              <p className="text-text-2">{t("Already set up like this: nothing would change.")}</p>
+            ) : (
+              <>
+                <p className="mb-2 font-semibold">{tn(checked.outcome.changes.length, "{n} change:", "{n} changes:")}</p>
+                <ul dir="ltr" className="max-h-48 list-disc space-y-1 overflow-y-auto ps-5 text-[14px]">
+                  {checked.outcome.changes.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+        {checked && !upToDate && <p className="text-[14px] text-warning">{t("The file changed since it was checked: check it again.")}</p>}
       </div>
     </Dialog>
   );
@@ -802,12 +1003,13 @@ function CheckSomeone({ branchId, onOpen }: { branchId: string; onOpen: (id: str
   const people = usePeople();
   const [who, setWho] = useState<string | null>(null);
   const eff = useEffectivePermissions(branchId, who ?? undefined);
-  const byGroup = new Map<string, { name: string; items: string[] }>();
+  const bySource = new Map<string, { name: string; items: string[] }>();
   for (const g of eff.data?.grants ?? []) {
-    const entry = byGroup.get(g.group.id) ?? { name: g.group.name, items: [] };
-    const title = permissionInfo[g.permission]?.title ?? g.permission;
-    entry.items.push(`${title}${g.issue_type ? ` (${typePlural[g.issue_type]})` : ""}`);
-    byGroup.set(g.group.id, entry);
+    const key = `${g.permission_group.id}:${g.department?.id ?? ""}`;
+    const name = g.department ? t("{group}, through {department}", { group: g.permission_group.name, department: g.department.name }) : t("Everyone");
+    const entry = bySource.get(key) ?? { name, items: [] };
+    entry.items.push(grantTitle(g));
+    bySource.set(key, entry);
   }
   return (
     <Card className="p-5">
@@ -830,12 +1032,13 @@ function CheckSomeone({ branchId, onOpen }: { branchId: string; onOpen: (id: str
             </p>
           ) : (
             <ul className="space-y-3">
-              {[...byGroup.values()].map((g) => (
+              {[...bySource.values()].map((g) => (
                 <li key={g.name}>
                   <b>{g.items.slice(0, 3).join(t(", "))}{g.items.length > 3 ? t(" and {n} more", { n: g.items.length - 3 }) : ""}</b>
                   <span className="block text-text-2">{t("from {name}", { name: g.name })}</span>
                 </li>
               ))}
+              {bySource.size === 0 && <li className="text-text-2">{t("Only the basics: their own items and what is sent to them.")}</li>}
             </ul>
           )}
         </div>

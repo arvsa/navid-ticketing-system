@@ -16,16 +16,28 @@ pub struct Actor {
     pub is_super_admin: bool,
     /// Current memberships only (`left_at IS NULL`).
     pub branches: HashMap<Uuid, BranchAccess>,
-    /// Active departments the actor heads: they run its members and the
-    /// work and questions sent to it.
+    /// Active departments the actor heads: they run the work and questions
+    /// sent to it.
     pub heads: HashSet<Uuid>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct BranchAccess {
     pub is_admin: bool,
-    /// Union of the grants of every active group the actor is in, in this branch only.
+    /// Union of the grants of the permission groups attached to the actor's
+    /// active departments in this branch, and of "Everyone".
     pub grants: Vec<Grant>,
+    /// `department.members.manage` grants: lowercase department names, or
+    /// `*` for every department of the branch.
+    pub manages_members_of: Vec<String>,
+}
+
+impl BranchAccess {
+    /// May choose the members of the department called `name`?
+    pub fn manages_members_of(&self, name: &str) -> bool {
+        let name = name.to_lowercase();
+        self.manages_members_of.iter().any(|d| d == "*" || *d == name)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, utoipa::ToSchema)]
@@ -47,29 +59,29 @@ impl Actor {
 
         let mut branches: HashMap<Uuid, BranchAccess> = memberships
             .into_iter()
-            .map(|m| (m.branch_id, BranchAccess { is_admin: m.is_admin, grants: Vec::new() }))
+            .map(|m| (m.branch_id, BranchAccess { is_admin: m.is_admin, ..Default::default() }))
             .collect();
 
-        // Grants via groups, active groups only. group_member rows are removed
-        // by trigger when a membership ends, so these are current branches.
-        // (School-wide groups are templates with no members; their copies
-        // are ordinary branch groups.) Plus the grants of "Everyone", the
-        // school-wide default group, in every current branch.
+        // Grants of the permission groups attached to the actor's active
+        // departments. department_member rows are removed by trigger when a
+        // membership ends, so these are current branches. Plus the grants of
+        // "Everyone", the school-wide default group, in every current branch.
         let grants = sqlx::query!(
             r#"
-            SELECT gm.branch_id AS "branch_id!", gp.permission_key AS "permission_key!",
-                   t.code AS "issue_type?", gp.scope AS "scope!: Scope"
-            FROM group_member gm
-            JOIN user_group g        ON g.id = gm.group_id AND g.archived_at IS NULL
-            JOIN group_permission gp ON gp.group_id = g.id
-            LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
-            WHERE gm.user_id = $1
+            SELECT dm.branch_id AS "branch_id!", gg.permission_key AS "permission_key!",
+                   t.code AS "issue_type?", gg.scope AS "scope!: Scope", gg.department
+            FROM department_member dm
+            JOIN department d                    ON d.id = dm.department_id AND d.archived_at IS NULL
+            JOIN department_permission_group dpg ON dpg.department_id = d.id
+            JOIN permission_group_grant gg       ON gg.group_id = dpg.group_id
+            LEFT JOIN issue_type t               ON t.id = gg.issue_type_id
+            WHERE dm.user_id = $1
             UNION ALL
-            SELECT m.branch_id, gp.permission_key, t.code, gp.scope
+            SELECT m.branch_id, gg.permission_key, t.code, gg.scope, gg.department
             FROM branch_membership m
-            JOIN user_group g        ON g.branch_id IS NULL AND g.is_default
-            JOIN group_permission gp ON gp.group_id = g.id
-            LEFT JOIN issue_type t   ON t.id = gp.issue_type_id
+            JOIN permission_group pg       ON pg.is_default
+            JOIN permission_group_grant gg ON gg.group_id = pg.id
+            LEFT JOIN issue_type t         ON t.id = gg.issue_type_id
             WHERE m.user_id = $1 AND m.left_at IS NULL
             "#,
             user_id
@@ -81,6 +93,10 @@ impl Actor {
             let Some(access) = branches.get_mut(&row.branch_id) else { continue };
             let permission = Permission::from_key(&row.permission_key)
                 .ok_or_else(|| AppError::internal(format!("unknown permission {}", row.permission_key)))?;
+            if let Some(department) = row.department {
+                access.manages_members_of.push(department.to_lowercase());
+                continue;
+            }
             let issue_type = match row.issue_type.as_deref() {
                 None => None,
                 Some(code) => Some(
@@ -93,12 +109,14 @@ impl Actor {
         for access in branches.values_mut() {
             access.grants.sort();
             access.grants.dedup();
+            access.manages_members_of.sort();
+            access.manages_members_of.dedup();
         }
 
         let heads = sqlx::query_scalar!(
-            r#"SELECT gm.group_id FROM group_member gm
-               JOIN user_group g ON g.id = gm.group_id AND g.archived_at IS NULL AND g.kind = 'department'
-               WHERE gm.user_id = $1 AND gm.is_head"#,
+            r#"SELECT dm.department_id FROM department_member dm
+               JOIN department d ON d.id = dm.department_id AND d.archived_at IS NULL
+               WHERE dm.user_id = $1 AND dm.is_head"#,
             user_id
         )
         .fetch_all(db)
@@ -113,8 +131,8 @@ impl Actor {
         self.branches.get(&branch_id)
     }
 
-    pub fn heads(&self, group_id: Uuid) -> bool {
-        self.heads.contains(&group_id)
+    pub fn heads(&self, department_id: Uuid) -> bool {
+        self.heads.contains(&department_id)
     }
 
     pub fn is_admin_of(&self, branch_id: Uuid) -> bool {

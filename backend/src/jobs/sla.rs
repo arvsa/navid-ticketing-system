@@ -22,7 +22,7 @@ pub async fn run(pool: &PgPool, now: OffsetDateTime) -> AppResult<Option<u64>> {
                    CASE WHEN w.sla_due_at <= $1 THEN 'sla_breached' ELSE 'sla_due_soon' END AS kind,
                    to_char(($1 AT TIME ZONE b.timezone)::date, 'YYYY-MM-DD') AS day
             FROM work_item w
-            JOIN issue i ON i.id = w.issue_id AND i.state = 'open'
+            JOIN issue i ON i.id = w.issue_id AND i.state = 'open' AND i.deleted_at IS NULL
             JOIN branch b ON b.id = w.branch_id
             WHERE w.status IN ('open', 'in_progress', 'blocked')
               AND w.sla_due_at <= $1 + interval '24 hours'

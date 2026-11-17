@@ -69,9 +69,12 @@ pub struct IssueFacts {
     pub created_by: Uuid,
     /// Distinct branches of the issue's active targets.
     pub target_branch_ids: Vec<Uuid>,
-    /// The groups among the issue's active targets.
-    pub target_group_ids: Vec<Uuid>,
-    /// The actor is a user target, a current member of a group target, a
+    /// The departments among the issue's active targets.
+    pub target_department_ids: Vec<Uuid>,
+    /// Open, and neither an event that has ended nor work past its deadline:
+    /// its sender may still change or delete it.
+    pub sender_may_change: bool,
+    /// The actor is a user target, a current member of a department target, a
     /// member of a branch target's branch, or the assignee of a work item,
     /// always as a current member of that branch.
     pub actor_targeted: bool,
@@ -95,19 +98,24 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         SELECT i.id, i.branch_id, ty.code AS issue_type, i.created_by,
                ARRAY(SELECT DISTINCT t.branch_id FROM issue_target t
                      WHERE t.issue_id = i.id AND t.removed_at IS NULL) AS "target_branch_ids!",
-               ARRAY(SELECT t.group_id FROM issue_target t
-                     WHERE t.issue_id = i.id AND t.removed_at IS NULL AND t.group_id IS NOT NULL) AS "target_group_ids!",
+               ARRAY(SELECT t.department_id FROM issue_target t
+                     WHERE t.issue_id = i.id AND t.removed_at IS NULL AND t.department_id IS NOT NULL)
+                   AS "target_department_ids!",
+               (i.state = 'open'
+                AND NOT EXISTS (SELECT 1 FROM issue_event e WHERE e.issue_id = i.id AND e.ends_at < now())
+                AND NOT EXISTS (SELECT 1 FROM work_item w WHERE w.issue_id = i.id AND w.sla_due_at < now()))
+                   AS "sender_may_change!",
                (EXISTS (SELECT 1 FROM issue_target t
                         WHERE t.issue_id = i.id AND t.removed_at IS NULL AND (
                               (t.user_id = $2 AND t.branch_id = ANY($3))
-                           OR t.group_id IN (SELECT gm.group_id FROM group_member gm WHERE gm.user_id = $2)
+                           OR t.department_id IN (SELECT dm.department_id FROM department_member dm WHERE dm.user_id = $2)
                            OR (t.kind = 'branch' AND t.branch_id = ANY($3))))
                 OR EXISTS (SELECT 1 FROM work_item w JOIN issue_target t ON t.id = w.target_id
                            WHERE w.issue_id = i.id AND w.assignee_id = $2 AND t.removed_at IS NULL
                              AND w.branch_id = ANY($3))) AS "targeted!"
         FROM issue i
         JOIN issue_type ty ON ty.id = i.type_id
-        WHERE i.id = $1
+        WHERE i.id = $1 AND i.deleted_at IS NULL
         "#,
         issue_id,
         actor.user_id,
@@ -125,7 +133,8 @@ pub async fn load_issue(db: &PgPool, actor: &Actor, issue_id: Uuid) -> AppResult
         issue_type,
         created_by: r.created_by,
         target_branch_ids: r.target_branch_ids,
-        target_group_ids: r.target_group_ids,
+        target_department_ids: r.target_department_ids,
+        sender_may_change: r.sender_may_change,
         actor_targeted: r.targeted,
     }))
 }
@@ -140,10 +149,10 @@ pub struct WorkItemFacts {
     /// level up the chain. `None`: the item's usual approvers.
     pub reviewer: Option<Uuid>,
     /// The actor belongs to the item's target: is the user target, a current
-    /// member of the target group, or a member of the target branch.
+    /// member of the target department, or a member of the target branch.
     pub actor_in_target: bool,
-    /// The target group, when the work was sent to a group.
-    pub target_group_id: Option<Uuid>,
+    /// The target department, when the work was sent to a department.
+    pub target_department_id: Option<Uuid>,
     pub issue: IssueFacts,
 }
 
@@ -152,11 +161,11 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
     let Some(row) = sqlx::query!(
         r#"
         SELECT w.id, w.issue_id, w.branch_id, w.assignee_id, work_reviewer(w.handoff_chain, w.assignee_id) AS reviewer,
-               t.group_id AS target_group_id,
-               -- coalesce: `NULL IN (...)` is NULL, not false, for non-group targets
+               t.department_id AS target_department_id,
+               -- coalesce: `NULL IN (...)` is NULL, not false, for non-department targets
                coalesce(t.removed_at IS NULL AND (
                     (t.user_id = $2 AND t.branch_id = ANY($3))
-                 OR t.group_id IN (SELECT gm.group_id FROM group_member gm WHERE gm.user_id = $2)
+                 OR t.department_id IN (SELECT dm.department_id FROM department_member dm WHERE dm.user_id = $2)
                  OR (t.kind = 'branch' AND t.branch_id = ANY($3))), false) AS "in_target!"
         FROM work_item w
         JOIN issue_target t ON t.id = w.target_id
@@ -178,7 +187,7 @@ pub async fn load_work_item(db: &PgPool, actor: &Actor, work_item_id: Uuid) -> A
         assignee_id: row.assignee_id,
         reviewer: row.reviewer,
         actor_in_target: row.in_target,
-        target_group_id: row.target_group_id,
+        target_department_id: row.target_department_id,
         issue,
     }))
 }

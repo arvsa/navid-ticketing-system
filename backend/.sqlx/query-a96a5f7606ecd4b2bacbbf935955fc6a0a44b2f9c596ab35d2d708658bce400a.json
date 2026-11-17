@@ -1,0 +1,125 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT d.id, d.branch_id, d.name, d.description, d.is_default, d.archived_at, d.created_at,\n               ARRAY(SELECT m.user_id FROM department_member m WHERE m.department_id = d.id ORDER BY m.user_id) AS \"member_ids!\",\n               ARRAY(SELECT m.user_id FROM department_member m WHERE m.department_id = d.id AND m.is_head ORDER BY m.user_id) AS \"head_ids!\",\n               (SELECT coalesce(jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name, 'school_wide', g.branch_id IS NULL)\n                                          ORDER BY lower(g.name)), '[]')\n                FROM department_permission_group x JOIN permission_group g ON g.id = x.group_id\n                WHERE x.department_id = d.id) AS \"permission_groups!: Json<Vec<PermissionGroupRef>>\"\n        FROM department d\n        WHERE d.branch_id = $1\n          AND ($2 OR d.archived_at IS NULL)\n          AND ($3::text IS NULL OR (lower(d.name), d.id) > ($3, $4))\n        ORDER BY lower(d.name), d.id\n        LIMIT $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "is_default",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "is_default"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "archived_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "archived_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "member_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "head_ids!",
+        "type_info": "UuidArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "permission_groups!: Json<Vec<PermissionGroupRef>>",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a96a5f7606ecd4b2bacbbf935955fc6a0a44b2f9c596ab35d2d708658bce400a"
+}

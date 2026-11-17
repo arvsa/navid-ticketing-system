@@ -98,7 +98,9 @@ pub async fn run(
         let planned = match validate_email(&p.email) {
             Err(e) => Err(e),
             Ok(email) => match seen.get(&email.to_lowercase()) {
-                Some(first) => Err(AppError::validation("duplicate_email", format!("the same email is on row {first}"))),
+                Some(first) => {
+                    Err(AppError::validation("duplicate_email", format!("the same email is on row {first}")))
+                }
                 None => {
                     seen.insert(email.to_lowercase(), p.row);
                     let existing = find_user(db, &email).await?;
@@ -225,8 +227,8 @@ fn parse(file: &[u8]) -> AppResult<Vec<ParsedRow>> {
     let table = if file.starts_with(b"PK\x03\x04") || file.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) {
         read_workbook(file)?
     } else {
-        let text = std::str::from_utf8(file)
-            .map_err(|_| invalid("save the file as an Excel workbook or a UTF-8 CSV"))?;
+        let text =
+            std::str::from_utf8(file).map_err(|_| invalid("save the file as an Excel workbook or a UTF-8 CSV"))?;
         read_csv(text.strip_prefix('\u{feff}').unwrap_or(text))
     };
     rows_from_table(table)
@@ -236,8 +238,8 @@ fn parse(file: &[u8]) -> AppResult<Vec<ParsedRow>> {
 type Table = Vec<(u32, Vec<String>)>;
 
 fn read_workbook(file: &[u8]) -> AppResult<Table> {
-    let mut book =
-        open_workbook_auto_from_rs(Cursor::new(file)).map_err(|_| invalid("the file isn't a readable Excel workbook"))?;
+    let mut book = open_workbook_auto_from_rs(Cursor::new(file))
+        .map_err(|_| invalid("the file isn't a readable Excel workbook"))?;
     let range = book
         .worksheet_range_at(0)
         .ok_or_else(|| invalid("the workbook has no sheets"))?
@@ -260,8 +262,7 @@ fn read_workbook(file: &[u8]) -> AppResult<Table> {
 /// common in the first line (Excel saves `;` in some locales).
 fn read_csv(text: &str) -> Table {
     let first_line = text.lines().next().unwrap_or_default();
-    let delimiter =
-        [',', ';', '\t'].into_iter().max_by_key(|d| first_line.matches(*d).count()).unwrap_or(',');
+    let delimiter = [',', ';', '\t'].into_iter().max_by_key(|d| first_line.matches(*d).count()).unwrap_or(',');
     let mut table = Vec::new();
     let (mut row, mut cell) = (Vec::new(), String::new());
     let (mut line, mut row_start) = (1u32, 1u32);
@@ -358,7 +359,8 @@ mod tests {
 
     #[test]
     fn csv_with_quotes_bom_and_blank_lines() {
-        let csv = "\u{feff}Last Name,E-mail,First name\r\n\"O\"\"Brien\",a@x.org,Ann\r\n\r\n\"Doe, Jr\",b@x.org,\"Bo\nB\"\n";
+        let csv =
+            "\u{feff}Last Name,E-mail,First name\r\n\"O\"\"Brien\",a@x.org,Ann\r\n\r\n\"Doe, Jr\",b@x.org,\"Bo\nB\"\n";
         assert_eq!(
             parse(csv.as_bytes()).unwrap(),
             vec![row(2, "a@x.org", "Ann", "O\"Brien"), row(4, "b@x.org", "Bo\nB", "Doe, Jr")]

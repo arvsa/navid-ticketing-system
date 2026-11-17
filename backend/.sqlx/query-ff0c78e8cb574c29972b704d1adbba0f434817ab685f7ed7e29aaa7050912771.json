@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT d.branch_id, b.code, d.name, d.description,\n               ARRAY(SELECT g.name FROM department_permission_group x JOIN permission_group g ON g.id = x.group_id\n                     WHERE x.department_id = d.id ORDER BY lower(g.name)) AS \"groups!\",\n               ARRAY(SELECT u.email::text FROM department_member m JOIN app_user u ON u.id = m.user_id\n                     WHERE m.department_id = d.id AND m.is_head ORDER BY u.email) AS \"heads!: Vec<String>\"\n        FROM department d JOIN branch b ON b.id = d.branch_id\n        WHERE d.archived_at IS NULL AND b.is_active\n        ORDER BY b.code, d.is_default DESC, lower(d.name)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "branch_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "branch_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "branch",
+            "name": "code"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "department",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "groups!",
+        "type_info": "TextArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "heads!: Vec<String>",
+        "type_info": "TextArray",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "ff0c78e8cb574c29972b704d1adbba0f434817ab685f7ed7e29aaa7050912771"
+}

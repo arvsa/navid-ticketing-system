@@ -15,7 +15,7 @@ async fn the_school_name_is_public_and_set_by_super_admins(pool: PgPool) {
     // Anyone, signed in or not.
     let res = app.get("/api/settings").await;
     assert_status(&res, StatusCode::OK, None);
-    assert_eq!(res.body["school_name"], "Navid Schools");
+    assert_eq!(res.body["school_name"], "Rahe Novin Navid Schools");
 
     let admin = as_user(&app, "admin_a@example.com").await;
     let rename = json!({ "school_name": "  Navid Schools Tehran " });

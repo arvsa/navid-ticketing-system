@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM department_member WHERE department_id = $1 AND user_id = $2 RETURNING is_head",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_head",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "department_member",
+            "name": "is_head"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4703a31dca216364ae495a1a71b2b7b1d2d30af314f35d52f8aae1b2974f36b7"
+}

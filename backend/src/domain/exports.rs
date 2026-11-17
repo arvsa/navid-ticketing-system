@@ -125,12 +125,17 @@ pub async fn run(db: &PgPool, actor: &Actor, q: ExportQuery) -> AppResult<Export
     let f = &q.items;
     let state = f.state.and_then(|s| serde_json::to_value(s).ok().and_then(|v| v.as_str().map(str::to_owned)));
     let priorities: Option<Vec<String>> = (!f.priorities.is_empty()).then(|| {
-        f.priorities.iter().filter_map(|p| serde_json::to_value(p).ok().and_then(|v| v.as_str().map(str::to_owned))).collect()
+        f.priorities
+            .iter()
+            .filter_map(|p| serde_json::to_value(p).ok().and_then(|v| v.as_str().map(str::to_owned)))
+            .collect()
     });
     let tags: Option<Vec<String>> = (!f.tags.is_empty()).then(|| f.tags.clone());
-    let pattern: Option<String> = f.q.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(|t| {
-        format!("%{}%", t.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"))
-    });
+    let pattern: Option<String> =
+        f.q.as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(|t| format!("%{}%", t.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")));
 
     let tickets = if want(Sheet::Ticket) {
         sqlx::query!(
@@ -548,9 +553,9 @@ pub async fn people(db: &PgPool, actor: &Actor, branch_ids: Option<Vec<Uuid>>) -
         r#"
         SELECT u.email::text AS "email!", u.first_name, u.last_name, b.name AS branch, b.code, b.timezone,
                m.is_admin, u.is_active, u.last_login_at, m.joined_at,
-               (SELECT string_agg(g.name, ', ' ORDER BY g.name) FROM group_member gm
-                JOIN user_group g ON g.id = gm.group_id
-                WHERE gm.user_id = u.id AND gm.branch_id = b.id AND NOT g.is_default AND g.archived_at IS NULL) AS groups
+               (SELECT string_agg(d.name, ', ' ORDER BY d.name) FROM department_member dm
+                JOIN department d ON d.id = dm.department_id
+                WHERE dm.user_id = u.id AND dm.branch_id = b.id AND NOT d.is_default AND d.archived_at IS NULL) AS departments
         FROM branch_membership m
         JOIN app_user u ON u.id = m.user_id
         JOIN branch b ON b.id = m.branch_id
@@ -577,7 +582,7 @@ pub async fn people(db: &PgPool, actor: &Actor, branch_ids: Option<Vec<Uuid>>) -
             ("Branch", 22.0),
             ("Branch code", 11.0),
             ("Branch admin", 13.0),
-            ("Groups", 30.0),
+            ("Departments", 30.0),
             ("Account", 10.0),
             ("Joined branch", 17.0),
             ("Last sign-in", 17.0),
@@ -592,7 +597,7 @@ pub async fn people(db: &PgPool, actor: &Actor, branch_ids: Option<Vec<Uuid>>) -
         ws.write_string(r, 3, &p.branch).map_err(x)?;
         ws.write_string(r, 4, &p.code).map_err(x)?;
         ws.write_string(r, 5, if p.is_admin { "yes" } else { "no" }).map_err(x)?;
-        ws.write_string(r, 6, p.groups.as_deref().unwrap_or("")).map_err(x)?;
+        ws.write_string(r, 6, p.departments.as_deref().unwrap_or("")).map_err(x)?;
         ws.write_string(r, 7, if p.is_active { "active" } else { "inactive" }).map_err(x)?;
         write_time(ws, r, 8, Some(p.joined_at), &p.timezone, &date).map_err(x)?;
         write_time(ws, r, 9, p.last_login_at, &p.timezone, &date).map_err(x)?;

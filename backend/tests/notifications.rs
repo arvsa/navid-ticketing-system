@@ -122,7 +122,7 @@ async fn people_and_groups_a_ticket_is_aimed_at_hear_about_it_once(pool: PgPool)
         &root,
         json!({
             "branch_id": org.branch_a, "type": "ticket", "title": "Heating is off",
-            "targets": [{ "user_id": org.plain_a }, { "user_id": org.admin_a }, { "group_id": org.managers_group }]
+            "targets": [{ "user_id": org.plain_a }, { "user_id": org.admin_a }, { "department_id": org.managers_department }]
         }),
     )
     .await;
@@ -193,8 +193,8 @@ async fn sla_job_warns_then_breaches_once_per_day(pool: PgPool) {
     let soon = create(&app, &admin, json!({ "branch_id": org.branch_a, "type": "action", "title": "Soon", "sla_due_at": due(5), "targets": [{ "user_id": org.plain_a }] })).await;
     create(&app, &admin, json!({ "branch_id": org.branch_a, "type": "action", "title": "Far", "sla_due_at": due(48), "targets": [{ "user_id": org.plain_a }] })).await;
     // Unassigned shared work: only the admins hear.
-    let team = create_group(&app.db, org.branch_a, "Team", &[], &[org.multi]).await;
-    create(&app, &admin, json!({ "branch_id": org.branch_a, "type": "action", "title": "Shared", "sla_due_at": due(3), "targets": [{ "group_id": team }] })).await;
+    let team = create_department(&app.db, org.branch_a, "Team", &[], &[org.multi]).await;
+    create(&app, &admin, json!({ "branch_id": org.branch_a, "type": "action", "title": "Shared", "sla_due_at": due(3), "targets": [{ "department_id": team }] })).await;
     // Done work never warns.
     let done = create(&app, &admin, json!({ "branch_id": org.branch_a, "type": "action", "title": "Done", "sla_due_at": due(2), "targets": [{ "user_id": org.multi }] })).await;
     let done_item = done["work_items"][0]["id"].as_str().unwrap();
@@ -423,7 +423,8 @@ async fn a_question_can_be_passed_to_someone_else(pool: PgPool) {
 
     let res = call(&app, &manager, Method::POST, &pass, Some(json!({ "user_id": org.multi }))).await;
     assert_status(&res, StatusCode::OK, None);
-    let targets: Vec<&str> = res.body["targets"].as_array().unwrap().iter().filter_map(|t| t["user_id"].as_str()).collect();
+    let targets: Vec<&str> =
+        res.body["targets"].as_array().unwrap().iter().filter_map(|t| t["user_id"].as_str()).collect();
     assert_eq!(targets, [org.multi.to_string().as_str()]);
     assert_eq!(notifications_of(&app.db, org.multi, "ticket_created").await, 1);
     // The new person may pass it on in turn; the old one no longer can.

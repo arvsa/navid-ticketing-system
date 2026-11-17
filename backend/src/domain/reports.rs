@@ -121,9 +121,8 @@ pub struct NewReport {
 
 pub async fn create(db: &PgPool, actor: &Actor, issue_id: Uuid, input: NewReport) -> AppResult<Report> {
     let issue = issues::readable(db, actor, issue_id).await?;
-    let requires_report = sqlx::query_scalar!("SELECT requires_report FROM issue WHERE id = $1", issue_id)
-        .fetch_one(db)
-        .await?;
+    let requires_report =
+        sqlx::query_scalar!("SELECT requires_report FROM issue WHERE id = $1", issue_id).fetch_one(db).await?;
     if !requires_report {
         return Err(AppError::validation("not_a_report", "reports can only be written on issues that need one"));
     }

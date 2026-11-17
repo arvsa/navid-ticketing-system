@@ -67,13 +67,13 @@ async fn rsvp_rows_exist_for_exactly_the_resolved_invitees(pool: PgPool) {
     // A group containing the organizer and an inactive member, plus a user target.
     let inactive = create_user(&app.db, NewUser::member("gone@example.com", PW)).await;
     add_member(&app.db, a, inactive).await;
-    let team = create_group(&app.db, a, "Team", &[], &[org.multi, org.manager_a, org.boss_like_a, inactive]).await;
+    let team = create_department(&app.db, a, "Team", &[], &[org.multi, org.manager_a, org.boss_like_a, inactive]).await;
     sqlx::query!("UPDATE app_user SET is_active = false WHERE id = $1", inactive).execute(&app.db).await.unwrap();
 
     let event = create(
         &app,
         &organizer,
-        event_body(a, "Staff party", 7, json!([{ "group_id": team }, { "user_id": org.plain_a }])),
+        event_body(a, "Staff party", 7, json!([{ "department_id": team }, { "user_id": org.plain_a }])),
     )
     .await;
     let id = event["id"].as_str().unwrap().to_owned();
@@ -102,7 +102,7 @@ async fn rsvp_rows_exist_for_exactly_the_resolved_invitees(pool: PgPool) {
 
     // Removing the group drops the people only it covered.
     let group_target =
-        res.body["targets"].as_array().unwrap().iter().find(|t| t["group_id"] == team.to_string()).unwrap()["id"]
+        res.body["targets"].as_array().unwrap().iter().find(|t| t["department_id"] == team.to_string()).unwrap()["id"]
             .as_str()
             .unwrap()
             .to_owned();

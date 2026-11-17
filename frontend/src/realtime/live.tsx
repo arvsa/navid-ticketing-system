@@ -30,7 +30,17 @@ const ISSUE_EVENTS = [
   "target_added",
   "target_removed",
 ];
-const ORG_EVENTS = ["permissions_changed", "member_changed", "member_removed", "group_changed", "branch_changed", "settings_changed", "templates_changed", "avatars_changed"];
+const ORG_EVENTS = [
+  "permissions_changed",
+  "member_changed",
+  "member_removed",
+  "department_changed",
+  "permission_groups_changed",
+  "branch_changed",
+  "settings_changed",
+  "templates_changed",
+  "avatars_changed",
+];
 const TOAST_KINDS = new Set([
   "assigned",
   "mentioned",

@@ -33,20 +33,20 @@ async fn issue(db: &PgPool, i: NewIssue<'_>) -> Uuid {
     .unwrap()
 }
 
-async fn target(db: &PgPool, issue: Uuid, branch: Uuid, user: Option<Uuid>, group: Option<Uuid>) -> Uuid {
-    let kind = match (user, group) {
+async fn target(db: &PgPool, issue: Uuid, branch: Uuid, user: Option<Uuid>, department: Option<Uuid>) -> Uuid {
+    let kind = match (user, department) {
         (Some(_), _) => "user",
-        (_, Some(_)) => "group",
+        (_, Some(_)) => "department",
         _ => "branch",
     };
     sqlx::query_scalar!(
-        r#"INSERT INTO issue_target (issue_id, branch_id, kind, user_id, group_id)
+        r#"INSERT INTO issue_target (issue_id, branch_id, kind, user_id, department_id)
            VALUES ($1, $2, $3::text::target_kind, $4, $5) RETURNING id"#,
         issue,
         branch,
         kind,
         user,
-        group
+        department
     )
     .fetch_one(db)
     .await
@@ -90,25 +90,31 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     let org = Org::seed(db).await;
 
     // Extra actors without the baseline: a reader limited to actions, a member
-    // with no read grant at all, and a group member targeted via the group.
+    // with no read grant at all, and a department member targeted via the department.
     let action_reader = create_user(db, NewUser::member("action_reader@example.com", PW)).await;
     let blind = create_user(db, NewUser::member("blind@example.com", PW)).await;
     let grouped = create_user(db, NewUser::member("grouped@example.com", PW)).await;
     for u in [action_reader, blind, grouped] {
         add_member(db, org.branch_a, u).await;
     }
-    let team = create_group(db, org.branch_a, "Team", &[], &[grouped]).await;
-    // Remove the baseline from the restricted users: drop them from "All members".
+    let team = create_department(db, org.branch_a, "Team", &[], &[grouped]).await;
+    // Remove the branch-wide read from the restricted users: drop them from "All members".
     sqlx::query!(
-        "DELETE FROM group_member gm USING user_group g
-         WHERE g.id = gm.group_id AND g.is_default AND gm.user_id = ANY($1)",
+        "DELETE FROM department_member dm USING department d
+         WHERE d.id = dm.department_id AND d.is_default AND dm.user_id = ANY($1)",
         &[action_reader, blind, grouped][..]
     )
     .execute(db)
     .await
     .unwrap();
-    create_group(db, org.branch_a, "Action readers", &[("issue.read", Some("action"), "branch")], &[action_reader])
-        .await;
+    create_department(
+        db,
+        org.branch_a,
+        "Action readers",
+        &[("issue.read", Some("action"), "branch")],
+        &[action_reader],
+    )
+    .await;
 
     let a = Some(org.branch_a);
     let b = Some(org.branch_b);
@@ -125,7 +131,7 @@ async fn list_filter_and_read_decision_agree(pool: PgPool) {
     target(db, to_group, org.branch_a, None, Some(team)).await;
     // Reaching someone only as an assignee.
     let assigned = issue(db, NewIssue { branch: a, ty: "action", by: org.admin_a }).await;
-    let t = target(db, assigned, org.branch_a, None, Some(org.managers_group)).await;
+    let t = target(db, assigned, org.branch_a, None, Some(org.managers_department)).await;
     sqlx::query!(
         "INSERT INTO work_item (issue_id, target_id, branch_id, assignee_id) VALUES ($1, $2, $3, $4)",
         assigned,

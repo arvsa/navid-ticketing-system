@@ -1,19 +1,19 @@
 // One person, opened from anywhere on the admin pages (UX_SPEC §4.11 member
-// page): who they are, their branches and groups, what they can do here, and
+// page): who they are, their branches and departments, what they can do here, and
 // the actions the viewer may take.
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Shield, X } from "lucide-react";
 import { toast } from "sonner";
-import { api, getAll } from "@/api/client";
-import { useEffectivePermissions, useMembers, useUserProfile } from "@/api/hooks";
-import type { Group, Member } from "@/api/types";
+import { api } from "@/api/client";
+import { useDepartments, useEffectivePermissions, useMembers, useUserProfile } from "@/api/hooks";
+import type { Member } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar, Cover } from "@/components/badges";
 import { Button, Dialog, Drawer, DrawerClose, Field, LoadingRows, SectionLabel, cx, inputClass } from "@/components/ui";
 import { hasGrant, isAdminOf, isSuper } from "@/lib/can";
 import { formatDay } from "@/lib/dates";
-import { errorMessage, permissionInfo, typePlural } from "@/lib/labels";
+import { errorMessage, grantTitle } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
 import { ConfirmDialog } from "@/features/items/ItemDialogs";
@@ -28,24 +28,13 @@ export function PersonPanel({ userId, branchId, onClose }: { userId?: string | n
   );
 }
 
-/** Groups this person is in, in one branch (gap G-4: no endpoint lists them). */
-function usePersonGroups(branchId: string | undefined, userId: string) {
-  return useQuery({
-    queryKey: ["person-groups", branchId, userId],
-    enabled: !!branchId,
-    queryFn: async () => {
-      const groups = await getAll<Group>(`/branches/${branchId}/groups`);
-      const mine: Group[] = [];
-      await Promise.all(
-        groups.map(async (g) => {
-          if (g.is_default) return void mine.push(g);
-          const members = await getAll<Member>(`/branches/${branchId}/members`, { group_id: g.id });
-          if (members.some((m) => m.user_id === userId)) mine.push(g);
-        }),
-      );
-      return mine.sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
-    },
-  });
+/** The departments this person is in, in one branch, "All members" first. */
+function usePersonDepartments(branchId: string | undefined, userId: string) {
+  const departments = useDepartments(branchId);
+  const mine = (departments.data ?? [])
+    .filter((d) => d.member_ids.includes(userId))
+    .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, localeTag));
+  return { isLoading: departments.isLoading, data: mine };
 }
 
 function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: string; branchId?: string; onClose: () => void }) {
@@ -61,7 +50,7 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
   const manage = admin || (!!branchId && hasGrant(viewer, branchId, "member.manage"));
   const members = useMembers(branchId, { includeLeft: admin });
   const m = members.data?.find((x) => x.user_id === userId);
-  const groups = usePersonGroups(branchId, userId);
+  const departments = usePersonDepartments(branchId, userId);
   const eff = useEffectivePermissions(m && !m.left_at ? branchId : undefined, userId);
   const [dialog, setDialog] = useState<null | "edit" | "remove" | "deactivate" | "reset" | "super">(null);
   const [temp, setTemp] = useState<string | null>(null);
@@ -92,11 +81,18 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
   const profile = useUserProfile(userId);
   const singleBranch = branchIds.length <= 1;
 
-  const byGroup = new Map<string, { name: string; items: string[] }>();
+  // By where it comes from: a permission group, through a department (or Everyone).
+  const bySource = new Map<string, { name: string; items: string[] }>();
   for (const g of eff.data?.grants ?? []) {
-    const entry = byGroup.get(g.group.id) ?? { name: g.group.everyone ? t("Everyone") : g.group.name, items: [] };
-    entry.items.push(`${permissionInfo[g.permission]?.title ?? g.permission}${g.issue_type ? ` (${typePlural[g.issue_type]})` : ""}`);
-    byGroup.set(g.group.id, entry);
+    const key = `${g.permission_group.id}:${g.department?.id ?? ""}`;
+    const name = g.department
+      ? g.department.name === g.permission_group.name
+        ? g.department.name
+        : t("{group}, through {department}", { group: g.permission_group.name, department: g.department.name })
+      : t("Everyone");
+    const entry = bySource.get(key) ?? { name, items: [] };
+    entry.items.push(grantTitle(g));
+    bySource.set(key, entry);
   }
 
   return (
@@ -161,14 +157,15 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
         {branchId && m && !m.left_at && (
           <>
             <section>
-              <SectionLabel className="mb-2">{t("Groups in {name}", { name: branchName(branchId) })}</SectionLabel>
-              {groups.isLoading ? (
+              <SectionLabel className="mb-2">{t("Departments in {name}", { name: branchName(branchId) })}</SectionLabel>
+              {departments.isLoading ? (
                 <LoadingRows rows={1} />
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {(groups.data ?? []).map((g) => (
-                    <span key={g.id} className="rounded-full bg-sunken px-3 py-1">
-                      {g.is_default ? t("All members") : g.name}
+                  {departments.data.map((d) => (
+                    <span key={d.id} className="rounded-full bg-sunken px-3 py-1">
+                      {d.is_default ? t("All members") : d.name}
+                      {d.head_ids.includes(userId) && <span className="ms-1.5 text-[12px] font-semibold text-primary">{t("Head")}</span>}
                     </span>
                   ))}
                 </div>
@@ -185,13 +182,13 @@ function PersonBody({ userId, branchId: initialBranch, onClose }: { userId: stri
                 </p>
               ) : (
                 <ul className="space-y-3">
-                  {[...byGroup.values()].map((g) => (
+                  {[...bySource.values()].map((g) => (
                     <li key={g.name}>
                       <span className="block">{g.items.join(t(", "))}</span>
                       <span className="text-[14px] text-text-2">{t("from {name}", { name: g.name })}</span>
                     </li>
                   ))}
-                  {byGroup.size === 0 && <li className="text-text-2">{t("Nothing beyond seeing their own work.")}</li>}
+                  {bySource.size === 0 && <li className="text-text-2">{t("Only the basics: their own items and what is sent to them.")}</li>}
                 </ul>
               )}
             </section>

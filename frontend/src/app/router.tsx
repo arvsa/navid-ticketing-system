@@ -143,13 +143,22 @@ const inbox = createRoute({
   component: lazyRouteComponent(() => import("@/features/inbox/InboxPage"), "InboxPage"),
 });
 
-/** `tab`: members, or school-wide groups (super admins); groups of the branch by default. */
-export type PeopleSearch = { tab?: "members" | "school"; group?: string; person?: string; branch?: string };
+/** `tab`: members, the branch's permission groups (admins) or the
+ * school-wide ones (super admins); the branch's departments by default.
+ * `department` and `group` (a permission group) pick one in the list. */
+export type PeopleSearch = {
+  tab?: "members" | "permissions" | "school";
+  department?: string;
+  group?: string;
+  person?: string;
+  branch?: string;
+};
 const people = createRoute({
   getParentRoute: () => shell,
   path: "/people",
   validateSearch: (s: Record<string, unknown>): PeopleSearch => ({
-    tab: s.tab === "members" || s.tab === "school" ? s.tab : undefined,
+    tab: s.tab === "members" || s.tab === "permissions" || s.tab === "school" ? s.tab : undefined,
+    department: typeof s.department === "string" ? s.department : undefined,
     group: typeof s.group === "string" ? s.group : undefined,
     person: typeof s.person === "string" ? s.person : undefined,
     branch: typeof s.branch === "string" ? s.branch : undefined,
@@ -195,7 +204,7 @@ const newItem = createRoute({
     type: ["ticket", "action", "event"].includes(s.type as string) ? (s.type as IssueType) : s.type === "report" ? "action" : undefined,
     templateTag: s.type === "report" ? "report" : typeof s.template === "string" ? s.template : undefined,
     date: typeof s.date === "string" ? s.date : undefined,
-    group: typeof s.group === "string" ? s.group : undefined,
+    department: typeof s.department === "string" ? s.department : undefined,
   }),
   component: function NewItemRedirect() {
     const search = newItem.useSearch();

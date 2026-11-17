@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError, api } from "@/api/client";
-import { setIssue, useGroups, useRecipients } from "@/api/hooks";
+import { setIssue, useDepartments, useRecipientDepartments, useRecipients } from "@/api/hooks";
 import { keys } from "@/api/keys";
 import type { IssueDetail, IssuePatch, Priority } from "@/api/types";
 import { PRIORITIES } from "@/api/types";
@@ -143,9 +143,10 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
   const people = usePeople();
   const { options } = useBranch();
   const branchId = issue.branch_id;
-  const groups = useGroups(branchId ?? undefined);
-  // School-wide items take people of any branch (who already have it are left out).
+  const departments = useDepartments(branchId ?? undefined);
+  // School-wide items take people and departments of any branch (who already have it are left out).
   const crossPeople = useRecipients(open && !branchId);
+  const crossDepartments = useRecipientDepartments(open && !branchId);
   const [value, setValue] = useState<Recipient[]>([]);
   const send = useMutation({
     mutationFn: async () => {
@@ -156,8 +157,10 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
             ? branchId
               ? { user_id: r.id }
               : { user_id: r.id, branch_id: r.branchId }
-            : r.kind === "group"
-              ? { group_id: r.id }
+            : r.kind === "department"
+              ? branchId
+                ? { department_id: r.id }
+                : { department_id: r.id, branch_id: r.branchId }
               : { branch_id: r.id };
         last = await api.post<IssueDetail>(`/issues/${issue.id}/targets`, body);
       }
@@ -193,20 +196,16 @@ export function SendToMoreDialog({ issue, open, onOpenChange }: { issue: IssueDe
         value={value}
         onChange={setValue}
         people={branchId ? people.inBranch(branchId) : []}
-        groups={groups.data ?? []}
-        branches={(branchId
-          ? canTargetWholeBranch(viewer, branchId, issue.type)
-            ? options.filter((o) => o.id === branchId)
-            : []
-          : isSuper(viewer)
-            ? options
-            : [...new Map((crossPeople.data ?? []).map((p) => [p.branch_id, { id: p.branch_id, name: p.branch_name }])).values()]
-        ).filter((o) => !issue.targets.some((t) => t.kind === "branch" && t.branch_id === o.id))}
+        departments={(departments.data ?? []).filter((d) => !issue.targets.some((t) => t.department_id === d.id))}
+        branches={(branchId ? (canTargetWholeBranch(viewer, branchId) ? options.filter((o) => o.id === branchId) : []) : isSuper(viewer) ? options : []).filter(
+          (o) => !issue.targets.some((t) => t.kind === "branch" && t.branch_id === o.id),
+        )}
         crossPeople={
           branchId
             ? undefined
             : (crossPeople.data ?? []).filter((p) => !issue.targets.some((t) => t.kind === "user" && t.user_id === p.user_id && t.branch_id === p.branch_id))
         }
+        crossDepartments={branchId ? undefined : (crossDepartments.data ?? []).filter((d) => !issue.targets.some((t) => t.department_id === d.id))}
         branchId={branchId ?? null}
       />
       {issue.type === "action" && (

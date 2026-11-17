@@ -217,8 +217,9 @@ async fn permission_changes_refresh_the_connection(pool: PgPool) {
     // A revoked session ends the stream on the next refresh.
     let admin_b = as_user(&app, "admin_b@example.com").await;
     call(&app, &multi, Method::POST, "/api/auth/logout", None).await;
-    let group = create_group(&app.db, org.branch_b, "B team", &[], &[org.multi]).await;
-    let res = call(&app, &admin_b, Method::DELETE, &format!("/api/groups/{group}/members/{}", org.multi), None).await;
+    let team = create_department(&app.db, org.branch_b, "B team", &[], &[org.multi]).await;
+    let uri = format!("/api/departments/{team}/members/{}", org.multi);
+    let res = call(&app, &admin_b, Method::DELETE, &uri, None).await;
     assert_status(&res, StatusCode::NO_CONTENT, None);
     stream.expect("session_ended").await;
     assert!(stream.closed().await, "the stream closes after session_ended");

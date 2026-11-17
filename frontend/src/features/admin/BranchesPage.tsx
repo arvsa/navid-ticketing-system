@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Ban, FileSpreadsheet, Hash, Mail, MoreHorizontal, Pencil, Plus, RotateCcw, Shield, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useBranches, useGroups } from "@/api/hooks";
+import { useBranches, useDepartments } from "@/api/hooks";
 import type { Branch, RootUser } from "@/api/types";
 import { useBranch } from "@/app/BranchContext";
 import { Avatar } from "@/components/badges";
@@ -94,7 +94,7 @@ function BranchCard({ branch }: { branch: Branch }) {
   const [adding, setAdding] = useState<null | "one" | "import">(null);
   const admins = people.all.filter((p) => p.adminOf.includes(branch.id));
   const members = people.inBranch(branch.id);
-  const groups = useGroups(branch.id);
+  const departmentList = useDepartments(branch.id);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["people"] });
     qc.invalidateQueries({ queryKey: ["branches"] });
@@ -115,7 +115,7 @@ function BranchCard({ branch }: { branch: Branch }) {
     onSuccess: () => (toast.success(branch.is_active ? t("Branch closed") : t("Branch reopened")), setClosing(false), refresh()),
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const departments = (groups.data ?? []).filter((g) => g.kind === "department" && !g.archived_at);
+  const departments = (departmentList.data ?? []).filter((d) => !d.is_default && !d.archived_at);
   const chip = "inline-flex max-w-full items-center gap-1.5 rounded-full bg-sunken py-1 ps-1 pe-3 text-[14px]";
   return (
     <Card className={cx("flex flex-col p-5", !branch.is_active && "opacity-70")}>
@@ -189,13 +189,13 @@ function BranchCard({ branch }: { branch: Branch }) {
         <div>
           <dt className="mb-1.5"><SectionLabel>{t("Departments")}</SectionLabel></dt>
           <dd className="flex flex-wrap gap-1.5">
-            {departments.map((g) => (
-              <Link key={g.id} to="/people" search={{ branch: branch.id, group: g.id }} className={cx(chip, "ps-3 hover:bg-surface-2")}>
-                <span className="truncate">{g.name}</span>
-                <span className="text-text-3 tabular">{num(g.member_count)}</span>
+            {departments.map((d) => (
+              <Link key={d.id} to="/people" search={{ branch: branch.id, department: d.id }} className={cx(chip, "ps-3 hover:bg-surface-2")}>
+                <span className="truncate">{d.name}</span>
+                <span className="text-text-3 tabular">{num(d.member_ids.length)}</span>
               </Link>
             ))}
-            {groups.isSuccess && departments.length === 0 && <span className="text-[14px] text-text-2">{t("No departments yet")}</span>}
+            {departmentList.isSuccess && departments.length === 0 && <span className="text-[14px] text-text-2">{t("No departments yet")}</span>}
           </dd>
         </div>
       </dl>

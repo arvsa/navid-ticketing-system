@@ -15,7 +15,7 @@ import { AttachButton, FileList, PendingFiles, UploadNow, reportFailedUploads, u
 import { Button, Card, Dialog, EmptyState, ErrorPanel, Field, Skeleton, cx, inputClass } from "@/components/ui";
 import { canClaim, canPass, isMine } from "@/lib/can";
 import { dueIn, formatDateTime, formatTime, timeAgo } from "@/lib/dates";
-import { isDone, isSentBack, numberOf, targetName, useGroupDirectory } from "@/lib/items";
+import { isDone, isSentBack, numberOf, targetName, useDepartmentDirectory } from "@/lib/items";
 import { errorMessage, modeLabel } from "@/lib/labels";
 import { useViewer } from "@/lib/useViewer";
 import { usePeople } from "@/people/usePeople";
@@ -71,7 +71,7 @@ function stepOf(w: WorkItem) {
 function AssignmentView({ issue, work }: { issue: IssueDetail; work: WorkItem }) {
   const viewer = useViewer();
   const people = usePeople();
-  const groups = useGroupDirectory();
+  const groups = useDepartmentDirectory();
   const { zoneOf, branchById } = useBranch();
   const zone = zoneOf(work.branch_id);
   const step = stepOf(work);

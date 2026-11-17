@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE department SET name = $2, description = $3,\n               archived_at = CASE WHEN $4 THEN coalesce(archived_at, now()) ELSE NULL END\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b7a99682204ad90dc25c683fe926202403d85158c56b357a2b46cc29839e223b"
+}

@@ -35,7 +35,9 @@ pub enum CompletionMode {
 #[serde(rename_all = "snake_case")]
 pub enum TargetKind {
     Branch,
-    Group,
+    /// The `target_kind` enum still has `group` (Postgres can't drop enum
+    /// values); no target uses it since migration 0023.
+    Department,
     User,
 }
 

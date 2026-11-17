@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO department_member (department_id, user_id, branch_id, is_head, added_by)\n                       VALUES ($1, $2, $3, true, $4)\n                       ON CONFLICT (department_id, user_id) DO UPDATE SET is_head = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "11149d9323191c89eac464410f138735cda76f119a4e085e103df17bca0c08d7"
+}
