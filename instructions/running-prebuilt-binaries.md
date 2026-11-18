@@ -1,15 +1,18 @@
-# Offline bundle
+# Running prebuilt binaries
 
-Run the whole app from one archive, with no internet access: nothing is
-downloaded from Docker Hub, npm or crates.io. You only need Docker.
+Run the whole app from Docker images that are already built: nothing is
+compiled, and nothing is pulled from Docker Hub, npm or crates.io. You only
+need Docker, and an internet connection once, to download the bundle from the
+[releases](https://github.com/arvsa/navid-ticketing-system/releases)
+(`./get-prebuilt-bundle.sh` resumes a dropped download).
 
-The bundle is a folder, `navid-offline/`, containing:
+The bundle, `navid-prebuilt-<version>-<arch>.zip`, unzips to a folder, `navid-prebuilt/`, containing:
 
 | File | What |
 |---|---|
 | `navid-images-<version>-<arch>.tar.gz` | The postgres, backend and frontend images, e.g. `navid-images-1.0.1-amd64.tar.gz` |
 | `docker-compose.yml` | Starts the three images |
-| `offline-bundle.md` | This file |
+| `running-prebuilt-binaries.md` | This file |
 
 ## Run it
 
@@ -19,7 +22,7 @@ The bundle is a folder, `navid-offline/`, containing:
    docker load -i navid-images-1.0.1-amd64.tar.gz
    ```
 
-2. **Start everything** from inside `navid-offline/`:
+2. **Start everything** from inside `navid-prebuilt/`:
 
    ```sh
    docker compose up -d
@@ -63,8 +66,8 @@ APP_PORT=9000 APP_ORIGIN=http://localhost:9000 docker compose up -d
 The images are built from the checked-out code:
 
 ```sh
-./build-offline-bundle.sh                # amd64, 1.0.1
-./build-offline-bundle.sh -v 1.0.2 arm64
+./build-prebuilt-bundle.sh                # amd64, 1.0.1
+./build-prebuilt-bundle.sh -v 1.0.2 arm64
 
 # After shipping for a different architecture
 # docker pull postgres:16

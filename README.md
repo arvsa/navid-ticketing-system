@@ -55,20 +55,25 @@ points at the database. With `localhost` in a container they can't reach it.
 
 Stop it with `docker compose down`. Add `-v` to also delete the data.
 
-### In case of MANY, MANY, MANY internet issues (Iranians internet in 2026 :/)
+### Running prebuilt binaries
 
-Download the offline bundle via script or manually from the
+Nothing to compile and nothing pulled from Docker Hub, npm or crates.io: one
+download of prebuilt images, which also helps when the internet is unreliable
+(Iranian internet in 2026 :/). Download the bundle with the script (it resumes
+a dropped download) or manually from the
 [releases](https://github.com/arvsa/navid-ticketing-system/releases) and start it:
 
 ```sh
-./get-offline-bundle.sh    # or manually
-cd navid-offline
+./get-prebuilt-bundle.sh    # or manually
+cd navid-prebuilt
 docker load -i navid-images-<version>-<arch>.tar.gz
 docker compose up -d
 ```
 
-Then continue from step 3 above.
+The first start creates a root user, `superadmin@school.local`; get its
+temporary password with `docker compose logs backend | grep -A1 "First root user"`
+and sign in at http://localhost:8000.
 
-See [instructions/offline-bundle.md](instructions/offline-bundle.md) for more details.
+See [instructions/running-prebuilt-binaries.md](instructions/running-prebuilt-binaries.md) for more details.
 
 Follow [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for more details on respective services.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Downloads and unzips an offline bundle from the GitHub releases.
-# See instructions/offline-bundle.md.
-#   ./get-offline-bundle.sh [-v version] [amd64|arm64]
+# Downloads and unzips a prebuilt bundle from the GitHub releases.
+# See instructions/running-prebuilt-binaries.md.
+#   ./get-prebuilt-bundle.sh [-v version] [amd64|arm64]
 #   -v, --version   release to download (default: the latest release)
 #   architecture    target platform (default: this machine's)
 set -euo pipefail
@@ -30,7 +30,7 @@ if [ -z "$version" ]; then
   [ "$version" != "$latest" ] || { echo "Couldn't find the latest release." >&2; exit 1; }
 fi
 
-zipfile="navid-offline-$version-$arch.zip"
+zipfile="navid-prebuilt-$version-$arch.zip"
 url="https://github.com/$repo/releases/download/v$version/$zipfile"
 
 if [ -f "$zipfile" ] && unzip -tq "$zipfile" >/dev/null 2>&1; then
@@ -60,6 +60,6 @@ fi
 unzip -o "$zipfile"
 echo
 echo "Done. Next:"
-echo "  cd navid-offline"
+echo "  cd navid-prebuilt"
 echo "  docker load -i navid-images-$version-$arch.tar.gz"
 echo "  docker compose up -d"

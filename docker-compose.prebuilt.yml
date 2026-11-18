@@ -1,4 +1,4 @@
-# Use downloaded backend binaries instead of compiling Rust. See README,
+# Use downloaded backend binaries instead of compiling Rust. See backend/README.md,
 # "Without building the backend":
 #   docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d --build
 services:

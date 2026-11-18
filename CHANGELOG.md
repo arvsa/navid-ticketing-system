@@ -29,6 +29,19 @@
   on its own when its recipients are in more than one branch.
 - Other branches' people and groups in the recipient picker are folded until
   you open them or search.
+- **The offline bundle is now the prebuilt bundle.** It still needs the
+  internet once, to download it; what it skips is building and pulling images.
+  The tutorial is [instructions/running-prebuilt-binaries.md](instructions/running-prebuilt-binaries.md),
+  the scripts are `get-prebuilt-bundle.sh` and `build-prebuilt-bundle.sh`, the
+  release files are `navid-prebuilt-<version>-<arch>.zip`, and they unzip to
+  `navid-prebuilt/`.
+
+### Upgrading
+
+- The bundle's compose project is now `navid-prebuilt`, so a new bundle starts
+  with an empty database. To keep the data of a 1.0.x bundle, start the new
+  one with `docker compose -p navid-offline up -d` (and use `-p navid-offline`
+  with every `docker compose` command after).
 
 
 ## v1.0.1

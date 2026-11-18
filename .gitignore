@@ -3,5 +3,8 @@
 
 # Same images as the "School Ticketing UI-png" folder, which is kept.
 /School Ticketing UI-png.zip
+navid-prebuilt/
+navid-prebuilt-*.zip
+# Bundles built before 1.0.2 had the old name.
 navid-offline/
 navid-offline-*.zip

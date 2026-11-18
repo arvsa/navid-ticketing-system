@@ -1,6 +1,6 @@
-# Runs from images loaded with `docker load`, with no internet access.
-# See instructions/offline-bundle.md.
-name: navid-offline
+# Runs the prebuilt images loaded with `docker load`: nothing is built or pulled.
+# See instructions/running-prebuilt-binaries.md.
+name: navid-prebuilt
 
 services:
   postgres:
