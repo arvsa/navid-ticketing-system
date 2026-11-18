@@ -1,7 +1,8 @@
 # School ticketing backend
 
-The API for the school ticketing featuring branches, people and groups, issue creation, work and approvals, comments,
-attachments, notifications, a dashboard and Excel exports with Farsi language support.
+The API for the school ticketing app: branches, people, departments and permission groups, issues from templates
+with tags, work and approvals, comments, attachments, notifications, a dashboard and Excel exports with Farsi
+language support.
 
 Built with Rust, axum and PostgreSQL 16. For configuration, error codes and
 deployment, see [docs/REFERENCE.md](docs/REFERENCE.md).
@@ -89,21 +90,26 @@ The main endpoints:
 | Events | `GET /calendar?from=...&to=...`, `PUT /events/{id}/rsvp` |
 | Inbox | `GET /notifications`, `GET /notifications/unread-count` |
 | Overview | `GET /dashboard`, `GET /exports?branch_ids=...` (Excel) |
-| People | `GET /branches`, `GET /branches/{id}/members`, `GET /branches/{id}/groups`, `POST /branches/{id}/members/import` (Excel or CSV) |
+| People | `GET /branches`, `GET /branches/{id}/members`, `GET /branches/{id}/departments`, `POST /branches/{id}/members/import` (Excel or CSV), `GET /directory` |
+| Permissions | `GET /branches/{id}/permission-groups`, `PUT /departments/{id}/permission-groups/{group_id}`, `GET` / `POST /permission-config` |
+| Templates | `GET /templates`, `POST /templates` (root users) |
 
 ## Making requests
 
 The session cookie is kept in `cookies.txt`: the `login` tool writes it, and
 curl sends it with `-b cookies.txt`.
 
-**1. Sign in** (the password defaults to `demo-password`)
+**1. Sign in** as the root user from setup step 3. The first time, replace
+the temporary password: until then only `/me`, `/me/password` and logout work.
 
 ```sh
-cargo run --bin login -- --email member1@north.demo.school
+cargo run --bin login -- --email you@school.org --password 'TEMPORARY-PASSWORD'
+cargo run --bin change_password -- --current-password 'TEMPORARY-PASSWORD' --new-password 'your-own-password'
 cargo run --bin whoami
 ```
 
-`whoami` shows your profile and your branches.
+`whoami` shows your profile and your branches. See
+[`docs/password-rotation.html`](docs/password-rotation.html) for the full flow.
 
 **2. Read something**: GET requests only need the cookie.
 
@@ -124,6 +130,23 @@ cargo run --bin logout
 - A `401 unauthenticated` means the cookie is missing or expired: sign in again
   with `cargo run --bin login`.
 
+## Without building the backend
+
+Every release has static Linux binaries of `backend`, `admin`, `health` and
+`users` (`backend-linux-amd64.tar.gz`, `backend-linux-arm64.tar.gz`). To run the
+root `docker-compose.yml` with them instead of compiling Rust, unpack the
+archive for your machine into `dist/` and add `docker-compose.prebuilt.yml`:
+
+```sh
+tar -xzf backend-linux-amd64.tar.gz -C dist     # gives dist/linux-amd64/
+cd ..
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d --build
+```
+
+The frontend is still built from source. To skip building anything, use the
+prebuilt bundle instead
+([instructions/running-prebuilt-binaries.md](../instructions/running-prebuilt-binaries.md)).
+
 ## Publishing a release
 
 Tag the commit and push the tag:
@@ -134,7 +157,7 @@ git push origin v0.0.2
 ```
 
 The [release workflow](../.github/workflows/backend-binaries.yml) then creates
-the GitHub release and attaches the Linux binaries and the offline bundles
-(`navid-offline-0.0.2-amd64.zip`, `-arm64.zip`). Others download a bundle with
-`./get-offline-bundle.sh` (see
-[instructions/offline-bundle.md](../instructions/offline-bundle.md)).
+the GitHub release and attaches the Linux binaries and the prebuilt bundles
+(`navid-prebuilt-0.0.2-amd64.zip`, `-arm64.zip`). Others download a bundle with
+`./get-prebuilt-bundle.sh` (see
+[instructions/running-prebuilt-binaries.md](../instructions/running-prebuilt-binaries.md)).

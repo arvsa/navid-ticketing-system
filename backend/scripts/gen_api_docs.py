@@ -23,96 +23,135 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Sidebar order and display names of the OpenAPI tags.
 TAGS = [
-    ("auth", "Session"),
+    ("auth", "Session & profile"),
     ("issues", "Issues"),
     ("work items", "Work items"),
     ("comments", "Comments"),
     ("reports", "Reports"),
     ("attachments", "Attachments"),
     ("events", "Events"),
+    ("templates", "Templates"),
     ("notifications", "Notifications & live updates"),
     ("dashboard", "Dashboard & export"),
     ("branches", "Branches"),
-    ("members", "Members"),
-    ("groups", "Groups & permissions"),
+    ("members", "Members & directory"),
+    ("departments", "Departments"),
+    ("permission groups", "Permission groups"),
+    ("groups", "Permission catalog"),
     ("users", "Users"),
+    ("settings", "Settings"),
     ("health", "Health"),
 ]
 
 # "METHOD path": (summary, who may call it)
 ANYONE = "Anyone signed in."
+PENDING = "Anyone signed in, even before changing a temporary password."
+ROOT_ONLY = "Root users (super admins) only."
 ENDPOINTS = {
     "GET /api/healthz": ("Check that the server and its database are up.", "Public, no session needed."),
     "POST /api/auth/login": ("Sign in with email and password. Sets the `sid` session cookie and returns your profile.", "Public. Five wrong passwords in a row lock the account for 15 minutes."),
-    "POST /api/auth/logout": ("Sign out: ends this session and clears the cookie.", ANYONE),
-    "GET /api/me": ("Your profile, branches, and effective permissions in each branch.", "Anyone signed in, even before changing a temporary password."),
-    "POST /api/me/password": ("Change your password. Signs out your other sessions.", "Anyone signed in, even before changing a temporary password."),
-    "GET /api/permissions": ("The catalog of grantable permissions and their allowed scopes, for admin screens.", ANYONE),
+    "POST /api/auth/logout": ("Sign out: ends this session and clears the cookie.", PENDING),
+    "GET /api/me": ("Your profile and branches, with your grants in each branch and the departments whose members you manage.", PENDING),
+    "PATCH /api/me": ("Edit your bio; root users can also change their name.", ANYONE),
+    "POST /api/me/password": ("Change your password. Signs out your other sessions.", PENDING),
+    "PUT /api/me/avatar": ("Upload your profile picture (JPEG, PNG or WebP, max 2 MB) as `multipart/form-data` with a `file` part.", ANYONE),
+    "DELETE /api/me/avatar": ("Remove your profile picture.", ANYONE),
+    "PUT /api/me/cover": ("Upload your profile cover (JPEG, PNG or WebP, max 5 MB) as `multipart/form-data` with a `file` part.", ANYONE),
+    "DELETE /api/me/cover": ("Remove your profile cover.", ANYONE),
+    "GET /api/permissions": ("The catalog of grantable permissions: which can be limited to an issue type or granted per department.", ANYONE),
 
-    "GET /api/branches": ("Branches you belong to (every branch for super admins).", ANYONE),
-    "POST /api/branches": ("Create a branch with its first admin. An \"All members\" group is created automatically.", "Super admins only."),
-    "GET /api/branches/{id}": ("One branch.", "Members of the branch and super admins."),
-    "PATCH /api/branches/{id}": ("Rename a branch, change its code, timezone or email, or deactivate it.", "Super admins only."),
-    "PUT /api/branches/{id}/admins/{user_id}": ("Make someone an admin of the branch (adds them as a member if needed).", "Super admins only."),
-    "DELETE /api/branches/{id}/admins/{user_id}": ("Remove someone's admin role. A branch always keeps at least one admin.", "Super admins only."),
-    "PUT /api/users/{id}/super-admin": ("Make a user a super admin.", "Super admins only."),
-    "DELETE /api/users/{id}/super-admin": ("Remove a user's super admin role. At least one super admin always remains.", "Super admins only."),
+    "GET /api/settings": ("The school's name, shown in the header and on the sign-in page.", "Public, no session needed."),
+    "PATCH /api/settings": ("Change the school's name. Sends `settings_changed` to everyone.", ROOT_ONLY),
 
-    "GET /api/branches/{id}/members": ("The branch's member directory. Filter by group with `group_id`.", "Holders of `member.view` (everyone, by default). `include_left=true`: admins only."),
-    "GET /api/school-groups": ("School-wide groups: templates with a copy in every branch. `member_count` adds up the copies.", "Super admins."),
-    "POST /api/school-groups": ("Create a school-wide group and its copy in every active branch (a branch group with the same name becomes its copy). New branches get a copy automatically. Its grants, name and archiving pass on to the copies; branch admins choose each copy's members.", "Super admins."),
-    "GET /api/school-groups/{id}/copies": ("A school-wide group's copy in each branch, with member counts.", "Super admins."),
-    "PUT /api/groups/{id}/permissions": ("Save several grant changes at once: all or nothing, one audit row per grant, and branch admins are told once.", "Whoever may manage the group."),
-    "GET /api/recipients": ("Everyone in every active branch, names only, to send a school-wide item to. Someone in two branches appears once per branch.", "Super admins and holders of `issue.target_other_branches`."),
-    "POST /api/branches/{id}/members": ("Add someone by email. New accounts get a one-time temporary password in the response.", "Admins and holders of `member.manage`. Bringing back someone who left: admins only."),
-    "PATCH /api/branches/{id}/members/{user_id}": ("Edit a member's name or email.", "Admins; holders of `member.manage` for non-admin members."),
-    "DELETE /api/branches/{id}/members/{user_id}": ("Remove someone from the branch. Their open work there becomes unassigned.", "Admins; holders of `member.manage` for non-admin members. Admins must be demoted first."),
-    "GET /api/branches/{id}/members/{user_id}/effective-permissions": ("What someone may do in the branch, and which group each permission comes from.", "Admins, and the member themselves."),
-    "POST /api/users/{id}/reset-password": ("Give a user a new temporary password and sign them out everywhere.", "Admins of a branch they belong to; holders of `member.manage` for non-admins. Super admin accounts: super admins only."),
-    "PATCH /api/users/{id}/active": ("Deactivate (or reactivate) an account.", "Admins or `member.manage` for single-branch, non-admin members; otherwise super admins."),
+    "GET /api/branches": ("Branches you belong to (every branch for root users).", ANYONE),
+    "POST /api/branches": ("Create a branch, optionally with its first admin. Its \"All members\" department and permission group are created automatically.", ROOT_ONLY),
+    "GET /api/branches/{id}": ("One branch.", "Members of the branch and root users."),
+    "PATCH /api/branches/{id}": ("Rename a branch, change its code, timezone or email, or deactivate it.", ROOT_ONLY),
+    "PUT /api/branches/{id}/admins/{user_id}": ("Make someone an admin of the branch (adds them as a member if needed).", ROOT_ONLY),
+    "DELETE /api/branches/{id}/admins/{user_id}": ("Remove someone's admin role. A branch always keeps an active admin.", ROOT_ONLY),
+    "PUT /api/users/{id}/super-admin": ("Make a user a root user.", ROOT_ONLY),
+    "DELETE /api/users/{id}/super-admin": ("Remove a user's root role. At least one active root user always remains.", ROOT_ONLY),
+    "GET /api/root-users": ("Every root user, with their account details.", ROOT_ONLY),
+    "GET /api/root-users/names": ("Active root users' names. They belong to no branch, so this is how to name and @mention them.", ANYONE),
 
-    "GET /api/branches/{id}/groups": ("The branch's groups.", "Any member of the branch."),
-    "POST /api/branches/{id}/groups": ("Create a group.", "Branch admins only."),
-    "PATCH /api/groups/{id}": ("Rename a group, edit its description, archive or restore it.", "Branch admins only. \"All members\" can't be renamed or archived."),
-    "DELETE /api/groups/{id}": ("Delete a group; one that issues were sent to is archived instead.", "Branch admins only."),
-    "PUT /api/groups/{id}/members/{user_id}": ("Add a branch member to a group.", "Branch admins only."),
-    "DELETE /api/groups/{id}/members/{user_id}": ("Remove someone from a group. Takes effect on their next request.", "Branch admins only."),
-    "GET /api/groups/{id}/permissions": ("A group's grants.", "Branch admins only."),
-    "POST /api/groups/{id}/permissions": ("Grant a permission to a group, optionally for one issue type, at a scope.", "Branch admins only."),
-    "DELETE /api/group-permissions/{id}": ("Revoke a grant.", "Branch admins only."),
+    "GET /api/branches/{id}/members": ("The branch's members. Filter by department with `department_id`.", "Holders of `member.view` (everyone, through the branch's \"All members\" permission group). `include_left=true`: admins only."),
+    "POST /api/branches/{id}/members": ("Add someone by email. New accounts get a one-time temporary password in the response.", "Admins and holders of `member.manage`. Bringing back someone who left: admins only. Root user accounts: root users only."),
+    "POST /api/branches/{id}/members/import": ("Add many people from a spreadsheet (xlsx, xls, ods or csv, max 2 MB and 500 people) sent as `multipart/form-data` with a `file` part. `dry_run=true` only checks; `skip_errors=true` imports the good rows.", "Admins and holders of `member.manage`."),
+    "GET /api/members/import-template": ("An empty workbook with the import's header row.", ANYONE),
+    "PATCH /api/branches/{id}/members/{user_id}": ("Edit a member's name or email.", "Admins; holders of `member.manage` for members who aren't admins anywhere."),
+    "DELETE /api/branches/{id}/members/{user_id}": ("Remove someone from the branch: they leave its departments and their open work there becomes unassigned.", "Admins; holders of `member.manage` for members who aren't admins anywhere. Admins must be demoted first."),
+    "GET /api/branches/{id}/members/{user_id}/effective-permissions": ("What someone may do in the branch, with the permission group and department each grant comes from.", "Admins, and the member themselves."),
+    "POST /api/users/{id}/reset-password": ("Give a user a new temporary password and sign them out everywhere.", "Admins of a branch they belong to; holders of `member.manage` for people who aren't admins anywhere. Root user accounts: root users only."),
+    "PATCH /api/users/{id}/active": ("Deactivate (or reactivate) an account.", "Admins or `member.manage` for single-branch members who aren't admins; otherwise root users."),
+    "GET /api/recipients": ("People in every active branch, names only, to send an item to. Someone in two branches appears once per branch.", "Anyone who belongs to a branch."),
+    "GET /api/recipient-departments": ("Departments in every active branch (not \"All members\"), to send an item to.", "Anyone who belongs to a branch."),
+    "GET /api/directory": ("Every active branch with its departments, their members and heads, and its people.", ANYONE),
+    "GET /api/users/{id}/profile": ("Someone's profile: bio, cover and picture versions, and where they work.", ANYONE),
+    "GET /api/users/{id}/avatar": ("Someone's profile picture. Add `?v=<version>`: the URL changes with each upload, so it's cached for good.", ANYONE),
+    "GET /api/users/{id}/cover": ("Someone's profile cover. Add `?v=<version>`: the URL changes with each upload, so it's cached for good.", ANYONE),
+    "GET /api/avatars": ("Everyone with a profile picture and its version, to show pictures beside names. Changes send `avatars_changed`.", ANYONE),
 
-    "GET /api/issues": ("Issues you can see, newest first. Filter by branch, type, state, `assignee=me`, or title search `q`.", "Anyone signed in; only issues you may read."),
-    "POST /api/issues": ("Create a ticket, action, report or event, optionally sent to people or groups.", "Holders of `issue.create` for the type (members: tickets, reports, events). Targets need `issue.target`. School-wide (`branch_id: null`): whole branches are for super admins; people in any branch (`{\"user_id\", \"branch_id\"}`) also for holders of `issue.target_other_branches`."),
+    "GET /api/branches/{id}/departments": ("The branch's departments, with their members, heads and permission groups.", "Members of the branch."),
+    "POST /api/branches/{id}/departments": ("Create a department.", "Admins and holders of `department.manage`."),
+    "PATCH /api/departments/{id}": ("Rename a department, edit its description, archive or restore it.", "Admins and holders of `department.manage`. \"All members\" can't be changed."),
+    "DELETE /api/departments/{id}": ("Delete a department; one that items were sent to is archived instead.", "Admins and holders of `department.manage`."),
+    "PUT /api/departments/{id}/members/{user_id}": ("Add a branch member to a department.", "Admins, `department.manage`, or `department.members.manage` for that department."),
+    "DELETE /api/departments/{id}/members/{user_id}": ("Remove someone from a department. Takes effect on their next request.", "Admins, `department.manage`, or `department.members.manage` for that department. Removing a head: admins and `department.manage` only."),
+    "PUT /api/departments/{id}/heads/{user_id}": ("Make a department member one of its heads: they hand out, approve or send back, and cancel the work sent to it, and close the questions sent to it.", "Admins and holders of `department.manage`."),
+    "DELETE /api/departments/{id}/heads/{user_id}": ("Stop someone being a head of the department (they stay a member).", "Admins and holders of `department.manage`."),
+
+    "GET /api/branches/{id}/permission-groups": ("The branch's own permission groups and the school-wide ones it may attach, with the departments using each.", "Branch admins."),
+    "POST /api/branches/{id}/permission-groups": ("Create a permission group for the branch, with its grants.", "Branch admins."),
+    "GET /api/school-permission-groups": ("School-wide permission groups, \"Everyone\" first.", ROOT_ONLY),
+    "POST /api/school-permission-groups": ("Create a school-wide permission group, which any branch can attach to its departments.", ROOT_ONLY),
+    "PATCH /api/permission-groups/{id}": ("Rename or describe a permission group, or replace all its grants (`grants`: `[{permission, issue_type?, department?}]`).", "Branch admins for the branch's groups; root users for school-wide ones."),
+    "DELETE /api/permission-groups/{id}": ("Delete a permission group.", "Branch admins for the branch's groups; root users for school-wide ones. \"Everyone\" can't be deleted."),
+    "PUT /api/departments/{id}/permission-groups/{group_id}": ("Attach a permission group to a department: its members get the group's grants in that branch.", "Admins of the department's branch."),
+    "DELETE /api/departments/{id}/permission-groups/{group_id}": ("Detach a permission group from a department.", "Admins of the department's branch."),
+    "GET /api/permission-config": ("The permission setup as one YAML or JSON document: permission groups with their grants as statements, and each branch's departments with their permission groups and heads.", "Root users get everything; branch admins the school-wide groups and their own branches."),
+    "POST /api/permission-config": ("Apply an edited permission document in one transaction. Creates and updates, never deletes. `dry_run=true` only lists the changes.", "Root users; branch admins for their own branches."),
+
+    "GET /api/templates": ("Templates for new items: name, type, tag and rules. `include_archived=true` adds archived ones.", "Anyone signed in. Archived templates: root users."),
+    "POST /api/templates": ("Create a template. Sends `templates_changed`.", ROOT_ONLY),
+    "PATCH /api/templates/{id}": ("Edit, archive or restore a template (not its type). Applies to new items only.", ROOT_ONLY),
+
+    "GET /api/issues": ("Issues you can see, newest first. Filter by branch, type, state, priority, tags, template, `assignee=me`, created dates, or `q` (title, or an item number such as `ISS-12`).", "Anyone signed in; only issues you may read."),
+    "POST /api/issues": ("Create a ticket, action or event, optionally from a template and with tags, sent to people, departments or whole branches. Without `branch_id` it's school-wide.", "Anyone in a branch, to people and departments in any branch. Whole branches: that branch's admins; school-wide items to whole branches: root users."),
     "GET /api/issues/{id}": ("One issue with its targets, work items, event details, files and your read state.", "Anyone who can read it (otherwise 404)."),
     "GET /api/issues/by-number/{n}": ("The same, looked up by number (`ISS-<n>`).", "Anyone who can read it (otherwise 404)."),
-    "PATCH /api/issues/{id}": ("Edit title, description, priority or event details. Send the `version` you last saw.", "Holders of `issue.edit` (your own issues by default)."),
-    "POST /api/issues/{id}/close": ("Close the issue; any unfinished work is cancelled.", "Creators of tickets, reports and events; holders of `issue.close`; admins."),
+    "GET /api/issues/tags": ("The tags in use on issues you can see, for filtering.", ANYONE),
+    "PATCH /api/issues/{id}": ("Edit title, description, priority, tags or event details. Send the `version` you last saw.", "Its sender while it's open and current; holders of `issue.edit`; admins. School-wide items: only their sender."),
+    "POST /api/issues/{id}/close": ("Close the issue; any unfinished work is cancelled.", "Its sender at any time; heads of a department a question was sent to; holders of `issue.close`; admins. School-wide items: only their sender."),
     "POST /api/issues/{id}/cancel": ("Cancel the issue. For events, invitees who haven't declined are told.", "Same as closing."),
-    "POST /api/issues/{id}/targets": ("Send the issue to another person, group or (super admins) whole branch. Creates work items and invitations.", "Holders of `issue.target`. School-wide items: super admins, or their sender while holding `issue.target_other_branches`."),
-    "DELETE /api/issues/{id}/targets/{target_id}": ("Stop sending the issue to a target; its unfinished work is cancelled.", "Holders of `issue.target`."),
+    "POST /api/issues/{id}/delete": ("Soft-delete the issue: hidden from everyone, its history kept. Send the `version` you last saw.", "Its sender while it's open and current; admins at any time."),
+    "POST /api/issues/{id}/targets": ("Send the issue to another person, department or whole branch. Creates work items and invitations.", "Its sender while it's open and current; holders of `issue.edit`; admins. Whole branches: that branch's admins. School-wide items: only their sender, never to whole branches."),
+    "DELETE /api/issues/{id}/targets/{target_id}": ("Stop sending the issue to a target; its unfinished work is cancelled.", "Same as adding a target."),
+    "POST /api/issues/{id}/pass": ("Pass a question (ticket) you were asked to someone else in your branch.", "Whoever the question was sent to."),
     "POST /api/issues/{id}/read": ("Mark the issue as read (clears its `unread` flag).", "Anyone who can read it."),
     "PUT /api/issues/{id}/watch": ("Watch the issue to be told about new comments.", "Anyone who can read it."),
     "DELETE /api/issues/{id}/watch": ("Stop watching the issue.", "Anyone who can read it."),
+    "PUT /api/issues/{id}/mute": ("Mute the issue: no more comments or changes from it. What needs you (work, a hand-in to review, a mention) still arrives.", "Anyone who can read it."),
+    "DELETE /api/issues/{id}/mute": ("Unmute the issue.", "Anyone who can read it."),
     "GET /api/issues/{id}/history": ("The issue's change history.", "Anyone who can read it; staff-only comments appear only for staff."),
 
     "GET /api/work-items": ("Work you can see. Filter by `assignee=me`, status or branch.", ANYONE),
-    "GET /api/work-items/{id}": ("One work item.", "Anyone who can read its issue."),
-    "POST /api/work-items/{id}/{transition}": ("Move work along: `start`, `block`, `unblock`, `submit`, `approve`, `reject` (note required), `claim`, `assign` (`assignee_id`), `cancel`. Send the `version` you last saw.", "Updating: the assignee. Claim: members of the target group. Assign: admins or `work_item.assign`. Approve or reject: admins or `work_item.approve`, never your own work. Cancel: admins."),
+    "GET /api/work-items/{id}": ("One work item, with its hand-off chain and reviewer.", "Anyone who can read its issue."),
+    "POST /api/work-items/{id}/{transition}": ("Move work along: `start`, `block`, `unblock`, `submit`, `approve`, `reject` (note required), `claim`, `assign` (`assignee_id`), `pass` (`assignee_id`), `cancel`. Send the `version` you last saw.", "Start to submit: the assignee, `work_item.update`. Claim: members of the department it was sent to, `work_item.assign`. Pass: whoever holds it. Assign: admins, heads of its department, `work_item.assign`. Approve or reject: the reviewer one level up the chain, then the item's sender, heads of its department, admins or `work_item.approve`; never your own work. Cancel: the item's sender, heads of its department, admins."),
 
     "GET /api/issues/{id}/comments": ("Comments on an issue, oldest first. Narrow to one work item with `work_item_id`.", "Anyone who can read the issue; staff-only comments only for staff."),
-    "POST /api/issues/{id}/comments": ("Add a comment. Mentioned people (`mention_user_ids`) are notified.", "Holders of `comment.create`; staff-only comments need `comment.internal` or admin."),
+    "POST /api/issues/{id}/comments": ("Add a comment. Mentioned people (`mention_user_ids`) are notified.", "The issue's sender and whoever it was sent to; holders of `comment.create`. Staff-only comments need `comment.internal` or admin."),
     "PATCH /api/comments/{id}": ("Edit your comment.", "The comment's author."),
     "DELETE /api/comments/{id}": ("Delete a comment (its place in the thread remains).", "The author, admins, and holders of `comment.moderate`."),
 
-    "GET /api/issues/{id}/reports": ("Written reports on a report issue: submitted ones, plus your own drafts.", "Anyone who can read the issue."),
-    "POST /api/issues/{id}/reports": ("Start a report: for your work item, or for yourself on your own report issue.", "The work item's assignee, or the issue's creator."),
+    "GET /api/issues/{id}/reports": ("Written reports on an issue that needs one: submitted ones, plus your own drafts.", "Anyone who can read the issue."),
+    "POST /api/issues/{id}/reports": ("Start a report on an issue made from a template that needs one (such as Report): for your work item, or for yourself on your own issue.", "The work item's assignee, or the issue's creator."),
     "PATCH /api/reports/{id}": ("Edit your report. Send the `version` you last saw.", "The author, until the work is approved."),
     "POST /api/reports/{id}/submit": ("Submit the report. Then the work item can be submitted for approval.", "The author."),
 
-    "POST /api/issues/{id}/attachments": ("Upload a file (max 25 MB) to the issue, your comment or your report. Send it as `multipart/form-data`.", "Anyone who may comment; for comments and reports, their author."),
+    "POST /api/issues/{id}/attachments": ("Upload a file (max 25 MB) to the issue, your comment (`comment_id`) or a report (`report_id`). Send it as `multipart/form-data`.", "Anyone who may comment on the issue; for comments, their author; for reports, their author or the work's holder."),
     "GET /api/attachments/{id}": ("Download a file.", "Anyone who can see it (otherwise 404)."),
 
-    "GET /api/calendar": ("Events you can see between `from` and `to`, with your RSVP.", ANYONE),
+    "GET /api/calendar": ("Events you can see between `from` and `to` (at most 366 days), with your RSVP.", ANYONE),
     "PUT /api/events/{id}/rsvp": ("Answer an invitation: `going`, `maybe` or `declined`.", "Invitees."),
     "GET /api/events/{id}/rsvps": ("Who's coming, with counts.", "Anyone who can read the event."),
 
@@ -123,23 +162,25 @@ ENDPOINTS = {
     "GET /api/stream": ("Live updates (Server-Sent Events). Events carry IDs only; refetch what changed. See Live updates below.", ANYONE),
 
     "GET /api/dashboard": ("Numbers for one branch (`branch_id`) or all of yours: open issues, work by status, overdue and due-soon work, your work, approvals waiting for you, upcoming events, unread count.", "Anyone signed in. Branch-wide numbers need `dashboard.branch` or admin."),
-    "GET /api/exports": ("Download an Excel workbook (Tickets, Actions, Reports, Events) for one branch, or several for super admins.", "One branch: admins and holders of `export.run`. Several or all: super admins."),
+    "GET /api/exports": ("Download an Excel workbook of the items, with the same filters as the items list (`types`, `state`, `priority`, `tags`, `q`, `from`/`to`).", "One branch: admins and holders of `export.run`. Several or all: root users."),
+    "GET /api/exports/people": ("Download everyone's names and emails as an Excel workbook, for chosen branches (`branch_ids`) or all.", ROOT_ONLY),
 }
 
 # Ready-to-use bodies for the most common calls (others get one built from
 # their required fields).
 EXAMPLES = {
-    "POST /api/auth/login": {"email": "member1@north.demo.school", "password": "demo-password"},
+    "POST /api/auth/login": {"email": "you@school.org", "password": "your-password"},
     "POST /api/issues": {"branch_id": "BRANCH_ID", "type": "ticket", "title": "The projector is broken", "description": "Room 12"},
     "PATCH /api/issues/{id}": {"version": 1, "title": "New title"},
     "POST /api/issues/{id}/close": {"version": 1},
     "POST /api/issues/{id}/cancel": {"version": 1},
+    "POST /api/issues/{id}/delete": {"version": 1},
     "POST /api/issues/{id}/targets": {"user_id": "USER_ID"},
     "POST /api/issues/{id}/comments": {"body": "It flickers and then turns off."},
     "POST /api/work-items/{id}/{transition}": {"version": 1},
     "PUT /api/events/{id}/rsvp": {"response": "going"},
     "POST /api/me/password": {"current_password": "old-password", "new_password": "a-new-password"},
-    "POST /api/groups/{id}/permissions": {"permission": "issue.create", "issue_type": "action", "scope": "branch"},
+    "POST /api/branches/{id}/permission-groups": {"name": "IT support", "grants": [{"permission": "issue.read", "issue_type": "ticket"}]},
 }
 
 BASE = "http://127.0.0.1:8080"
@@ -495,7 +536,7 @@ details summary { cursor: pointer; color: var(--accent); font-size: 14px; }
 <main>
   <button class="theme" type="button" id="theme">Theme</button>
   <h1>School Ticketing API</h1>
-  <p class="lead">Branches, people and groups; tickets, actions, reports and events; work and approvals; comments, files, notifications, a dashboard and exports.</p>
+  <p class="lead">Branches, people, departments and permission groups; tickets, actions and events, from templates and with tags; work and approvals; comments, files, notifications, a dashboard and exports.</p>
 
   <section id="start" class="intro">
     <h2>Getting started</h2>
@@ -510,7 +551,7 @@ details summary { cursor: pointer; color: var(--accent); font-size: 14px; }
     <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code># Sign in (the cookie is saved in cookies.txt)
 curl -c cookies.txt -X POST {{BASE}}/api/auth/login \
   -H 'Origin: {{ORIGIN}}' -H 'Content-Type: application/json' \
-  -d '{"email": "member1@north.demo.school", "password": "demo-password"}'
+  -d '{"email": "you@school.org", "password": "your-password"}'
 
 # Then send the cookie with -b
 curl -b cookies.txt {{BASE}}/api/me</code></pre></div>
@@ -535,7 +576,8 @@ curl -b cookies.txt {{BASE}}/api/me</code></pre></div>
       <ul>
         <li><code>issue_created</code>, <code>issue_updated</code>, <code>work_item_updated</code>, <code>comment_*</code>, <code>report_*</code>, <code>rsvp_changed</code>: refetch that issue and any list showing it.</li>
         <li><code>notification</code>: your inbox changed; refetch the unread count.</li>
-        <li><code>permissions_changed</code>, <code>member_changed</code>, <code>group_changed</code>, <code>branch_changed</code>: refetch <code>/api/me</code> and branch data.</li>
+        <li><code>permissions_changed</code>, <code>member_changed</code>, <code>department_changed</code>, <code>permission_groups_changed</code>, <code>branch_changed</code>: refetch <code>/api/me</code> and branch data.</li>
+        <li><code>templates_changed</code>, <code>settings_changed</code>, <code>avatars_changed</code>: refetch templates, settings or <code>/api/avatars</code>.</li>
         <li><code>resync</code>: events may have been missed; refetch everything. <code>session_ended</code>: sign in again.</li>
       </ul>
       <p>Debounce refetches to at most once every 2 seconds, and refetch everything after reconnecting.</p>

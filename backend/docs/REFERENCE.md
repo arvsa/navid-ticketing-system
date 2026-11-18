@@ -17,6 +17,7 @@ Environment variables (`.env` is read in development):
 | `JOBS_ENABLED` | `true` | Run the SLA, reminder and cleanup jobs in this process. |
 | `LOG_FORMAT` | `pretty` | `pretty` for development, `json` in production. |
 | `RUST_LOG` | `backend=info,tower_http=info,sqlx=warn` | Log filter. |
+| `FIRST_SUPER_ADMIN_EMAIL` | unset | On a start with no users at all, create this root user and print its temporary password (`First root user: ...`) in the log. The prebuilt bundle sets it to `superadmin@school.local`. |
 
 Built-in limits: JSON bodies 1 MB, uploads 25 MB, member imports 2 MB and 500 people; requests time out after 30 s
 (uploads and member imports 5 min); each database statement after 15 s, locks after 10 s, idle
@@ -78,7 +79,9 @@ Two separate things:
   admins make it) or school-wide (root users make it; any branch attaches it).
   Attached to departments, its grants apply to their members in that branch.
   **Everyone**, the school-wide default group, applies to every user without
-  being attached. Every grant is branch-wide; `department.members.manage` is
+  being attached. A new branch gets an **All members** permission group,
+  attached to its All members department, granting `issue.read`,
+  `comment.create` and `member.view`. Every grant is branch-wide; `department.members.manage` is
   granted for named departments (or `*`).
 
 **The baseline**, which needs no grant: create items of every type and send
@@ -179,6 +182,8 @@ the normal API, which applies permissions.
 | `notification` | Your inbox changed; refetch the unread count. |
 | `permissions_changed`, `member_changed`, `department_changed`, `permission_groups_changed`, `branch_changed` | Refetch `/api/me` and the affected branch data. |
 | `templates_changed` | Refetch `/api/templates`. |
+| `settings_changed` | Refetch `/api/settings`. |
+| `avatars_changed` | Refetch `/api/avatars`. |
 | `resync` | Events may have been missed; refetch everything. |
 | `session_ended` | The session is no longer valid; sign in again. |
 
@@ -333,8 +338,9 @@ k6 run scripts/loadtest.js                             # BASE_URL / ORIGIN / DUR
 ## Deploying
 
 - **Build** with `SQLX_OFFLINE=true cargo build --release`; ship
-  `target/release/backend` and `target/release/admin`. Migrations run when
-  the server starts.
+  `target/release/backend`, `admin`, `health` and `users` (or take the static
+  Linux builds attached to each GitHub release). Migrations run when the
+  server starts.
 - **TLS:** run behind a reverse proxy (Caddy, nginx) that terminates HTTPS.
   Keep `COOKIE_SECURE=true` (it also enables HSTS) and set `APP_ORIGIN` to the
   public frontend origin. Serving the frontend and `/api` from the same origin

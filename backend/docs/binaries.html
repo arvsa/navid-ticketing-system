@@ -94,7 +94,7 @@ td:first-child { white-space: nowrap; }
 
 <h2 id="basics">Basics</h2>
 <p>Run each tool from the project folder with <code>cargo run --bin NAME</code>. Flags for the tool go after <code>--</code>:</p>
-<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login -- --email admin@north.demo.school</code></pre></div>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login -- --email you@school.org --password 'your-password'</code></pre></div>
 <p>Every tool has <code>--help</code>, for example <code>cargo run --bin users -- --help</code>.</p>
 <p>There are two kinds of tool:</p>
 <ul>
@@ -165,7 +165,7 @@ docker compose exec backend users --inactive --csv</code></pre></div>
 
 <section class="tool" id="login">
   <h3><code>login</code> <span class="needs">server</span></h3>
-  <p class="what">Signs in and saves the session to the cookie file. Without flags it signs in as the demo root user.</p>
+  <p class="what">Signs in and saves the session to the cookie file. Without flags it signs in as the demo root user, which exists only in a database filled with the demo data (as the tests do).</p>
   <div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cargo run --bin login
 cargo run --bin login -- --email jane@school.org --password 'her-password'</code></pre></div>
   <table>

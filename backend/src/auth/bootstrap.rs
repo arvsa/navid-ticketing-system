@@ -80,7 +80,7 @@ pub async fn create_super_admin(db: &PgPool, email: &str, first_name: &str, last
 }
 
 /// On a database with no users yet, creates the first super admin (the
-/// offline bundle's start). Returns `None` when anyone exists already.
+/// prebuilt bundle's start). Returns `None` when anyone exists already.
 pub async fn first_super_admin(db: &PgPool, email: &str) -> AppResult<Option<CreatedUser>> {
     let anyone = sqlx::query_scalar!(r#"SELECT EXISTS (SELECT 1 FROM app_user) AS "e!""#).fetch_one(db).await?;
     if anyone {

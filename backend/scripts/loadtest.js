@@ -2,7 +2,8 @@
 //
 //   k6 run scripts/loadtest.js
 //
-// Needs a server with demo data (`cargo run --bin admin -- seed-demo`).
+// Needs a server with the demo accounts: a database filled by
+// backend::seed::demo (as in tests/hardening.rs). See docs/REFERENCE.md.
 // Fails unless p95 latency < 200 ms and no request errors.
 
 import http from 'k6/http';
